@@ -1,4 +1,4 @@
-module Frontend exposing (app, init, update, updateFromBackend, view)
+port module Frontend exposing (app, init, update, updateFromBackend, view)
 
 import Ascii
 import Browser exposing (UrlRequest(..))
@@ -12,11 +12,12 @@ import Html.Attributes
 import Keyboard
 import Keyboard.Arrows
 import Lamdera
+import List.Extra as List
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
-import Pixels
+import Pixels exposing (Pixels)
 import Point2d
-import Quantity
+import Quantity exposing (Quantity)
 import Task
 import Types exposing (..)
 import Url
@@ -24,6 +25,12 @@ import Vector2d
 import WebGL exposing (Shader)
 import WebGL.Settings
 import WebGL.Texture exposing (Texture)
+
+
+port devicePixelRatioPortFromJS : (Float -> msg) -> Sub msg
+
+
+port devicePixelRatioPortToJS : () -> Cmd msg
 
 
 app =
@@ -47,6 +54,7 @@ init url key =
       , texture = Nothing
       , pressedKeys = []
       , windowSize = ( Pixels.pixels 100, Pixels.pixels 100 )
+      , devicePixelRatio = 1
       }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -130,7 +138,10 @@ update msg model =
             )
 
         WindowResized windowSize ->
-            ( { model | windowSize = windowSize }, Cmd.none )
+            ( { model | windowSize = windowSize }, devicePixelRatioPortToJS () )
+
+        GotDevicePixelRatio devicePixelRatio ->
+            ( { model | devicePixelRatio = devicePixelRatio }, Cmd.none )
 
 
 isDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
@@ -148,22 +159,60 @@ view model =
     { title = ""
     , body =
         [ Element.layout
-            [ Element.width Element.fill, Element.height Element.fill ]
+            [ Element.width Element.fill, Element.height Element.fill, Element.clip ]
             (Element.html (canvasView model))
         ]
     }
+
+
+findPixelPerfectSize : FrontendModel -> { canvasSize : ( Int, Int ), actualCanvasSize : ( Int, Int ) }
+findPixelPerfectSize frontendModel =
+    let
+        findValue : Quantity Int Pixels -> ( Int, Int )
+        findValue value =
+            List.range 0 9
+                |> List.map ((+) (Pixels.inPixels value))
+                |> List.find
+                    (\v ->
+                        let
+                            a =
+                                toFloat v * frontendModel.devicePixelRatio
+                        in
+                        a == toFloat (round a)
+                    )
+                |> Maybe.map (\v -> ( v, toFloat v * frontendModel.devicePixelRatio |> round ))
+                |> Maybe.withDefault ( Pixels.inPixels value, toFloat (Pixels.inPixels value) * frontendModel.devicePixelRatio |> round )
+
+        ( w, actualW ) =
+            findValue (Tuple.first frontendModel.windowSize)
+
+        ( h, actualH ) =
+            findValue (Tuple.second frontendModel.windowSize)
+    in
+    { canvasSize = ( w, h ), actualCanvasSize = ( actualW, actualH ) }
 
 
 canvasView : FrontendModel -> Html msg
 canvasView model =
     let
         ( windowWidth, windowHeight ) =
-            model.windowSize
+            actualCanvasSize
+
+        ( cssWindowWidth, cssWindowHeight ) =
+            canvasSize
+
+        { canvasSize, actualCanvasSize } =
+            findPixelPerfectSize model
+
+        _ =
+            Debug.log "" ( canvasSize, actualCanvasSize, model.windowSize )
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False ]
-        [ Html.Attributes.width <| Pixels.inPixels windowWidth
-        , Html.Attributes.height <| Pixels.inPixels windowHeight
+        [ Html.Attributes.width windowWidth
+        , Html.Attributes.height windowHeight
+        , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
+        , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
         ]
         (case model.texture of
             Just texture ->
@@ -177,8 +226,8 @@ canvasView model =
                     fragmentShader
                     test
                     { view =
-                        Mat4.makeScale3 (2 / toFloat (Pixels.inPixels windowWidth)) (-2 / toFloat (Pixels.inPixels windowHeight)) 1
-                            |> Mat4.translate3 -(x |> Pixels.inPixels |> toFloat |> (+) 0.5) (y |> Pixels.inPixels |> toFloat |> (+) 0.5) 0
+                        Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
+                            |> Mat4.translate3 (x |> Pixels.inPixels |> toFloat |> (+) 0.5 |> negate) (y |> Pixels.inPixels |> toFloat |> (+) 0.5) 0
                     , texture = texture
                     }
                 ]
@@ -197,11 +246,12 @@ subscriptions model =
           else
             Browser.Events.onAnimationFrame Step
         , Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
+        , devicePixelRatioPortFromJS GotDevicePixelRatio
         ]
 
 
 test =
-    Grid.mesh (List.range 0 255 |> List.map (Ascii.ascii >> Maybe.withDefault Ascii.default))
+    Grid.mesh (List.range 0 255 |> List.reverse |> List.map (Ascii.ascii >> Maybe.withDefault Ascii.default))
 
 
 type alias Uniforms =

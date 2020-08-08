@@ -24,6 +24,7 @@ type alias FrontendModel =
     , texture : Maybe Texture
     , pressedKeys : List Keyboard.Key
     , windowSize : ( Quantity Int Pixels, Quantity Int Pixels )
+    , devicePixelRatio : Float
     }
 
 
@@ -39,6 +40,7 @@ type FrontendMsg
     | KeyMsg Keyboard.Msg
     | Step Time.Posix
     | WindowResized ( Quantity Int Pixels, Quantity Int Pixels )
+    | GotDevicePixelRatio Float
 
 
 type ToBackend
