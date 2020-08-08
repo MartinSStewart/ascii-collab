@@ -1,10 +1,8 @@
 module Grid exposing (AsciiUnit, CellUnit, Grid, Vertex, empty, mesh, setAscii)
 
 import Ascii exposing (Ascii)
-import Bytes exposing (Bytes)
 import Dict exposing (Dict)
 import GridCell exposing (Cell)
-import List.Extra as List
 import Math.Vector2 exposing (Vec2)
 import Quantity exposing (Quantity(..))
 import Serialize
@@ -72,12 +70,16 @@ cellCodec =
 
 baseMesh : { boxes : List (List Vec2), indices : List ( Int, Int, Int ) }
 baseMesh =
+    let
+        ( Quantity w, Quantity h ) =
+            Ascii.size
+    in
     List.range 0 (GridCell.cellSize * GridCell.cellSize - 1)
         |> List.foldl
             (\index { boxes, indices } ->
                 let
                     box =
-                        asciiBox (modBy GridCell.cellSize index) (index // GridCell.cellSize) (index * 4)
+                        asciiBox (modBy GridCell.cellSize index |> (*) w) (index // GridCell.cellSize |> (*) h) (index * 4)
                 in
                 { boxes = boxes ++ [ box.vertices ], indices = indices ++ box.indices }
             )
@@ -96,7 +98,7 @@ asciiBox offsetX offsetY indexOffset =
         , Math.Vector2.vec2 (toFloat (offsetX + w)) (toFloat (offsetY + h))
         , Math.Vector2.vec2 (toFloat offsetX) (toFloat (offsetY + h))
         ]
-    , indices = [ ( indexOffset, indexOffset + 1, indexOffset + 2 ), ( indexOffset + 1, indexOffset + 3, indexOffset + 2 ) ]
+    , indices = [ ( indexOffset + 3, indexOffset + 1, indexOffset ), ( indexOffset + 2, indexOffset + 1, indexOffset + 3 ) ]
     }
 
 

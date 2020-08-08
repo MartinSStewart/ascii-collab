@@ -22,7 +22,7 @@ asciiCharCount =
 
 size : ( Quantity number Pixels, Quantity number Pixels )
 size =
-    ( Pixels.pixels 10, Pixels.pixels 16 )
+    ( Pixels.pixels 10, Pixels.pixels 18 )
 
 
 default : Ascii
@@ -75,10 +75,10 @@ texturePosition (Ascii ascii_) =
     in
     { topLeft =
         Math.Vector2.vec2
-            (modBy charsPerRow ascii_ |> (*) w |> toFloat |> (+) 0.5 |> (\a -> a / Pixels.inPixels textureSize))
-            (ascii_ // charsPerRow |> (*) h |> toFloat |> (+) 0.5 |> (\a -> a / Pixels.inPixels textureSize))
+            (modBy charsPerRow ascii_ |> (*) w |> toFloat |> (\a -> a / Pixels.inPixels textureSize))
+            (ascii_ // charsPerRow |> (*) h |> toFloat |> (\a -> a / Pixels.inPixels textureSize))
     , bottomRight =
         Math.Vector2.vec2
-            (modBy charsPerRow ascii_ |> (+) 1 |> (*) w |> toFloat |> (+) -0.5 |> (\a -> a / Pixels.inPixels textureSize))
-            (ascii_ // charsPerRow |> (+) 1 |> (*) h |> toFloat |> (+) -0.5 |> (\a -> a / Pixels.inPixels textureSize))
+            (modBy charsPerRow ascii_ |> (+) 1 |> (*) w |> toFloat |> (\a -> a / Pixels.inPixels textureSize))
+            (ascii_ // charsPerRow |> (+) 1 |> (*) h |> toFloat |> (\a -> a / Pixels.inPixels textureSize))
     }
