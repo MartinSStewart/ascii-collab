@@ -1,6 +1,5 @@
 module Cursor exposing (Cursor, moveCursor, newLine, setCursor)
 
-import Grid
 import Helper
 import Quantity exposing (Quantity)
 import Units

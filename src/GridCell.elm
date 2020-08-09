@@ -25,7 +25,7 @@ flatten (Cell history) =
                 line
                 |> Tuple.second
         )
-        (Array.initialize 255 (\_ -> Ascii.default))
+        (Array.initialize (cellSize * cellSize) (\_ -> Ascii.default))
         history
 
 

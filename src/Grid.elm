@@ -130,7 +130,7 @@ baseMesh =
         ( Quantity w, Quantity h ) =
             Ascii.size
     in
-    List.range 0 (GridCell.cellSize * GridCell.cellSize - 1)
+    List.range 0 (GridCell.cellSize * GridCell.cellSize)
         |> List.foldl
             (\index { boxes, indices } ->
                 let

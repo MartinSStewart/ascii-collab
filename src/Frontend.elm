@@ -115,33 +115,14 @@ update msg model =
             )
 
         KeyDown rawKey ->
-            ( model, Cmd.none )
+            ( case ( model.cursor, Keyboard.anyKeyOriginal rawKey ) of
+                --( Just cursor, Just Keyboard.Enter ) ->
+                --    { model | cursor = Cursor.newLine cursor |> Just }
+                _ ->
+                    model
+            , Cmd.none
+            )
 
-        --( case ( model.cursor, Keyboard.anyKeyOriginal rawKey ) of
-        --    ( Just cursor, Just (Keyboard.Character text) ) ->
-        --        String.toList text
-        --            |> List.head
-        --            |> Maybe.andThen Ascii.charToAscii
-        --            |> Maybe.map
-        --                (\ascii ->
-        --                    { model
-        --                        | grid =
-        --                            Grid.setAscii (UserId 0) cursor.position ascii model.grid
-        --                        , cursor = Cursor.moveCursor ( Grid.asciiUnit 1, Grid.asciiUnit 0 ) cursor |> Just
-        --                    }
-        --                )
-        --            |> Maybe.withDefault model
-        --
-        --    ( Just cursor, Just Keyboard.Enter ) ->
-        --        { model | cursor = Cursor.newLine cursor |> Just }
-        --
-        --    ( Just cursor, Just Keyboard.Tab ) ->
-        --        { model | cursor = Cursor.moveCursor ( Grid.asciiUnit 4, Grid.asciiUnit 1 ) cursor |> Just }
-        --
-        --    _ ->
-        --        model
-        --, Cmd.none
-        --)
         Step _ ->
             let
                 newViewPoint =
@@ -178,29 +159,29 @@ update msg model =
         UserTyped text ->
             ( case model.cursor of
                 Just cursor ->
-                    String.filter ((/=) '\u{000D}') text
-                        |> String.split "\n"
-                        |> List.Nonempty.fromList
-                        |> Maybe.map (List.Nonempty.map (String.toList >> List.map (Ascii.charToAscii >> Maybe.withDefault Ascii.default)))
-                        |> Maybe.map
-                            (\lines ->
-                                let
-                                    _ =
-                                        Debug.log "fdsa" lines
-                                in
-                                { model
-                                    | grid =
-                                        Grid.addChange (UserId 0) cursor.position lines model.grid
-                                    , cursor =
-                                        Cursor.moveCursor
-                                            ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
-                                            , Units.asciiUnit (List.Nonempty.length lines - 1)
-                                            )
-                                            cursor
-                                            |> Just
-                                }
-                            )
-                        |> Maybe.withDefault model
+                    if text == "\n" || text == "\n\u{000D}" then
+                        { model | cursor = Cursor.newLine cursor |> Just }
+
+                    else
+                        String.filter ((/=) '\u{000D}') text
+                            |> String.split "\n"
+                            |> List.Nonempty.fromList
+                            |> Maybe.map (List.Nonempty.map (String.toList >> List.map (Ascii.charToAscii >> Maybe.withDefault Ascii.default)))
+                            |> Maybe.map
+                                (\lines ->
+                                    { model
+                                        | grid =
+                                            Grid.addChange (UserId 0) cursor.position lines model.grid
+                                        , cursor =
+                                            Cursor.moveCursor
+                                                ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
+                                                , Units.asciiUnit (List.Nonempty.length lines - 1)
+                                                )
+                                                cursor
+                                                |> Just
+                                    }
+                                )
+                            |> Maybe.withDefault model
 
                 _ ->
                     model
