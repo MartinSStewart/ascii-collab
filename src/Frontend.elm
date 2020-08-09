@@ -5,14 +5,19 @@ import Browser exposing (UrlRequest(..))
 import Browser.Dom
 import Browser.Events
 import Browser.Navigation as Nav
+import Cursor
 import Element
 import Grid
+import Helper
 import Html exposing (Html)
 import Html.Attributes
+import Html.Events
+import Json.Decode
 import Keyboard
 import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
+import List.Nonempty
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
@@ -20,7 +25,9 @@ import Point2d
 import Quantity exposing (Quantity)
 import Task
 import Types exposing (..)
+import Units
 import Url
+import User exposing (UserId(..))
 import Vector2d
 import WebGL exposing (Shader)
 import WebGL.Settings
@@ -50,7 +57,7 @@ init url key =
     ( { key = key
       , grid = Grid.empty
       , viewPoint = ( Quantity.zero, Quantity.zero )
-      , cursorPoint = Nothing
+      , cursor = Just { position = ( Units.asciiUnit 0, Units.asciiUnit 0 ), startingColumn = Units.asciiUnit 0 }
       , texture = Nothing
       , pressedKeys = []
       , windowSize = ( Pixels.pixels 100, Pixels.pixels 100 )
@@ -107,33 +114,58 @@ update msg model =
             , Cmd.none
             )
 
-        Step time ->
-            let
-                ( x, y ) =
-                    model.viewPoint
+        KeyDown rawKey ->
+            ( model, Cmd.none )
 
+        --( case ( model.cursor, Keyboard.anyKeyOriginal rawKey ) of
+        --    ( Just cursor, Just (Keyboard.Character text) ) ->
+        --        String.toList text
+        --            |> List.head
+        --            |> Maybe.andThen Ascii.charToAscii
+        --            |> Maybe.map
+        --                (\ascii ->
+        --                    { model
+        --                        | grid =
+        --                            Grid.setAscii (UserId 0) cursor.position ascii model.grid
+        --                        , cursor = Cursor.moveCursor ( Grid.asciiUnit 1, Grid.asciiUnit 0 ) cursor |> Just
+        --                    }
+        --                )
+        --            |> Maybe.withDefault model
+        --
+        --    ( Just cursor, Just Keyboard.Enter ) ->
+        --        { model | cursor = Cursor.newLine cursor |> Just }
+        --
+        --    ( Just cursor, Just Keyboard.Tab ) ->
+        --        { model | cursor = Cursor.moveCursor ( Grid.asciiUnit 4, Grid.asciiUnit 1 ) cursor |> Just }
+        --
+        --    _ ->
+        --        model
+        --, Cmd.none
+        --)
+        Step _ ->
+            let
                 newViewPoint =
                     ( if isDown Keyboard.ArrowLeft model /= isDown Keyboard.ArrowRight model then
                         if isDown Keyboard.ArrowLeft model then
-                            Quantity.plus x (Pixels.pixels -10)
+                            Units.worldUnit -10
 
                         else
-                            Quantity.plus x (Pixels.pixels 10)
+                            Units.worldUnit 10
 
                       else
-                        x
+                        Quantity.zero
                     , if isDown Keyboard.ArrowUp model /= isDown Keyboard.ArrowDown model then
                         if isDown Keyboard.ArrowUp model then
-                            Quantity.plus y (Pixels.pixels 10)
+                            Units.worldUnit 10
 
                         else
-                            Quantity.plus y (Pixels.pixels -10)
+                            Units.worldUnit -10
 
                       else
-                        y
+                        Quantity.zero
                     )
             in
-            ( { model | viewPoint = newViewPoint }
+            ( { model | viewPoint = Helper.addTuple model.viewPoint newViewPoint }
             , Cmd.none
             )
 
@@ -142,6 +174,30 @@ update msg model =
 
         GotDevicePixelRatio devicePixelRatio ->
             ( { model | devicePixelRatio = devicePixelRatio }, Cmd.none )
+
+        UserTyped text ->
+            ( case model.cursor of
+                Just cursor ->
+                    String.toList text
+                        |> List.Nonempty.fromList
+                        |> Maybe.map (List.Nonempty.map (Ascii.charToAscii >> Maybe.withDefault Ascii.default))
+                        |> Maybe.map
+                            (\line ->
+                                { model
+                                    | grid =
+                                        Grid.addChange (UserId 0) cursor.position line model.grid
+                                    , cursor = Cursor.moveCursor ( Units.asciiUnit (List.Nonempty.length line), Units.asciiUnit 0 ) cursor |> Just
+                                }
+                            )
+                        |> Maybe.withDefault model
+
+                _ ->
+                    model
+            , Cmd.none
+            )
+
+        MouseDown mousePosition ->
+            ( model, Cmd.none )
 
 
 isDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
@@ -154,12 +210,27 @@ updateFromBackend msg model =
     ( model, Cmd.none )
 
 
-view : FrontendModel -> Browser.Document msg
+view : FrontendModel -> Browser.Document FrontendMsg
 view model =
     { title = ""
     , body =
         [ Element.layout
-            [ Element.width Element.fill, Element.height Element.fill, Element.clip ]
+            [ Element.width Element.fill
+            , Element.height Element.fill
+            , Element.clip
+            , Element.inFront <|
+                Element.html <|
+                    Html.textarea
+                        [ Html.Events.onInput UserTyped
+                        , Html.Attributes.value ""
+                        , Html.Attributes.style "width" "100%"
+                        , Html.Attributes.style "height" "100%"
+                        , Html.Attributes.style "resize" "none"
+                        , Html.Attributes.style "background-color" "transparent"
+                        , Html.Attributes.style "border-width" "0px"
+                        ]
+                        []
+            ]
             (Element.html (canvasView model))
         ]
     }
@@ -178,7 +249,7 @@ findPixelPerfectSize frontendModel =
                             a =
                                 toFloat v * frontendModel.devicePixelRatio
                         in
-                        a == toFloat (round a)
+                        a == toFloat (round a) && modBy 2 (round a) == 0
                     )
                 |> Maybe.map (\v -> ( v, toFloat v * frontendModel.devicePixelRatio |> round ))
                 |> Maybe.withDefault ( Pixels.inPixels value, toFloat (Pixels.inPixels value) * frontendModel.devicePixelRatio |> round )
@@ -192,7 +263,7 @@ findPixelPerfectSize frontendModel =
     { canvasSize = ( w, h ), actualCanvasSize = ( actualW, actualH ) }
 
 
-canvasView : FrontendModel -> Html msg
+canvasView : FrontendModel -> Html FrontendMsg
 canvasView model =
     let
         ( windowWidth, windowHeight ) =
@@ -203,12 +274,9 @@ canvasView model =
 
         { canvasSize, actualCanvasSize } =
             findPixelPerfectSize model
-
-        _ =
-            Debug.log "" ( canvasSize, actualCanvasSize, model.windowSize )
     in
     WebGL.toHtmlWith
-        [ WebGL.alpha False ]
+        [ WebGL.alpha False, WebGL.antialias ]
         [ Html.Attributes.width windowWidth
         , Html.Attributes.height windowHeight
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
@@ -220,17 +288,23 @@ canvasView model =
                     ( x, y ) =
                         model.viewPoint
                 in
-                [ WebGL.entityWith
-                    [ WebGL.Settings.cullFace WebGL.Settings.back ]
-                    vertexShader
-                    fragmentShader
-                    test
-                    { view =
-                        Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
-                            |> Mat4.translate3 (x |> Pixels.inPixels |> toFloat |> (+) 0.5 |> negate) (y |> Pixels.inPixels |> toFloat |> (+) 0.5) 0
-                    , texture = texture
-                    }
-                ]
+                Grid.meshes model.grid
+                    |> List.map
+                        (\mesh ->
+                            WebGL.entityWith
+                                [ WebGL.Settings.cullFace WebGL.Settings.back ]
+                                vertexShader
+                                fragmentShader
+                                mesh
+                                { view =
+                                    Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
+                                        |> Mat4.translate3
+                                            (x |> Units.inWorldUnits |> toFloat |> negate)
+                                            (y |> Units.inWorldUnits |> toFloat)
+                                            0
+                                , texture = texture
+                                }
+                        )
 
             Nothing ->
                 []
@@ -240,18 +314,26 @@ canvasView model =
 subscriptions model =
     Sub.batch
         [ Sub.map KeyMsg Keyboard.subscriptions
-        , if List.isEmpty model.pressedKeys then
+        , Keyboard.downs KeyDown
+        , if Keyboard.Arrows.arrowsDirection model.pressedKeys == Keyboard.Arrows.NoDirection then
             Sub.none
 
           else
             Browser.Events.onAnimationFrame Step
         , Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
         , devicePixelRatioPortFromJS GotDevicePixelRatio
+        , Browser.Events.onMouseDown
+            (Json.Decode.value
+                |> Json.Decode.map
+                    (\a ->
+                        let
+                            _ =
+                                Debug.log "asfd" a
+                        in
+                        MouseDown ( Quantity.zero, Quantity.zero )
+                    )
+            )
         ]
-
-
-test =
-    Grid.mesh (List.range 0 255 |> List.reverse |> List.map (Ascii.ascii >> Maybe.withDefault Ascii.default))
 
 
 type alias Uniforms =

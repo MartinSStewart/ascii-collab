@@ -1,4 +1,4 @@
-module Ascii exposing (Ascii, CodecError(..), ascii, charsPerRow, codec, default, size, textureData, texturePosition)
+module Ascii exposing (Ascii, CodecError(..), ascii, charToAscii, charsPerRow, codec, default, size, textureData, texturePosition)
 
 import List.Extra as List
 import Math.Vector2 exposing (Vec2)
@@ -13,6 +13,11 @@ asciiChars =
         |> List.map Char.fromCode
         |> (++) [ '░', '▒', '▓', '█' ]
         |> (++) [ '│', '┤', '╡', '╢', '╖', '╕', '╣', '║', '╗', '╝', '╜', '╛', '┐', '└', '┴', '┬', '├', '─', '┼', '╞', '╟', '╚', '╔', '╩', '╦', '╠', '═', '╬', '╧', '╨', '╤', '╥', '╙', '╘', '╒', '╓', '╫', '╪', '┘', '┌' ]
+
+
+charToAscii : Char -> Maybe Ascii
+charToAscii char =
+    List.findIndex ((==) char) asciiChars |> Maybe.map Ascii
 
 
 asciiCharCount : Int

@@ -1,11 +1,17 @@
-module Grid exposing (AsciiUnit, CellUnit, Grid, Vertex, empty, mesh, setAscii)
+module Grid exposing (Grid, Vertex, addChange, empty, mesh, meshes)
 
+import Array
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
 import GridCell exposing (Cell)
+import Helper
+import List.Extra as List
+import List.Nonempty exposing (Nonempty)
 import Math.Vector2 exposing (Vec2)
+import Pixels
 import Quantity exposing (Quantity(..))
 import Serialize
+import Units
 import User exposing (UserId)
 import WebGL
 
@@ -18,49 +24,68 @@ type alias Vertex =
     { position : Vec2, texturePosition : Vec2 }
 
 
-type AsciiUnit
-    = AsciiUnit Never
-
-
-type CellUnit
-    = CellUnit Never
-
-
 empty : Grid
 empty =
     Grid Dict.empty
 
 
-asciiToCellCoord : ( Quantity Int AsciiUnit, Quantity Int AsciiUnit ) -> ( Quantity Int CellUnit, Quantity Int CellUnit )
+asciiToCellCoord : ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> ( Quantity Int Units.CellUnit, Quantity Int Units.CellUnit )
 asciiToCellCoord ( Quantity x, Quantity y ) =
-    ( x // GridCell.cellSize |> Quantity, y // GridCell.cellSize |> Quantity )
+    let
+        offset =
+            1000000
+    in
+    ( (x + (GridCell.cellSize * offset)) // GridCell.cellSize - offset |> Quantity
+    , (y + (GridCell.cellSize * offset)) // GridCell.cellSize - offset |> Quantity
+    )
 
 
-asciiToLocalCoord : ( Quantity Int AsciiUnit, Quantity Int AsciiUnit ) -> Int
+asciiToLocalCoord : ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> Int
 asciiToLocalCoord ( Quantity x, Quantity y ) =
     modBy GridCell.cellSize x + modBy GridCell.cellSize y * GridCell.cellSize
 
 
-setAscii : UserId -> ( Quantity Int AsciiUnit, Quantity Int AsciiUnit ) -> Ascii -> Grid -> Grid
-setAscii userId asciiCoord ascii grid =
+addChange : UserId -> ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> Nonempty Ascii -> Grid -> Grid
+addChange userId asciiCoord line grid =
     let
-        cellCoord =
-            asciiToCellCoord asciiCoord
+        (Quantity.Quantity x) =
+            Tuple.first asciiCoord
+
+        splitIndex =
+            GridCell.cellSize - modBy GridCell.cellSize x
+
+        ( head, rest ) =
+            List.splitAt splitIndex (List.Nonempty.toList line)
+
+        restCoord index =
+            Helper.addTuple asciiCoord ( Units.asciiUnit <| splitIndex + GridCell.cellSize * index, Units.asciiUnit 0 )
     in
-    getCell cellCoord grid
-        |> Maybe.withDefault GridCell.empty
-        |> GridCell.addChange userId (asciiToLocalCoord asciiCoord) ascii
-        |> (\cell -> setCell cellCoord cell grid)
+    List.greedyGroupsOf GridCell.cellSize rest
+        |> List.indexedMap (\index value -> ( restCoord index, value ))
+        |> (::) ( asciiCoord, head )
+        |> List.filterMap (\( position, value ) -> List.Nonempty.fromList value |> Maybe.map (Tuple.pair position))
+        |> List.foldl
+            (\( position, cellLine ) state ->
+                let
+                    cellCoord =
+                        asciiToCellCoord position
+                in
+                getCell cellCoord state
+                    |> Maybe.withDefault GridCell.empty
+                    |> GridCell.addLine userId (asciiToLocalCoord position) cellLine
+                    |> (\cell -> setCell cellCoord cell state)
+            )
+            grid
 
 
-getCell : ( Quantity Int CellUnit, Quantity Int CellUnit ) -> Grid -> Maybe Cell
+getCell : ( Quantity Int Units.CellUnit, Quantity Int Units.CellUnit ) -> Grid -> Maybe Cell
 getCell ( Quantity x, Quantity y ) (Grid grid) =
     Dict.get ( x, y ) grid |> Maybe.map .cell
 
 
-setCell : ( Quantity Int CellUnit, Quantity Int CellUnit ) -> Cell -> Grid -> Grid
-setCell ( Quantity x, Quantity y ) value (Grid grid) =
-    Dict.insert ( x, y ) { cell = value, mesh = Nothing } grid |> Grid
+setCell : ( Quantity Int Units.CellUnit, Quantity Int Units.CellUnit ) -> Cell -> Grid -> Grid
+setCell (( Quantity x, Quantity y ) as position) value (Grid grid) =
+    Dict.insert ( x, y ) { cell = value, mesh = GridCell.flatten value |> Array.toList |> mesh position |> Just } grid |> Grid
 
 
 cellCodec : Serialize.Codec Ascii.CodecError (List Ascii)
@@ -102,15 +127,29 @@ asciiBox offsetX offsetY indexOffset =
     }
 
 
-mesh : List Ascii -> WebGL.Mesh { position : Vec2, texturePosition : Vec2 }
-mesh asciiValues =
+mesh : ( Quantity Int Units.CellUnit, Quantity Int Units.CellUnit ) -> List Ascii -> WebGL.Mesh { position : Vec2, texturePosition : Vec2 }
+mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
     List.map2
         (\ascii box ->
             let
                 { topLeft, bottomRight } =
                     Ascii.texturePosition ascii
+
+                ( w, h ) =
+                    Ascii.size
             in
-            List.map2 (\v uv -> { position = v, texturePosition = uv })
+            List.map2
+                (\v uv ->
+                    { position =
+                        Math.Vector2.add
+                            (Math.Vector2.vec2
+                                (x * GridCell.cellSize * Pixels.inPixels w |> toFloat)
+                                (y * GridCell.cellSize * Pixels.inPixels h |> toFloat)
+                            )
+                            v
+                    , texturePosition = uv
+                    }
+                )
                 box
                 [ topLeft
                 , Math.Vector2.vec2 (Math.Vector2.getX bottomRight) (Math.Vector2.getY topLeft)
@@ -122,3 +161,8 @@ mesh asciiValues =
         baseMesh.boxes
         |> List.concat
         |> (\vertices -> WebGL.indexedTriangles vertices baseMesh.indices)
+
+
+meshes : Grid -> List (WebGL.Mesh Vertex)
+meshes (Grid grid) =
+    Dict.toList grid |> List.filterMap (Tuple.second >> .mesh)

@@ -1,28 +1,29 @@
-module GridCell exposing (Cell, addChange, cellSize, empty, flatten)
+module GridCell exposing (Cell, addLine, cellSize, empty, flatten)
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
-import Dict
-import Math.Vector2 exposing (Vec2)
-import Quantity exposing (Quantity(..))
+import List.Nonempty exposing (Nonempty)
 import User exposing (UserId)
-import WebGL
 
 
 type Cell
-    = Cell (List { userId : UserId, position : Int, ascii : Ascii })
+    = Cell (List { userId : UserId, position : Int, line : Nonempty Ascii })
 
 
-addChange : UserId -> Int -> Ascii -> Cell -> Cell
-addChange userId position ascii (Cell history) =
-    { userId = userId, position = position, ascii = ascii } :: history |> Cell
+addLine : UserId -> Int -> Nonempty Ascii -> Cell -> Cell
+addLine userId position line (Cell history) =
+    { userId = userId, position = position, line = line } :: history |> Cell
 
 
 flatten : Cell -> Array Ascii
 flatten (Cell history) =
-    List.foldl
-        (\{ userId, position, ascii } state ->
-            Array.set position ascii state
+    List.foldr
+        (\{ userId, position, line } state ->
+            List.Nonempty.foldl
+                (\ascii ( position_, state_ ) -> ( position_ + 1, Array.set position_ ascii state_ ))
+                ( position, state )
+                line
+                |> Tuple.second
         )
         (Array.initialize 255 (\_ -> Ascii.default))
         history
