@@ -34,10 +34,10 @@ import WebGL.Settings
 import WebGL.Texture exposing (Texture)
 
 
-port devicePixelRatioPortFromJS : (Float -> msg) -> Sub msg
+port martinsstewart_elm_device_pixel_ratio_from_js : (Float -> msg) -> Sub msg
 
 
-port devicePixelRatioPortToJS : () -> Cmd msg
+port martinsstewart_elm_device_pixel_ratio_to_js : () -> Cmd msg
 
 
 app =
@@ -170,7 +170,7 @@ update msg model =
             )
 
         WindowResized windowSize ->
-            ( { model | windowSize = windowSize }, devicePixelRatioPortToJS () )
+            ( { model | windowSize = windowSize }, martinsstewart_elm_device_pixel_ratio_to_js () )
 
         GotDevicePixelRatio devicePixelRatio ->
             ( { model | devicePixelRatio = devicePixelRatio }, Cmd.none )
@@ -178,15 +178,26 @@ update msg model =
         UserTyped text ->
             ( case model.cursor of
                 Just cursor ->
-                    String.toList text
+                    String.filter ((/=) '\u{000D}') text
+                        |> String.split "\n"
                         |> List.Nonempty.fromList
-                        |> Maybe.map (List.Nonempty.map (Ascii.charToAscii >> Maybe.withDefault Ascii.default))
+                        |> Maybe.map (List.Nonempty.map (String.toList >> List.map (Ascii.charToAscii >> Maybe.withDefault Ascii.default)))
                         |> Maybe.map
-                            (\line ->
+                            (\lines ->
+                                let
+                                    _ =
+                                        Debug.log "fdsa" lines
+                                in
                                 { model
                                     | grid =
-                                        Grid.addChange (UserId 0) cursor.position line model.grid
-                                    , cursor = Cursor.moveCursor ( Units.asciiUnit (List.Nonempty.length line), Units.asciiUnit 0 ) cursor |> Just
+                                        Grid.addChange (UserId 0) cursor.position lines model.grid
+                                    , cursor =
+                                        Cursor.moveCursor
+                                            ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
+                                            , Units.asciiUnit (List.Nonempty.length lines - 1)
+                                            )
+                                            cursor
+                                            |> Just
                                 }
                             )
                         |> Maybe.withDefault model
@@ -212,7 +223,7 @@ updateFromBackend msg model =
 
 view : FrontendModel -> Browser.Document FrontendMsg
 view model =
-    { title = ""
+    { title = "Ascii Art"
     , body =
         [ Element.layout
             [ Element.width Element.fill
@@ -321,7 +332,7 @@ subscriptions model =
           else
             Browser.Events.onAnimationFrame Step
         , Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
-        , devicePixelRatioPortFromJS GotDevicePixelRatio
+        , martinsstewart_elm_device_pixel_ratio_from_js GotDevicePixelRatio
         , Browser.Events.onMouseDown
             (Json.Decode.value
                 |> Json.Decode.map

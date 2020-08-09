@@ -45,34 +45,54 @@ asciiToLocalCoord ( Quantity x, Quantity y ) =
     modBy GridCell.cellSize x + modBy GridCell.cellSize y * GridCell.cellSize
 
 
-addChange : UserId -> ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> Nonempty Ascii -> Grid -> Grid
-addChange userId asciiCoord line grid =
+addChange : UserId -> ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> Nonempty (List Ascii) -> Grid -> Grid
+addChange userId asciiCoord lines grid =
     let
         (Quantity.Quantity x) =
             Tuple.first asciiCoord
 
-        splitIndex =
-            GridCell.cellSize - modBy GridCell.cellSize x
+        splitUpLine : Quantity Int Units.AsciiUnit -> Nonempty Ascii -> List ( ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ), Nonempty Ascii )
+        splitUpLine offsetY line =
+            let
+                splitIndex =
+                    GridCell.cellSize - modBy GridCell.cellSize x
 
-        ( head, rest ) =
-            List.splitAt splitIndex (List.Nonempty.toList line)
+                ( head, rest ) =
+                    List.splitAt splitIndex (List.Nonempty.toList line)
 
-        restCoord index =
-            Helper.addTuple asciiCoord ( Units.asciiUnit <| splitIndex + GridCell.cellSize * index, Units.asciiUnit 0 )
+                restCoord index =
+                    Helper.addTuple asciiCoord ( Units.asciiUnit <| splitIndex + GridCell.cellSize * index, offsetY )
+            in
+            List.greedyGroupsOf GridCell.cellSize rest
+                |> List.indexedMap (\index value -> ( restCoord index, value ))
+                |> (::) ( Helper.addTuple asciiCoord ( Quantity.zero, offsetY ), head )
+                |> List.filterMap (\( position, value ) -> List.Nonempty.fromList value |> Maybe.map (Tuple.pair position))
     in
-    List.greedyGroupsOf GridCell.cellSize rest
-        |> List.indexedMap (\index value -> ( restCoord index, value ))
-        |> (::) ( asciiCoord, head )
-        |> List.filterMap (\( position, value ) -> List.Nonempty.fromList value |> Maybe.map (Tuple.pair position))
+    List.Nonempty.toList lines
+        |> List.indexedMap Tuple.pair
+        |> List.filterMap
+            (\( yOffset, line ) ->
+                case List.Nonempty.fromList line of
+                    Just line_ ->
+                        splitUpLine (Units.asciiUnit yOffset) line_ |> Just
+
+                    Nothing ->
+                        Nothing
+            )
+        |> List.concat
+        |> List.gatherEqualsBy (Tuple.first >> asciiToLocalCoord)
         |> List.foldl
-            (\( position, cellLine ) state ->
+            (\( ( position, _ ) as head, rest ) state ->
                 let
                     cellCoord =
                         asciiToCellCoord position
                 in
-                getCell cellCoord state
-                    |> Maybe.withDefault GridCell.empty
-                    |> GridCell.addLine userId (asciiToLocalCoord position) cellLine
+                List.foldl
+                    (\( position_, cellLine ) cell ->
+                        GridCell.addLine userId (asciiToLocalCoord position_) cellLine cell
+                    )
+                    (getCell cellCoord state |> Maybe.withDefault GridCell.empty)
+                    (head :: rest)
                     |> (\cell -> setCell cellCoord cell state)
             )
             grid

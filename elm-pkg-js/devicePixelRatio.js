@@ -1,4 +1,4 @@
 exports.init = async function init(app)
 {
-    app.ports.devicePixelRatioPortToJS.subscribe(a => app.ports.devicePixelRatioPortFromJS.send(window.devicePixelRatio));
+    app.ports.martinsstewart_elm_device_pixel_ratio_to_js.subscribe(a => app.ports.martinsstewart_elm_device_pixel_ratio_from_js.send(window.devicePixelRatio));
 }
