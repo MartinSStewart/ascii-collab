@@ -4,9 +4,9 @@ import Array
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
 import GridCell exposing (Cell)
-import Helper
+import Helper exposing (Coord)
 import List.Extra as List
-import List.Nonempty exposing (Nonempty)
+import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
 import Pixels
 import Quantity exposing (Quantity(..))
@@ -29,7 +29,7 @@ empty =
     Grid Dict.empty
 
 
-asciiToCellCoord : ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> ( Quantity Int Units.CellUnit, Quantity Int Units.CellUnit )
+asciiToCellCoord : Coord Int Units.AsciiUnit -> Coord Int Units.CellUnit
 asciiToCellCoord ( Quantity x, Quantity y ) =
     let
         offset =
@@ -40,70 +40,81 @@ asciiToCellCoord ( Quantity x, Quantity y ) =
     )
 
 
-asciiToLocalCoord : ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> Int
+asciiToLocalCoord : Coord Int Units.AsciiUnit -> Int
 asciiToLocalCoord ( Quantity x, Quantity y ) =
     modBy GridCell.cellSize x + modBy GridCell.cellSize y * GridCell.cellSize
 
 
-addChange : UserId -> ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> Nonempty (List Ascii) -> Grid -> Grid
+addChange : UserId -> Coord Int Units.AsciiUnit -> Nonempty (List Ascii) -> Grid -> Grid
 addChange userId asciiCoord lines grid =
-    let
-        (Quantity.Quantity x) =
-            Tuple.first asciiCoord
-
-        splitUpLine : Quantity Int Units.AsciiUnit -> Nonempty Ascii -> List ( ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ), Nonempty Ascii )
-        splitUpLine offsetY line =
-            let
-                splitIndex =
-                    GridCell.cellSize - modBy GridCell.cellSize x
-
-                ( head, rest ) =
-                    List.splitAt splitIndex (List.Nonempty.toList line)
-
-                restCoord index =
-                    Helper.addTuple asciiCoord ( Units.asciiUnit <| splitIndex + GridCell.cellSize * index, offsetY )
-            in
-            List.greedyGroupsOf GridCell.cellSize rest
-                |> List.indexedMap (\index value -> ( restCoord index, value ))
-                |> (::) ( Helper.addTuple asciiCoord ( Quantity.zero, offsetY ), head )
-                |> List.filterMap (\( position, value ) -> List.Nonempty.fromList value |> Maybe.map (Tuple.pair position))
-    in
     List.Nonempty.toList lines
         |> List.indexedMap Tuple.pair
         |> List.filterMap
             (\( yOffset, line ) ->
                 case List.Nonempty.fromList line of
                     Just line_ ->
-                        splitUpLine (Units.asciiUnit yOffset) line_ |> Just
+                        splitUpLine asciiCoord (Units.asciiUnit yOffset) line_ |> Just
 
                     Nothing ->
                         Nothing
             )
         |> List.concat
-        |> List.gatherEqualsBy (Tuple.first >> asciiToLocalCoord)
+        |> List.gatherEqualsBy (Tuple.first >> asciiToCellCoord)
         |> List.foldl
-            (\( ( position, _ ) as head, rest ) state ->
-                let
-                    cellCoord =
-                        asciiToCellCoord position
-                in
-                List.foldl
-                    (\( position_, cellLine ) cell ->
-                        GridCell.addLine userId (asciiToLocalCoord position_) cellLine cell
-                    )
-                    (getCell cellCoord state |> Maybe.withDefault GridCell.empty)
-                    (head :: rest)
-                    |> (\cell -> setCell cellCoord cell state)
-            )
+            (\( head, rest ) state -> addLines userId (Nonempty head rest) state)
             grid
 
 
-getCell : ( Quantity Int Units.CellUnit, Quantity Int Units.CellUnit ) -> Grid -> Maybe Cell
+splitUpLine :
+    Coord Int Units.AsciiUnit
+    -> Quantity Int Units.AsciiUnit
+    -> Nonempty Ascii
+    -> List ( Coord Int Units.AsciiUnit, Nonempty Ascii )
+splitUpLine asciiCoord offsetY line =
+    let
+        (Quantity.Quantity x) =
+            Tuple.first asciiCoord
+
+        splitIndex =
+            GridCell.cellSize - modBy GridCell.cellSize x
+
+        ( head, rest ) =
+            List.splitAt splitIndex (List.Nonempty.toList line)
+
+        restCoord index =
+            Helper.addTuple asciiCoord ( Units.asciiUnit <| splitIndex + GridCell.cellSize * index, offsetY )
+    in
+    List.greedyGroupsOf GridCell.cellSize rest
+        |> List.indexedMap (\index value -> ( restCoord index, value ))
+        |> (::) ( Helper.addTuple asciiCoord ( Quantity.zero, offsetY ), head )
+        |> List.filterMap (\( position, value ) -> List.Nonempty.fromList value |> Maybe.map (Tuple.pair position))
+
+
+addLines :
+    UserId
+    -> Nonempty ( Coord Int Units.AsciiUnit, Nonempty Ascii )
+    -> Grid
+    -> Grid
+addLines userId lines state =
+    let
+        cellCoord =
+            List.Nonempty.head lines |> Tuple.first |> asciiToCellCoord
+    in
+    List.Nonempty.foldl
+        (\( position_, cellLine ) cell ->
+            GridCell.addLine userId (asciiToLocalCoord position_) cellLine cell
+        )
+        (getCell cellCoord state |> Maybe.withDefault GridCell.empty)
+        lines
+        |> (\cell -> setCell cellCoord cell state)
+
+
+getCell : Coord Int Units.CellUnit -> Grid -> Maybe Cell
 getCell ( Quantity x, Quantity y ) (Grid grid) =
     Dict.get ( x, y ) grid |> Maybe.map .cell
 
 
-setCell : ( Quantity Int Units.CellUnit, Quantity Int Units.CellUnit ) -> Cell -> Grid -> Grid
+setCell : Coord Int Units.CellUnit -> Cell -> Grid -> Grid
 setCell (( Quantity x, Quantity y ) as position) value (Grid grid) =
     Dict.insert ( x, y ) { cell = value, mesh = GridCell.flatten value |> Array.toList |> mesh position |> Just } grid |> Grid
 
@@ -147,7 +158,7 @@ asciiBox offsetX offsetY indexOffset =
     }
 
 
-mesh : ( Quantity Int Units.CellUnit, Quantity Int Units.CellUnit ) -> List Ascii -> WebGL.Mesh { position : Vec2, texturePosition : Vec2 }
+mesh : Coord Int Units.CellUnit -> List Ascii -> WebGL.Mesh { position : Vec2, texturePosition : Vec2 }
 mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
     List.map2
         (\ascii box ->
