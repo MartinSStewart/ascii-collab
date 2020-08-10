@@ -1,4 +1,4 @@
-module User exposing (User(..), UserId(..))
+module User exposing (User(..), UserId, fromSessionId)
 
 import Lamdera exposing (SessionId)
 
@@ -9,4 +9,8 @@ type User
 
 type UserId
     = TempUserId SessionId
-    | UserId Int
+
+
+fromSessionId : SessionId -> UserId
+fromSessionId =
+    TempUserId

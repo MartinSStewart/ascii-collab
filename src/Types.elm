@@ -1,22 +1,33 @@
-module Types exposing (BackendModel, BackendMsg(..), FrontendModel, FrontendMsg(..), MouseState(..), ToBackend(..), ToFrontend(..))
+module Types exposing (BackendModel, BackendMsg(..), FrontendLoaded, FrontendModel(..), FrontendMsg(..), MouseState(..), ToBackend(..), ToFrontend(..))
 
+import Ascii exposing (Ascii)
 import Browser exposing (UrlRequest)
-import Browser.Navigation exposing (Key)
+import Browser.Navigation
 import Cursor exposing (Cursor)
-import Grid exposing (Grid)
+import Dict exposing (Dict)
+import Grid exposing (Grid, ServerGrid)
+import GridCell exposing (Cell)
 import Helper exposing (Coord)
 import Keyboard
+import Lamdera exposing (ClientId, SessionId)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
+import Set exposing (Set)
 import Time
-import Units exposing (ScreenCoordinate, WorldCoordinate, WorldPixel)
+import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
+import User exposing (User, UserId)
 import WebGL.Texture exposing (Texture)
 
 
-type alias FrontendModel =
-    { key : Key
+type FrontendModel
+    = Loading { key : Browser.Navigation.Key }
+    | Loaded FrontendLoaded
+
+
+type alias FrontendLoaded =
+    { key : Browser.Navigation.Key
     , grid : Grid
     , viewPoint : Point2d WorldPixel WorldCoordinate
     , cursor : Cursor
@@ -25,6 +36,7 @@ type alias FrontendModel =
     , windowSize : Coord Pixels
     , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
     , mouseState : MouseState
+    , userId : UserId
     }
 
 
@@ -34,7 +46,7 @@ type MouseState
 
 
 type alias BackendModel =
-    {}
+    { grid : ServerGrid, users : Set ( SessionId, ClientId ), changeCount : Int }
 
 
 type FrontendMsg
@@ -55,6 +67,8 @@ type FrontendMsg
 
 type ToBackend
     = NoOpToBackend
+    | RequestData
+    | GridChange { changes : List Change }
 
 
 type BackendMsg
@@ -63,3 +77,9 @@ type BackendMsg
 
 type ToFrontend
     = NoOpToFrontend
+    | LoadingData { userId : UserId, grid : ServerGrid }
+    | GridChangeBroadcast { changes : List Change, changeId : Int, user : UserId }
+
+
+type alias Change =
+    { cellPosition : Coord CellUnit, localPosition : Int, change : List Ascii }

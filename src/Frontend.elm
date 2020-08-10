@@ -4,10 +4,10 @@ import Ascii
 import Browser exposing (UrlRequest(..))
 import Browser.Dom
 import Browser.Events
-import Browser.Navigation as Nav
+import Browser.Navigation
 import Cursor
 import Element
-import Grid exposing (Grid)
+import Grid exposing (Grid, ServerGrid)
 import Helper
 import Html exposing (Html)
 import Html.Attributes
@@ -54,18 +54,20 @@ app =
         }
 
 
-init : Url.Url -> Nav.Key -> ( FrontendModel, Cmd FrontendMsg )
-init _ key =
-    ( { key = key
-      , grid = Grid.empty
-      , viewPoint = Point2d.origin
-      , cursor = { position = ( Units.asciiUnit 0, Units.asciiUnit 0 ), startingColumn = Units.asciiUnit 0 }
-      , texture = Nothing
-      , pressedKeys = []
-      , windowSize = ( Pixels.pixels 100, Pixels.pixels 100 )
-      , devicePixelRatio = Quantity.per Pixels.pixel (Units.worldUnit 1)
-      , mouseState = MouseLeftUp
-      }
+loadedInit : Browser.Navigation.Key -> ServerGrid -> UserId -> ( FrontendModel, Cmd FrontendMsg )
+loadedInit key grid userId =
+    ( Loaded
+        { key = key
+        , grid = Grid.toGrid grid
+        , viewPoint = Point2d.origin
+        , cursor = { position = ( Units.asciiUnit 0, Units.asciiUnit 0 ), startingColumn = Units.asciiUnit 0 }
+        , texture = Nothing
+        , pressedKeys = []
+        , windowSize = ( Pixels.pixels 100, Pixels.pixels 100 )
+        , devicePixelRatio = Quantity.per Pixels.pixel (Units.worldUnit 1)
+        , mouseState = MouseLeftUp
+        , userId = userId
+        }
     , Cmd.batch
         [ WebGL.Texture.loadWith
             { magnify = WebGL.Texture.nearest
@@ -84,19 +86,36 @@ init _ key =
     )
 
 
+init : Url.Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
+init _ key =
+    ( Loading { key = key }
+    , Lamdera.sendToBackend RequestData
+    )
+
+
 update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 update msg model =
+    case model of
+        Loading _ ->
+            ( model, Cmd.none )
+
+        Loaded frontendLoaded ->
+            updateLoaded msg frontendLoaded |> Tuple.mapFirst Loaded
+
+
+updateLoaded : FrontendMsg -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+updateLoaded msg model =
     case msg of
         UrlClicked urlRequest ->
             case urlRequest of
                 Internal url ->
                     ( model
-                    , Cmd.batch [ Nav.pushUrl model.key (Url.toString url) ]
+                    , Cmd.batch [ Browser.Navigation.pushUrl model.key (Url.toString url) ]
                     )
 
                 External url ->
                     ( model
-                    , Nav.load url
+                    , Browser.Navigation.load url
                     )
 
         UrlChanged url ->
@@ -156,7 +175,7 @@ update msg model =
                     in
                     { model
                         | cursor = newCursor
-                        , grid = Grid.addChange (UserId 0) newCursor.position (List.Nonempty.fromElement [ Ascii.default ]) model.grid
+                        , grid = Grid.addChange model.userId newCursor.position (List.Nonempty.fromElement [ Ascii.default ]) model.grid
                     }
 
                 _ ->
@@ -186,7 +205,7 @@ update msg model =
                         (\lines ->
                             { model
                                 | grid =
-                                    Grid.addChange (UserId 0) model.cursor.position lines model.grid
+                                    Grid.addChange model.userId model.cursor.position lines model.grid
                                 , cursor =
                                     Cursor.moveCursor
                                         ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
@@ -211,7 +230,7 @@ update msg model =
                         | mouseState = MouseLeftUp
                         , viewPoint = offsetViewPoint model start mousePosition
                         , cursor =
-                            if Vector2d.from start mousePosition |> Vector2d.length |> Quantity.lessThan (Pixels.pixels 5) then
+                            if Vector2d.from start mousePosition |> Vector2d.length |> Quantity.lessThan (Pixels.pixels 15) then
                                 let
                                     ( w, h ) =
                                         model.windowSize
@@ -244,7 +263,7 @@ update msg model =
                     ( model, Cmd.none )
 
 
-offsetViewPoint : FrontendModel -> Point2d Pixels ScreenCoordinate -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
+offsetViewPoint : FrontendLoaded -> Point2d Pixels ScreenCoordinate -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
 offsetViewPoint { windowSize, viewPoint, devicePixelRatio } mouseStart mouseCurrent =
     let
         delta : Vector2d WorldPixel WorldCoordinate
@@ -254,7 +273,7 @@ offsetViewPoint { windowSize, viewPoint, devicePixelRatio } mouseStart mouseCurr
     Point2d.translateBy delta viewPoint
 
 
-actualViewPoint : FrontendModel -> Point2d WorldPixel WorldCoordinate
+actualViewPoint : FrontendLoaded -> Point2d WorldPixel WorldCoordinate
 actualViewPoint model =
     case model.mouseState of
         MouseLeftUp ->
@@ -266,57 +285,77 @@ actualViewPoint model =
 
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 updateFromBackend msg model =
-    ( model, Cmd.none )
+    case ( model, msg ) of
+        ( _, NoOpToFrontend ) ->
+            ( model, Cmd.none )
+
+        ( Loading { key }, LoadingData { grid, userId } ) ->
+            loadedInit key grid userId
+
+        ( Loaded loaded, GridChangeBroadcast record ) ->
+            ( model, Cmd.none )
+
+        _ ->
+            ( model, Cmd.none )
 
 
 view : FrontendModel -> Browser.Document FrontendMsg
 view model =
     { title = "Ascii Art"
     , body =
-        [ Element.layout
-            [ Element.width Element.fill
-            , Element.height Element.fill
-            , Element.clip
-            , Element.inFront <|
-                Element.html <|
-                    Html.textarea
-                        ([ Html.Events.onInput UserTyped
-                         , Html.Attributes.value ""
-                         , Html.Attributes.style "width" "100%"
-                         , Html.Attributes.style "height" "100%"
-                         , Html.Attributes.style "resize" "none"
-                         , Html.Attributes.style "background-color" "transparent"
-                         , Html.Attributes.style "border-width" "0px"
-                         , Html.Attributes.id "textareaId"
-                         , Html.Events.Extra.Mouse.onDown
-                            (\{ clientPos } ->
-                                MouseDown (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                            )
-                         , Html.Events.Extra.Mouse.onUp
-                            (\{ clientPos } ->
-                                MouseUp (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                            )
-                         ]
-                            ++ (case model.mouseState of
-                                    MouseLeftDown _ ->
-                                        [ Html.Events.Extra.Mouse.onMove
-                                            (\{ clientPos } ->
-                                                MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                                            )
-                                        ]
+        [ case model of
+            Loading _ ->
+                Element.layout
+                    [ Element.width Element.fill
+                    , Element.height Element.fill
+                    ]
+                    (Element.text "Loading")
 
-                                    MouseLeftUp ->
-                                        []
-                               )
-                        )
-                        []
-            ]
-            (Element.html (canvasView model))
+            Loaded loadedModel ->
+                Element.layout
+                    [ Element.width Element.fill
+                    , Element.height Element.fill
+                    , Element.clip
+                    , Element.inFront <|
+                        Element.html <|
+                            Html.textarea
+                                ([ Html.Events.onInput UserTyped
+                                 , Html.Attributes.value ""
+                                 , Html.Attributes.style "width" "100%"
+                                 , Html.Attributes.style "height" "100%"
+                                 , Html.Attributes.style "resize" "none"
+                                 , Html.Attributes.style "background-color" "transparent"
+                                 , Html.Attributes.style "border-width" "0px"
+                                 , Html.Attributes.id "textareaId"
+                                 , Html.Events.Extra.Mouse.onDown
+                                    (\{ clientPos } ->
+                                        MouseDown (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+                                    )
+                                 , Html.Events.Extra.Mouse.onUp
+                                    (\{ clientPos } ->
+                                        MouseUp (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+                                    )
+                                 ]
+                                    ++ (case loadedModel.mouseState of
+                                            MouseLeftDown _ ->
+                                                [ Html.Events.Extra.Mouse.onMove
+                                                    (\{ clientPos } ->
+                                                        MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+                                                    )
+                                                ]
+
+                                            MouseLeftUp ->
+                                                []
+                                       )
+                                )
+                                []
+                    ]
+                    (Element.html (canvasView loadedModel))
         ]
     }
 
 
-findPixelPerfectSize : FrontendModel -> { canvasSize : ( Int, Int ), actualCanvasSize : ( Int, Int ) }
+findPixelPerfectSize : FrontendLoaded -> { canvasSize : ( Int, Int ), actualCanvasSize : ( Int, Int ) }
 findPixelPerfectSize frontendModel =
     let
         (Quantity pixelRatio) =
@@ -346,7 +385,7 @@ findPixelPerfectSize frontendModel =
     { canvasSize = ( w, h ), actualCanvasSize = ( actualW, actualH ) }
 
 
-canvasView : FrontendModel -> Html FrontendMsg
+canvasView : FrontendLoaded -> Html FrontendMsg
 canvasView model =
     let
         ( windowWidth, windowHeight ) =
@@ -406,18 +445,24 @@ drawText grid viewMatrix texture =
             )
 
 
+subscriptions : FrontendModel -> Sub FrontendMsg
 subscriptions model =
-    Sub.batch
-        [ Sub.map KeyMsg Keyboard.subscriptions
-        , Keyboard.downs KeyDown
-        , if Keyboard.Arrows.arrowsDirection model.pressedKeys == Keyboard.Arrows.NoDirection then
+    case model of
+        Loading _ ->
             Sub.none
 
-          else
-            Browser.Events.onAnimationFrame Step
-        , Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
-        , martinsstewart_elm_device_pixel_ratio_from_js (Units.worldUnit >> Quantity.per Pixels.pixel >> GotDevicePixelRatio)
-        ]
+        Loaded loadedModel ->
+            Sub.batch
+                [ Sub.map KeyMsg Keyboard.subscriptions
+                , Keyboard.downs KeyDown
+                , if Keyboard.Arrows.arrowsDirection loadedModel.pressedKeys == Keyboard.Arrows.NoDirection then
+                    Sub.none
+
+                  else
+                    Browser.Events.onAnimationFrame Step
+                , Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
+                , martinsstewart_elm_device_pixel_ratio_from_js (Units.worldUnit >> Quantity.per Pixels.pixel >> GotDevicePixelRatio)
+                ]
 
 
 type alias Uniforms =

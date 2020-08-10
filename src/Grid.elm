@@ -1,4 +1,4 @@
-module Grid exposing (Grid, Vertex, addChange, asciiBox, empty, mesh, meshes)
+module Grid exposing (Grid, ServerGrid, Vertex, addChange, asciiBox, empty, empty_, mesh, meshes, toGrid)
 
 import Array
 import Ascii exposing (Ascii)
@@ -20,6 +20,22 @@ type Grid
     = Grid (Dict ( Int, Int ) { cell : Cell, mesh : Maybe (WebGL.Mesh Vertex) })
 
 
+type ServerGrid
+    = ServerGrid (Dict ( Int, Int ) Cell)
+
+
+toGrid : ServerGrid -> Grid
+toGrid (ServerGrid serverGrid) =
+    Dict.map
+        (\( x, y ) cell ->
+            { cell = cell
+            , mesh = GridCell.flatten cell |> Array.toList |> mesh ( Units.cellUnit x, Units.cellUnit y ) |> Just
+            }
+        )
+        serverGrid
+        |> Grid
+
+
 type alias Vertex =
     { position : Vec2, texturePosition : Vec2 }
 
@@ -27,6 +43,11 @@ type alias Vertex =
 empty : Grid
 empty =
     Grid Dict.empty
+
+
+empty_ : ServerGrid
+empty_ =
+    ServerGrid Dict.empty
 
 
 asciiToCellCoord : Coord Units.AsciiUnit -> Coord Units.CellUnit
