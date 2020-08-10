@@ -29,7 +29,7 @@ empty =
     Grid Dict.empty
 
 
-asciiToCellCoord : Coord Int Units.AsciiUnit -> Coord Int Units.CellUnit
+asciiToCellCoord : Coord Units.AsciiUnit -> Coord Units.CellUnit
 asciiToCellCoord ( Quantity x, Quantity y ) =
     let
         offset =
@@ -40,12 +40,12 @@ asciiToCellCoord ( Quantity x, Quantity y ) =
     )
 
 
-asciiToLocalCoord : Coord Int Units.AsciiUnit -> Int
+asciiToLocalCoord : Coord Units.AsciiUnit -> Int
 asciiToLocalCoord ( Quantity x, Quantity y ) =
     modBy GridCell.cellSize x + modBy GridCell.cellSize y * GridCell.cellSize
 
 
-addChange : UserId -> Coord Int Units.AsciiUnit -> Nonempty (List Ascii) -> Grid -> Grid
+addChange : UserId -> Coord Units.AsciiUnit -> Nonempty (List Ascii) -> Grid -> Grid
 addChange userId asciiCoord lines grid =
     List.Nonempty.toList lines
         |> List.indexedMap Tuple.pair
@@ -66,10 +66,10 @@ addChange userId asciiCoord lines grid =
 
 
 splitUpLine :
-    Coord Int Units.AsciiUnit
+    Coord Units.AsciiUnit
     -> Quantity Int Units.AsciiUnit
     -> Nonempty Ascii
-    -> List ( Coord Int Units.AsciiUnit, Nonempty Ascii )
+    -> List ( Coord Units.AsciiUnit, Nonempty Ascii )
 splitUpLine asciiCoord offsetY line =
     let
         (Quantity.Quantity x) =
@@ -92,7 +92,7 @@ splitUpLine asciiCoord offsetY line =
 
 addLines :
     UserId
-    -> Nonempty ( Coord Int Units.AsciiUnit, Nonempty Ascii )
+    -> Nonempty ( Coord Units.AsciiUnit, Nonempty Ascii )
     -> Grid
     -> Grid
 addLines userId lines state =
@@ -109,12 +109,12 @@ addLines userId lines state =
         |> (\cell -> setCell cellCoord cell state)
 
 
-getCell : Coord Int Units.CellUnit -> Grid -> Maybe Cell
+getCell : Coord Units.CellUnit -> Grid -> Maybe Cell
 getCell ( Quantity x, Quantity y ) (Grid grid) =
     Dict.get ( x, y ) grid |> Maybe.map .cell
 
 
-setCell : Coord Int Units.CellUnit -> Cell -> Grid -> Grid
+setCell : Coord Units.CellUnit -> Cell -> Grid -> Grid
 setCell (( Quantity x, Quantity y ) as position) value (Grid grid) =
     Dict.insert ( x, y ) { cell = value, mesh = GridCell.flatten value |> Array.toList |> mesh position |> Just } grid |> Grid
 
@@ -158,7 +158,7 @@ asciiBox offsetX offsetY indexOffset =
     }
 
 
-mesh : Coord Int Units.CellUnit -> List Ascii -> WebGL.Mesh { position : Vec2, texturePosition : Vec2 }
+mesh : Coord Units.CellUnit -> List Ascii -> WebGL.Mesh { position : Vec2, texturePosition : Vec2 }
 mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
     List.map2
         (\ascii box ->

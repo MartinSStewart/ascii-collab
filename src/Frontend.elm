@@ -7,12 +7,15 @@ import Browser.Events
 import Browser.Navigation as Nav
 import Cursor
 import Element
-import Grid
+import Frame2d
+import Grid exposing (Grid)
 import Helper
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Events.Extra.Mouse
 import Json.Decode
+import Json.Encode
 import Keyboard
 import Keyboard.Arrows
 import Lamdera
@@ -21,13 +24,16 @@ import List.Nonempty
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
+import Maybe.Extra as Maybe
 import Pixels exposing (Pixels)
-import Quantity exposing (Quantity)
+import Point2d exposing (Point2d)
+import Quantity exposing (Quantity(..))
 import Task
 import Types exposing (..)
-import Units
+import Units exposing (ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url
 import User exposing (UserId(..))
+import Vector2d exposing (Vector2d)
 import WebGL exposing (Shader)
 import WebGL.Settings
 import WebGL.Settings.Blend as Blend
@@ -56,12 +62,13 @@ init : Url.Url -> Nav.Key -> ( FrontendModel, Cmd FrontendMsg )
 init url key =
     ( { key = key
       , grid = Grid.empty
-      , viewPoint = ( Quantity.zero, Quantity.zero )
+      , viewPoint = Point2d.origin
       , cursor = Just { position = ( Units.asciiUnit 0, Units.asciiUnit 0 ), startingColumn = Units.asciiUnit 0 }
       , texture = Nothing
       , pressedKeys = []
       , windowSize = ( Pixels.pixels 100, Pixels.pixels 100 )
-      , devicePixelRatio = 1
+      , devicePixelRatio = Quantity.per Pixels.pixel (Units.worldUnit 1)
+      , mouseState = MouseLeftUp
       }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -165,31 +172,6 @@ update msg model =
             )
 
         Step _ ->
-            --let
-            --    newViewPoint =
-            --        ( if isDown Keyboard.ArrowLeft model /= isDown Keyboard.ArrowRight model then
-            --            if isDown Keyboard.ArrowLeft model then
-            --                Units.worldUnit -10
-            --
-            --            else
-            --                Units.worldUnit 10
-            --
-            --          else
-            --            Quantity.zero
-            --        , if isDown Keyboard.ArrowUp model /= isDown Keyboard.ArrowDown model then
-            --            if isDown Keyboard.ArrowUp model then
-            --                Units.worldUnit 10
-            --
-            --            else
-            --                Units.worldUnit -10
-            --
-            --          else
-            --            Quantity.zero
-            --        )
-            --in
-            --( { model | viewPoint = Helper.addTuple model.viewPoint newViewPoint }
-            --, Cmd.none
-            --)
             ( model, Cmd.none )
 
         WindowResized windowSize ->
@@ -231,12 +213,45 @@ update msg model =
             )
 
         MouseDown mousePosition ->
-            ( model, Cmd.none )
+            ( { model | mouseState = MouseLeftDown { start = mousePosition, current = mousePosition } }
+            , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
+            )
+
+        MouseUp mousePosition ->
+            case model.mouseState of
+                MouseLeftDown { start } ->
+                    ( { model | mouseState = MouseLeftUp, viewPoint = offsetViewPoint model start mousePosition }, Cmd.none )
+
+                MouseLeftUp ->
+                    ( model, Cmd.none )
+
+        MouseMove mousePosition ->
+            case model.mouseState of
+                MouseLeftDown { start } ->
+                    ( { model | mouseState = MouseLeftDown { start = start, current = mousePosition } }, Cmd.none )
+
+                MouseLeftUp ->
+                    ( model, Cmd.none )
 
 
-isDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
-isDown key model =
-    List.any ((==) key) model.pressedKeys
+offsetViewPoint : FrontendModel -> Point2d Pixels ScreenCoordinate -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
+offsetViewPoint { viewPoint, devicePixelRatio } mouseStart mouseCurrent =
+    let
+        delta : Vector2d WorldPixel WorldCoordinate
+        delta =
+            Vector2d.from mouseStart mouseCurrent |> Vector2d.at devicePixelRatio |> Vector2d.placeIn (Units.screenFrame viewPoint)
+    in
+    Point2d.translateBy delta viewPoint
+
+
+actualViewPoint : FrontendModel -> Point2d WorldPixel WorldCoordinate
+actualViewPoint model =
+    case model.mouseState of
+        MouseLeftUp ->
+            model.viewPoint
+
+        MouseLeftDown { start, current } ->
+            offsetViewPoint model start current
 
 
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
@@ -255,14 +270,35 @@ view model =
             , Element.inFront <|
                 Element.html <|
                     Html.textarea
-                        [ Html.Events.onInput UserTyped
-                        , Html.Attributes.value ""
-                        , Html.Attributes.style "width" "100%"
-                        , Html.Attributes.style "height" "100%"
-                        , Html.Attributes.style "resize" "none"
-                        , Html.Attributes.style "background-color" "transparent"
-                        , Html.Attributes.style "border-width" "0px"
-                        ]
+                        ([ Html.Events.onInput UserTyped
+                         , Html.Attributes.value ""
+                         , Html.Attributes.style "width" "100%"
+                         , Html.Attributes.style "height" "100%"
+                         , Html.Attributes.style "resize" "none"
+                         , Html.Attributes.style "background-color" "transparent"
+                         , Html.Attributes.style "border-width" "0px"
+                         , Html.Attributes.id "textareaId"
+                         , Html.Events.Extra.Mouse.onDown
+                            (\{ clientPos } ->
+                                MouseDown (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+                            )
+                         , Html.Events.Extra.Mouse.onUp
+                            (\{ clientPos } ->
+                                MouseUp (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+                            )
+                         ]
+                            ++ (case model.mouseState of
+                                    MouseLeftDown _ ->
+                                        [ Html.Events.Extra.Mouse.onMove
+                                            (\{ clientPos } ->
+                                                MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+                                            )
+                                        ]
+
+                                    MouseLeftUp ->
+                                        []
+                               )
+                        )
                         []
             ]
             (Element.html (canvasView model))
@@ -273,6 +309,9 @@ view model =
 findPixelPerfectSize : FrontendModel -> { canvasSize : ( Int, Int ), actualCanvasSize : ( Int, Int ) }
 findPixelPerfectSize frontendModel =
     let
+        (Quantity pixelRatio) =
+            frontendModel.devicePixelRatio
+
         findValue : Quantity Int Pixels -> ( Int, Int )
         findValue value =
             List.range 0 9
@@ -281,12 +320,12 @@ findPixelPerfectSize frontendModel =
                     (\v ->
                         let
                             a =
-                                toFloat v * frontendModel.devicePixelRatio
+                                toFloat v * pixelRatio
                         in
                         a == toFloat (round a) && modBy 2 (round a) == 0
                     )
-                |> Maybe.map (\v -> ( v, toFloat v * frontendModel.devicePixelRatio |> round ))
-                |> Maybe.withDefault ( Pixels.inPixels value, toFloat (Pixels.inPixels value) * frontendModel.devicePixelRatio |> round )
+                |> Maybe.map (\v -> ( v, toFloat v * pixelRatio |> round ))
+                |> Maybe.withDefault ( Pixels.inPixels value, toFloat (Pixels.inPixels value) * pixelRatio |> round )
 
         ( w, actualW ) =
             findValue (Tuple.first frontendModel.windowSize)
@@ -309,14 +348,14 @@ canvasView model =
         { canvasSize, actualCanvasSize } =
             findPixelPerfectSize model
 
-        ( x, y ) =
-            model.viewPoint
+        { x, y } =
+            Point2d.unwrap (actualViewPoint model)
 
         viewMatrix =
             Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
                 |> Mat4.translate3
-                    (x |> Units.inWorldUnits |> toFloat |> negate)
-                    (y |> Units.inWorldUnits |> toFloat)
+                    (negate <| toFloat <| round x)
+                    (toFloat <| round y)
                     0
     in
     WebGL.toHtmlWith
@@ -341,28 +380,27 @@ canvasView model =
             Nothing ->
                 []
          )
-            ++ (case model.texture of
-                    Just texture ->
-                        Grid.meshes model.grid
-                            |> List.map
-                                (\mesh ->
-                                    WebGL.entityWith
-                                        [ WebGL.Settings.cullFace WebGL.Settings.back
-                                        , Blend.add Blend.one Blend.oneMinusSrcAlpha
-                                        ]
-                                        vertexShader
-                                        fragmentShader
-                                        mesh
-                                        { view = viewMatrix
-                                        , texture = texture
-                                        , color = Math.Vector3.vec3 0 0 0
-                                        }
-                                )
-
-                    Nothing ->
-                        []
-               )
+            ++ (Maybe.map (drawText model.grid viewMatrix) model.texture |> Maybe.withDefault [])
         )
+
+
+drawText : Grid -> Mat4 -> Texture -> List WebGL.Entity
+drawText grid viewMatrix texture =
+    Grid.meshes grid
+        |> List.map
+            (\mesh ->
+                WebGL.entityWith
+                    [ WebGL.Settings.cullFace WebGL.Settings.back
+                    , Blend.add Blend.one Blend.oneMinusSrcAlpha
+                    ]
+                    vertexShader
+                    fragmentShader
+                    mesh
+                    { view = viewMatrix
+                    , texture = texture
+                    , color = Math.Vector3.vec3 0 0 0
+                    }
+            )
 
 
 subscriptions model =
@@ -375,18 +413,7 @@ subscriptions model =
           else
             Browser.Events.onAnimationFrame Step
         , Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
-        , martinsstewart_elm_device_pixel_ratio_from_js GotDevicePixelRatio
-        , Browser.Events.onMouseDown
-            (Json.Decode.value
-                |> Json.Decode.map
-                    (\a ->
-                        let
-                            _ =
-                                Debug.log "asfd" a
-                        in
-                        MouseDown ( Quantity.zero, Quantity.zero )
-                    )
-            )
+        , martinsstewart_elm_device_pixel_ratio_from_js (Units.worldUnit >> Quantity.per Pixels.pixel >> GotDevicePixelRatio)
         ]
 
 
