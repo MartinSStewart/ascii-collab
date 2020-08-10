@@ -22,16 +22,15 @@ import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
 import Pixels exposing (Pixels)
-import Point2d
 import Quantity exposing (Quantity)
 import Task
 import Types exposing (..)
 import Units
 import Url
 import User exposing (UserId(..))
-import Vector2d
 import WebGL exposing (Shader)
 import WebGL.Settings
+import WebGL.Settings.Blend as Blend
 import WebGL.Texture exposing (Texture)
 
 
@@ -117,39 +116,81 @@ update msg model =
 
         KeyDown rawKey ->
             ( case ( model.cursor, Keyboard.anyKeyOriginal rawKey ) of
-                --( Just cursor, Just Keyboard.Enter ) ->
-                --    { model | cursor = Cursor.newLine cursor |> Just }
+                ( Just cursor, Just Keyboard.ArrowLeft ) ->
+                    { model
+                        | cursor =
+                            Cursor.setCursor
+                                (Helper.addTuple cursor.position ( Units.asciiUnit -1, Units.asciiUnit 0 ))
+                                |> Just
+                    }
+
+                ( Just cursor, Just Keyboard.ArrowRight ) ->
+                    { model
+                        | cursor =
+                            Cursor.setCursor
+                                (Helper.addTuple cursor.position ( Units.asciiUnit 1, Units.asciiUnit 0 ))
+                                |> Just
+                    }
+
+                ( Just cursor, Just Keyboard.ArrowUp ) ->
+                    { model
+                        | cursor =
+                            Cursor.setCursor
+                                (Helper.addTuple cursor.position ( Units.asciiUnit 0, Units.asciiUnit -1 ))
+                                |> Just
+                    }
+
+                ( Just cursor, Just Keyboard.ArrowDown ) ->
+                    { model
+                        | cursor =
+                            Cursor.setCursor
+                                (Helper.addTuple cursor.position ( Units.asciiUnit 0, Units.asciiUnit 1 ))
+                                |> Just
+                    }
+
+                ( Just cursor, Just Keyboard.Backspace ) ->
+                    let
+                        newCursor =
+                            Cursor.setCursor
+                                (Helper.addTuple cursor.position ( Units.asciiUnit -1, Units.asciiUnit 0 ))
+                    in
+                    { model
+                        | cursor = Just newCursor
+                        , grid = Grid.addChange (UserId 0) newCursor.position (List.Nonempty.fromElement [ Ascii.default ]) model.grid
+                    }
+
                 _ ->
                     model
             , Cmd.none
             )
 
         Step _ ->
-            let
-                newViewPoint =
-                    ( if isDown Keyboard.ArrowLeft model /= isDown Keyboard.ArrowRight model then
-                        if isDown Keyboard.ArrowLeft model then
-                            Units.worldUnit -10
-
-                        else
-                            Units.worldUnit 10
-
-                      else
-                        Quantity.zero
-                    , if isDown Keyboard.ArrowUp model /= isDown Keyboard.ArrowDown model then
-                        if isDown Keyboard.ArrowUp model then
-                            Units.worldUnit 10
-
-                        else
-                            Units.worldUnit -10
-
-                      else
-                        Quantity.zero
-                    )
-            in
-            ( { model | viewPoint = Helper.addTuple model.viewPoint newViewPoint }
-            , Cmd.none
-            )
+            --let
+            --    newViewPoint =
+            --        ( if isDown Keyboard.ArrowLeft model /= isDown Keyboard.ArrowRight model then
+            --            if isDown Keyboard.ArrowLeft model then
+            --                Units.worldUnit -10
+            --
+            --            else
+            --                Units.worldUnit 10
+            --
+            --          else
+            --            Quantity.zero
+            --        , if isDown Keyboard.ArrowUp model /= isDown Keyboard.ArrowDown model then
+            --            if isDown Keyboard.ArrowUp model then
+            --                Units.worldUnit 10
+            --
+            --            else
+            --                Units.worldUnit -10
+            --
+            --          else
+            --            Quantity.zero
+            --        )
+            --in
+            --( { model | viewPoint = Helper.addTuple model.viewPoint newViewPoint }
+            --, Cmd.none
+            --)
+            ( model, Cmd.none )
 
         WindowResized windowSize ->
             ( { model | windowSize = windowSize }, martinsstewart_elm_device_pixel_ratio_to_js () )
@@ -306,7 +347,9 @@ canvasView model =
                             |> List.map
                                 (\mesh ->
                                     WebGL.entityWith
-                                        [ WebGL.Settings.cullFace WebGL.Settings.back ]
+                                        [ WebGL.Settings.cullFace WebGL.Settings.back
+                                        , Blend.add Blend.one Blend.oneMinusSrcAlpha
+                                        ]
                                         vertexShader
                                         fragmentShader
                                         mesh
