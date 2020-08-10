@@ -20,6 +20,7 @@ import List.Extra as List
 import List.Nonempty
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
+import Math.Vector3 exposing (Vec3)
 import Pixels exposing (Pixels)
 import Point2d
 import Quantity exposing (Quantity)
@@ -266,6 +267,16 @@ canvasView model =
 
         { canvasSize, actualCanvasSize } =
             findPixelPerfectSize model
+
+        ( x, y ) =
+            model.viewPoint
+
+        viewMatrix =
+            Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
+                |> Mat4.translate3
+                    (x |> Units.inWorldUnits |> toFloat |> negate)
+                    (y |> Units.inWorldUnits |> toFloat)
+                    0
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False, WebGL.antialias ]
@@ -274,32 +285,40 @@ canvasView model =
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
         ]
-        (case model.texture of
-            Just texture ->
-                let
-                    ( x, y ) =
-                        model.viewPoint
-                in
-                Grid.meshes model.grid
-                    |> List.map
-                        (\mesh ->
-                            WebGL.entityWith
-                                [ WebGL.Settings.cullFace WebGL.Settings.back ]
-                                vertexShader
-                                fragmentShader
-                                mesh
-                                { view =
-                                    Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
-                                        |> Mat4.translate3
-                                            (x |> Units.inWorldUnits |> toFloat |> negate)
-                                            (y |> Units.inWorldUnits |> toFloat)
-                                            0
-                                , texture = texture
-                                }
-                        )
+        ((case model.cursor of
+            Just cursor ->
+                [ WebGL.entity
+                    Cursor.vertexShader
+                    Cursor.fragmentShader
+                    Cursor.mesh
+                    { view = viewMatrix
+                    , offset = Units.asciiToWorld cursor.position |> Helper.coordToVec
+                    , color = Math.Vector3.vec3 1 1 0
+                    }
+                ]
 
             Nothing ->
                 []
+         )
+            ++ (case model.texture of
+                    Just texture ->
+                        Grid.meshes model.grid
+                            |> List.map
+                                (\mesh ->
+                                    WebGL.entityWith
+                                        [ WebGL.Settings.cullFace WebGL.Settings.back ]
+                                        vertexShader
+                                        fragmentShader
+                                        mesh
+                                        { view = viewMatrix
+                                        , texture = texture
+                                        , color = Math.Vector3.vec3 0 0 0
+                                        }
+                                )
+
+                    Nothing ->
+                        []
+               )
         )
 
 
@@ -331,6 +350,7 @@ subscriptions model =
 type alias Uniforms =
     { view : Mat4
     , texture : Texture
+    , color : Vec3
     }
 
 
@@ -351,14 +371,16 @@ void main () {
 |]
 
 
-fragmentShader : Shader {} { u | texture : Texture } { vcoord : Vec2 }
+fragmentShader : Shader {} { u | texture : Texture, color : Vec3 } { vcoord : Vec2 }
 fragmentShader =
     [glsl|
         precision mediump float;
         uniform sampler2D texture;
+        uniform vec3 color;
         varying vec2 vcoord;
         void main () {
-            gl_FragColor = texture2D(texture, vcoord);
+            vec4 textureColor = texture2D(texture, vcoord);
+            gl_FragColor = vec4(color.x * textureColor.x, color.y * textureColor.x, color.z * textureColor.x, textureColor.x);
         }
     |]
 

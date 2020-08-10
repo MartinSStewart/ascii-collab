@@ -1,4 +1,4 @@
-module Grid exposing (Grid, Vertex, addChange, empty, mesh, meshes)
+module Grid exposing (Grid, Vertex, addChange, asciiBox, empty, mesh, meshes)
 
 import Array
 import Ascii exposing (Ascii)

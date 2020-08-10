@@ -1,5 +1,8 @@
-module Units exposing (AsciiUnit, CellUnit, WorldPixel, asciiUnit, cellUnit, inWorldUnits, worldUnit)
+module Units exposing (AsciiUnit, CellUnit, WorldPixel, asciiToWorld, asciiUnit, cellUnit, inWorldUnits, worldUnit)
 
+import Ascii
+import Helper exposing (Coord)
+import Pixels
 import Quantity exposing (Quantity)
 
 
@@ -33,3 +36,12 @@ inWorldUnits (Quantity.Quantity value) =
 cellUnit : Int -> Quantity Int CellUnit
 cellUnit =
     Quantity.Quantity
+
+
+asciiToWorld : Coord Int AsciiUnit -> Coord Int WorldPixel
+asciiToWorld ( Quantity.Quantity x, Quantity.Quantity y ) =
+    let
+        ( w, h ) =
+            Ascii.size
+    in
+    ( Quantity.Quantity (Pixels.inPixels w * x), Quantity.Quantity (Pixels.inPixels h * y) )
