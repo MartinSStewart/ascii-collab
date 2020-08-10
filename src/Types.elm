@@ -19,7 +19,7 @@ type alias FrontendModel =
     { key : Key
     , grid : Grid
     , viewPoint : Point2d WorldPixel WorldCoordinate
-    , cursor : Maybe Cursor
+    , cursor : Cursor
     , texture : Maybe Texture
     , pressedKeys : List Keyboard.Key
     , windowSize : Coord Pixels

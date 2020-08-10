@@ -7,15 +7,12 @@ import Browser.Events
 import Browser.Navigation as Nav
 import Cursor
 import Element
-import Frame2d
 import Grid exposing (Grid)
 import Helper
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Html.Events.Extra.Mouse
-import Json.Decode
-import Json.Encode
 import Keyboard
 import Keyboard.Arrows
 import Lamdera
@@ -24,7 +21,6 @@ import List.Nonempty
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
-import Maybe.Extra as Maybe
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
@@ -59,11 +55,11 @@ app =
 
 
 init : Url.Url -> Nav.Key -> ( FrontendModel, Cmd FrontendMsg )
-init url key =
+init _ key =
     ( { key = key
       , grid = Grid.empty
       , viewPoint = Point2d.origin
-      , cursor = Just { position = ( Units.asciiUnit 0, Units.asciiUnit 0 ), startingColumn = Units.asciiUnit 0 }
+      , cursor = { position = ( Units.asciiUnit 0, Units.asciiUnit 0 ), startingColumn = Units.asciiUnit 0 }
       , texture = Nothing
       , pressedKeys = []
       , windowSize = ( Pixels.pixels 100, Pixels.pixels 100 )
@@ -83,6 +79,7 @@ init url key =
         , Task.perform
             (\{ viewport } -> WindowResized ( round viewport.width |> Pixels.pixels, round viewport.height |> Pixels.pixels ))
             Browser.Dom.getViewport
+        , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
         ]
     )
 
@@ -122,47 +119,43 @@ update msg model =
             )
 
         KeyDown rawKey ->
-            ( case ( model.cursor, Keyboard.anyKeyOriginal rawKey ) of
-                ( Just cursor, Just Keyboard.ArrowLeft ) ->
+            ( case Keyboard.anyKeyOriginal rawKey of
+                Just Keyboard.ArrowLeft ->
                     { model
                         | cursor =
                             Cursor.setCursor
-                                (Helper.addTuple cursor.position ( Units.asciiUnit -1, Units.asciiUnit 0 ))
-                                |> Just
+                                (Helper.addTuple model.cursor.position ( Units.asciiUnit -1, Units.asciiUnit 0 ))
                     }
 
-                ( Just cursor, Just Keyboard.ArrowRight ) ->
+                Just Keyboard.ArrowRight ->
                     { model
                         | cursor =
                             Cursor.setCursor
-                                (Helper.addTuple cursor.position ( Units.asciiUnit 1, Units.asciiUnit 0 ))
-                                |> Just
+                                (Helper.addTuple model.cursor.position ( Units.asciiUnit 1, Units.asciiUnit 0 ))
                     }
 
-                ( Just cursor, Just Keyboard.ArrowUp ) ->
+                Just Keyboard.ArrowUp ->
                     { model
                         | cursor =
                             Cursor.setCursor
-                                (Helper.addTuple cursor.position ( Units.asciiUnit 0, Units.asciiUnit -1 ))
-                                |> Just
+                                (Helper.addTuple model.cursor.position ( Units.asciiUnit 0, Units.asciiUnit -1 ))
                     }
 
-                ( Just cursor, Just Keyboard.ArrowDown ) ->
+                Just Keyboard.ArrowDown ->
                     { model
                         | cursor =
                             Cursor.setCursor
-                                (Helper.addTuple cursor.position ( Units.asciiUnit 0, Units.asciiUnit 1 ))
-                                |> Just
+                                (Helper.addTuple model.cursor.position ( Units.asciiUnit 0, Units.asciiUnit 1 ))
                     }
 
-                ( Just cursor, Just Keyboard.Backspace ) ->
+                Just Keyboard.Backspace ->
                     let
                         newCursor =
                             Cursor.setCursor
-                                (Helper.addTuple cursor.position ( Units.asciiUnit -1, Units.asciiUnit 0 ))
+                                (Helper.addTuple model.cursor.position ( Units.asciiUnit -1, Units.asciiUnit 0 ))
                     in
                     { model
-                        | cursor = Just newCursor
+                        | cursor = newCursor
                         , grid = Grid.addChange (UserId 0) newCursor.position (List.Nonempty.fromElement [ Ascii.default ]) model.grid
                     }
 
@@ -181,34 +174,28 @@ update msg model =
             ( { model | devicePixelRatio = devicePixelRatio }, Cmd.none )
 
         UserTyped text ->
-            ( case model.cursor of
-                Just cursor ->
-                    if text == "\n" || text == "\n\u{000D}" then
-                        { model | cursor = Cursor.newLine cursor |> Just }
+            ( if text == "\n" || text == "\n\u{000D}" then
+                { model | cursor = Cursor.newLine model.cursor }
 
-                    else
-                        String.filter ((/=) '\u{000D}') text
-                            |> String.split "\n"
-                            |> List.Nonempty.fromList
-                            |> Maybe.map (List.Nonempty.map (String.toList >> List.map (Ascii.charToAscii >> Maybe.withDefault Ascii.default)))
-                            |> Maybe.map
-                                (\lines ->
-                                    { model
-                                        | grid =
-                                            Grid.addChange (UserId 0) cursor.position lines model.grid
-                                        , cursor =
-                                            Cursor.moveCursor
-                                                ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
-                                                , Units.asciiUnit (List.Nonempty.length lines - 1)
-                                                )
-                                                cursor
-                                                |> Just
-                                    }
-                                )
-                            |> Maybe.withDefault model
-
-                _ ->
-                    model
+              else
+                String.filter ((/=) '\u{000D}') text
+                    |> String.split "\n"
+                    |> List.Nonempty.fromList
+                    |> Maybe.map (List.Nonempty.map (String.toList >> List.map (Ascii.charToAscii >> Maybe.withDefault Ascii.default)))
+                    |> Maybe.map
+                        (\lines ->
+                            { model
+                                | grid =
+                                    Grid.addChange (UserId 0) model.cursor.position lines model.grid
+                                , cursor =
+                                    Cursor.moveCursor
+                                        ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
+                                        , Units.asciiUnit (List.Nonempty.length lines - 1)
+                                        )
+                                        model.cursor
+                            }
+                        )
+                    |> Maybe.withDefault model
             , Cmd.none
             )
 
@@ -220,7 +207,30 @@ update msg model =
         MouseUp mousePosition ->
             case model.mouseState of
                 MouseLeftDown { start } ->
-                    ( { model | mouseState = MouseLeftUp, viewPoint = offsetViewPoint model start mousePosition }, Cmd.none )
+                    ( { model
+                        | mouseState = MouseLeftUp
+                        , viewPoint = offsetViewPoint model start mousePosition
+                        , cursor =
+                            if Vector2d.from start mousePosition |> Vector2d.length |> Quantity.lessThan (Pixels.pixels 5) then
+                                let
+                                    ( w, h ) =
+                                        model.windowSize
+                                in
+                                mousePosition
+                                    |> Point2d.translateBy
+                                        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h)
+                                            |> Vector2d.scaleBy -0.5
+                                        )
+                                    |> Point2d.at model.devicePixelRatio
+                                    |> Point2d.placeIn (Units.screenFrame model.viewPoint)
+                                    |> Units.worldToAscii
+                                    |> Cursor.setCursor
+
+                            else
+                                model.cursor
+                      }
+                    , Cmd.none
+                    )
 
                 MouseLeftUp ->
                     ( model, Cmd.none )
@@ -235,11 +245,11 @@ update msg model =
 
 
 offsetViewPoint : FrontendModel -> Point2d Pixels ScreenCoordinate -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
-offsetViewPoint { viewPoint, devicePixelRatio } mouseStart mouseCurrent =
+offsetViewPoint { windowSize, viewPoint, devicePixelRatio } mouseStart mouseCurrent =
     let
         delta : Vector2d WorldPixel WorldCoordinate
         delta =
-            Vector2d.from mouseStart mouseCurrent |> Vector2d.at devicePixelRatio |> Vector2d.placeIn (Units.screenFrame viewPoint)
+            Vector2d.from mouseCurrent mouseStart |> Vector2d.at devicePixelRatio |> Vector2d.placeIn (Units.screenFrame viewPoint)
     in
     Point2d.translateBy delta viewPoint
 
@@ -355,7 +365,7 @@ canvasView model =
             Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
                 |> Mat4.translate3
                     (negate <| toFloat <| round x)
-                    (toFloat <| round y)
+                    (negate <| toFloat <| round y)
                     0
     in
     WebGL.toHtmlWith
@@ -365,22 +375,15 @@ canvasView model =
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
         ]
-        ((case model.cursor of
-            Just cursor ->
-                [ WebGL.entity
-                    Cursor.vertexShader
-                    Cursor.fragmentShader
-                    Cursor.mesh
-                    { view = viewMatrix
-                    , offset = Units.asciiToWorld cursor.position |> Helper.coordToVec
-                    , color = Math.Vector3.vec3 1 1 0
-                    }
-                ]
-
-            Nothing ->
-                []
-         )
-            ++ (Maybe.map (drawText model.grid viewMatrix) model.texture |> Maybe.withDefault [])
+        (WebGL.entity
+            Cursor.vertexShader
+            Cursor.fragmentShader
+            Cursor.mesh
+            { view = viewMatrix
+            , offset = Units.asciiToWorld model.cursor.position |> Helper.coordToVec
+            , color = Math.Vector3.vec3 1 1 0
+            }
+            :: (Maybe.map (drawText model.grid viewMatrix) model.texture |> Maybe.withDefault [])
         )
 
 

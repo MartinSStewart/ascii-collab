@@ -1,4 +1,4 @@
-module Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, asciiToWorld, asciiUnit, cellUnit, inWorldUnits, pixelToWorldPixel, screenFrame, worldUnit)
+module Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, asciiToWorld, asciiUnit, cellUnit, inWorldUnits, pixelToWorldPixel, screenFrame, worldToAscii, worldUnit)
 
 import Ascii
 import Axis2d
@@ -51,6 +51,18 @@ asciiToWorld ( Quantity.Quantity x, Quantity.Quantity y ) =
     ( Quantity.Quantity (Pixels.inPixels w * x), Quantity.Quantity (Pixels.inPixels h * y) )
 
 
+worldToAscii : Point2d WorldPixel WorldCoordinate -> Coord AsciiUnit
+worldToAscii point =
+    let
+        ( w, h ) =
+            Ascii.size
+
+        { x, y } =
+            Point2d.unwrap point
+    in
+    ( Quantity.Quantity (x / Pixels.inPixels w |> floor), Quantity.Quantity (y / Pixels.inPixels h |> floor) )
+
+
 pixelToWorldPixel : Float -> Vector2d Pixels ScreenCoordinate -> Coord WorldPixel
 pixelToWorldPixel devicePixelRatio v =
     let
@@ -62,14 +74,7 @@ pixelToWorldPixel devicePixelRatio v =
 
 screenFrame : Point2d WorldPixel WorldCoordinate -> Frame2d WorldPixel WorldCoordinate { defines : ScreenCoordinate }
 screenFrame viewPoint =
-    Frame2d.atPoint viewPoint |> Frame2d.mirrorAcross Axis2d.y
-
-
-
---
---worldPixelToPixel : Float -> Point2d Pixels ScreenCoordinate -> Coord WorldPixel
---worldPixelToPixel devicePixelRatio screenCoordinate =
---    Pixels.inPixels screenCoordinate |> worldUnit
+    Frame2d.atPoint viewPoint
 
 
 type ScreenCoordinate
