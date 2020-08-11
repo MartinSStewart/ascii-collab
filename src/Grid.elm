@@ -1,4 +1,4 @@
-module Grid exposing (Grid, ServerGrid, Vertex, addChange, asciiBox, empty, empty_, mesh, meshes, toGrid)
+module Grid exposing (Grid, ServerGrid, Vertex, addChange, addChange_, asciiBox, changeCount, empty, empty_, mesh, meshes, toGrid)
 
 import Array
 import Ascii exposing (Ascii)
@@ -84,6 +84,25 @@ addChange userId asciiCoord lines grid =
         |> List.foldl
             (\( head, rest ) state -> addLines userId (Nonempty head rest) state)
             grid
+
+
+changeCount : Coord Units.CellUnit -> ServerGrid -> Int
+changeCount ( Quantity x, Quantity y ) (ServerGrid grid) =
+    case Dict.get ( x, y ) grid of
+        Just cell ->
+            GridCell.changeCount cell
+
+        Nothing ->
+            0
+
+
+addChange_ : UserId -> Coord Units.CellUnit -> Int -> Nonempty Ascii -> ServerGrid -> ServerGrid
+addChange_ userId ( Quantity x, Quantity y ) localPosition change (ServerGrid grid) =
+    Dict.get ( x, y ) grid
+        |> Maybe.withDefault GridCell.empty
+        |> GridCell.addLine userId localPosition change
+        |> (\cell -> Dict.insert ( x, y ) cell grid)
+        |> ServerGrid
 
 
 splitUpLine :

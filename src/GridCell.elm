@@ -1,4 +1,4 @@
-module GridCell exposing (Cell, addLine, cellSize, empty, flatten)
+module GridCell exposing (Cell, addLine, cellSize, changeCount, empty, flatten)
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
@@ -13,6 +13,11 @@ type Cell
 addLine : UserId -> Int -> Nonempty Ascii -> Cell -> Cell
 addLine userId position line (Cell history) =
     { userId = userId, position = position, line = line } :: history |> Cell
+
+
+changeCount : Cell -> Int
+changeCount (Cell cell) =
+    List.length cell
 
 
 flatten : Cell -> Array Ascii

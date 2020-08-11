@@ -4,12 +4,11 @@ import Ascii exposing (Ascii)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Cursor exposing (Cursor)
-import Dict exposing (Dict)
 import Grid exposing (Grid, ServerGrid)
-import GridCell exposing (Cell)
 import Helper exposing (Coord)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
+import List.Nonempty exposing (Nonempty)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
@@ -46,7 +45,7 @@ type MouseState
 
 
 type alias BackendModel =
-    { grid : ServerGrid, users : Set ( SessionId, ClientId ), changeCount : Int }
+    { grid : ServerGrid, users : Set ( SessionId, ClientId ) }
 
 
 type FrontendMsg
@@ -68,7 +67,7 @@ type FrontendMsg
 type ToBackend
     = NoOpToBackend
     | RequestData
-    | GridChange { changes : List Change }
+    | GridChange { changes : Nonempty Change }
 
 
 type BackendMsg
@@ -78,8 +77,12 @@ type BackendMsg
 type ToFrontend
     = NoOpToFrontend
     | LoadingData { userId : UserId, grid : ServerGrid }
-    | GridChangeBroadcast { changes : List Change, changeId : Int, user : UserId }
+    | GridChangeBroadcast { changes : Nonempty ChangeBroadcast, user : UserId }
 
 
 type alias Change =
-    { cellPosition : Coord CellUnit, localPosition : Int, change : List Ascii }
+    { cellPosition : Coord CellUnit, localPosition : Int, change : Nonempty Ascii }
+
+
+type alias ChangeBroadcast =
+    { cellPosition : Coord CellUnit, localPosition : Int, change : Nonempty Ascii, changeId : Int }
