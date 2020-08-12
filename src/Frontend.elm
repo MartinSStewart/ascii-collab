@@ -6,8 +6,9 @@ import Browser.Dom
 import Browser.Events
 import Browser.Navigation
 import Cursor
+import Dict exposing (Dict)
 import Element
-import Grid exposing (Grid, ServerGrid)
+import Grid exposing (Grid)
 import Helper
 import Html exposing (Html)
 import Html.Attributes
@@ -54,11 +55,12 @@ app =
         }
 
 
-loadedInit : Browser.Navigation.Key -> ServerGrid -> UserId -> ( FrontendModel, Cmd FrontendMsg )
+loadedInit : Browser.Navigation.Key -> Grid -> UserId -> ( FrontendModel, Cmd FrontendMsg )
 loadedInit key grid userId =
     ( Loaded
         { key = key
-        , grid = Grid.toGrid grid
+        , grid = grid
+        , meshes = Dict.empty
         , viewPoint = Point2d.origin
         , cursor = { position = ( Units.asciiUnit 0, Units.asciiUnit 0 ), startingColumn = Units.asciiUnit 0 }
         , texture = Nothing
@@ -292,8 +294,9 @@ updateFromBackend msg model =
         ( Loading { key }, LoadingData { grid, userId } ) ->
             loadedInit key grid userId
 
-        ( Loaded loaded, GridChangeBroadcast record ) ->
-            ( model, Cmd.none )
+        ( Loaded loaded, GridChangeBroadcast { changes, user } ) ->
+            Grid.addChange loaded.grid
+                ( model, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -426,11 +429,11 @@ canvasView model =
         )
 
 
-drawText : Grid -> Mat4 -> Texture -> List WebGL.Entity
-drawText grid viewMatrix texture =
-    Grid.meshes grid
+drawText : Dict ( Int, Int ) (WebGL.Mesh Vertex) -> Mat4 -> Texture -> List WebGL.Entity
+drawText meshes viewMatrix texture =
+    Dict.toList meshes
         |> List.map
-            (\mesh ->
+            (\( _, mesh ) ->
                 WebGL.entityWith
                     [ WebGL.Settings.cullFace WebGL.Settings.back
                     , Blend.add Blend.one Blend.oneMinusSrcAlpha

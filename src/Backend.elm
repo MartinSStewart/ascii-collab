@@ -19,7 +19,7 @@ app =
 
 init : ( BackendModel, Cmd BackendMsg )
 init =
-    ( { grid = Grid.empty_, users = Set.empty }, Cmd.none )
+    ( { grid = Grid.empty, users = Set.empty }, Cmd.none )
 
 
 update : BackendMsg -> BackendModel -> ( BackendModel, Cmd BackendMsg )

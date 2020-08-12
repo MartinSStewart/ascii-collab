@@ -1,14 +1,16 @@
-module Types exposing (BackendModel, BackendMsg(..), FrontendLoaded, FrontendModel(..), FrontendMsg(..), MouseState(..), ToBackend(..), ToFrontend(..))
+module Types exposing (BackendModel, BackendMsg(..), FrontendLoaded, FrontendModel(..), FrontendMsg(..), MouseState(..), ToBackend(..), ToFrontend(..), Vertex)
 
 import Ascii exposing (Ascii)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Cursor exposing (Cursor)
-import Grid exposing (Grid, ServerGrid)
+import Dict exposing (Dict)
+import Grid exposing (Grid)
 import Helper exposing (Coord)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
+import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
@@ -17,6 +19,7 @@ import Time
 import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
 import User exposing (User, UserId)
+import WebGL
 import WebGL.Texture exposing (Texture)
 
 
@@ -25,9 +28,14 @@ type FrontendModel
     | Loaded FrontendLoaded
 
 
+type alias Vertex =
+    { position : Vec2, texturePosition : Vec2 }
+
+
 type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , grid : Grid
+    , meshes : Dict ( Int, Int ) (WebGL.Mesh Vertex)
     , viewPoint : Point2d WorldPixel WorldCoordinate
     , cursor : Cursor
     , texture : Maybe Texture
@@ -45,7 +53,7 @@ type MouseState
 
 
 type alias BackendModel =
-    { grid : ServerGrid, users : Set ( SessionId, ClientId ) }
+    { grid : Grid, users : Set ( SessionId, ClientId ) }
 
 
 type FrontendMsg
@@ -67,7 +75,7 @@ type FrontendMsg
 type ToBackend
     = NoOpToBackend
     | RequestData
-    | GridChange { changes : Nonempty Change }
+    | GridChange { changes : Nonempty Grid.Change }
 
 
 type BackendMsg
@@ -76,12 +84,8 @@ type BackendMsg
 
 type ToFrontend
     = NoOpToFrontend
-    | LoadingData { userId : UserId, grid : ServerGrid }
+    | LoadingData { userId : UserId, grid : Grid }
     | GridChangeBroadcast { changes : Nonempty ChangeBroadcast, user : UserId }
-
-
-type alias Change =
-    { cellPosition : Coord CellUnit, localPosition : Int, change : Nonempty Ascii }
 
 
 type alias ChangeBroadcast =
