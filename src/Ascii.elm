@@ -22,7 +22,7 @@ charToAscii char =
 
 asciiCharCount : Int
 asciiCharCount =
-    List.length asciiChars |> Debug.log "length"
+    List.length asciiChars
 
 
 size : ( Quantity number Pixels, Quantity number Pixels )
