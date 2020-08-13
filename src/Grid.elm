@@ -1,4 +1,4 @@
-module Grid exposing (Change, Grid, addChange, addChange_, asciiBox, changeCount, empty, mesh, textToChange)
+module Grid exposing (Change, ChangeBroadcast, Grid, addChange, addChangeBroadcast, allCells, asciiBox, changeCount, empty, getCell, mesh, textToChange)
 
 import Array
 import Ascii exposing (Ascii)
@@ -11,7 +11,7 @@ import Math.Vector2 exposing (Vec2)
 import Pixels
 import Quantity exposing (Quantity(..))
 import Serialize
-import Units
+import Units exposing (CellUnit)
 import User exposing (UserId)
 import WebGL
 
@@ -42,6 +42,10 @@ type alias Change =
     { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Nonempty Ascii }
 
 
+type alias ChangeBroadcast =
+    { cellPosition : Coord CellUnit, localPosition : Int, change : Nonempty Ascii, changeId : Int, userId : UserId }
+
+
 textToChange : Coord Units.AsciiUnit -> Nonempty (List Ascii) -> List Change
 textToChange asciiCoord lines =
     List.Nonempty.toList lines
@@ -67,24 +71,17 @@ textToChange asciiCoord lines =
         |> List.concat
 
 
-addChange : UserId -> Coord Units.AsciiUnit -> Nonempty (List Ascii) -> Grid -> Grid
-addChange userId asciiCoord lines grid =
-    textToChange asciiCoord lines
-        |> List.foldl
-            (\change state ->
-                getCell change.cellPosition state
-                    |> Maybe.withDefault GridCell.empty
-                    |> GridCell.addLine userId change.localPosition change.change
-                    |> (\cell -> setCell change.cellPosition cell state)
-            )
-            grid
-
-
-
---|> List.gatherEqualsBy (Tuple.first >> asciiToCellAndLocalCoord)
---|> List.foldl
---    (\( head, rest ) state -> addLines userId (Nonempty head rest) state)
---    grid
+addChange : UserId -> List Change -> Grid -> Grid
+addChange userId changes grid =
+    List.foldl
+        (\change state ->
+            getCell change.cellPosition state
+                |> Maybe.withDefault GridCell.empty
+                |> GridCell.addLine userId change.localPosition change.change
+                |> (\cell -> setCell change.cellPosition cell state)
+        )
+        grid
+        changes
 
 
 changeCount : Coord Units.CellUnit -> Grid -> Int
@@ -97,13 +94,25 @@ changeCount ( Quantity x, Quantity y ) (Grid grid) =
             0
 
 
-addChange_ : UserId -> Coord Units.CellUnit -> Int -> Nonempty Ascii -> Grid -> Grid
-addChange_ userId ( Quantity x, Quantity y ) localPosition change (Grid grid) =
-    Dict.get ( x, y ) grid
-        |> Maybe.withDefault GridCell.empty
-        |> GridCell.addLine userId localPosition change
-        |> (\cell -> Dict.insert ( x, y ) cell grid)
-        |> Grid
+addChangeBroadcast : ChangeBroadcast -> Grid -> Maybe Grid
+addChangeBroadcast change grid =
+    let
+        cell : Cell
+        cell =
+            getCell change.cellPosition grid
+                |> Maybe.withDefault GridCell.empty
+
+        changeCount_ : Int
+        changeCount_ =
+            GridCell.changeCount cell
+    in
+    if changeCount_ >= change.changeId then
+        GridCell.addLineWithChangeId change.changeId change.userId change.localPosition change.change cell
+            |> (\cell_ -> setCell change.cellPosition cell_ grid)
+            |> Just
+
+    else
+        Nothing
 
 
 splitUpLine :
@@ -149,6 +158,11 @@ splitUpLine asciiCoord offsetY line =
 --        (getCell cellCoord state |> Maybe.withDefault GridCell.empty)
 --        lines
 --        |> (\cell -> setCell cellCoord cell state)
+
+
+allCells : Grid -> List ( Coord CellUnit, Cell )
+allCells (Grid grid) =
+    Dict.toList grid |> List.map (Tuple.mapFirst (\( x, y ) -> ( Units.cellUnit x, Units.cellUnit y )))
 
 
 getCell : Coord Units.CellUnit -> Grid -> Maybe Cell

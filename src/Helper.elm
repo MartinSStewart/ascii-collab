@@ -1,4 +1,4 @@
-module Helper exposing (Coord, addTuple, coordToVec, multiplyTuple)
+module Helper exposing (Coord, addTuple, coordToVec, multiplyTuple, rawCoord)
 
 import Math.Vector2 exposing (Vec2)
 import Quantity exposing (Quantity(..))
@@ -17,6 +17,11 @@ multiplyTuple ( x0, y0 ) ( x1, y1 ) =
 coordToVec : Coord units -> Vec2
 coordToVec ( Quantity x, Quantity y ) =
     Math.Vector2.vec2 (toFloat x) (toFloat y)
+
+
+rawCoord : Coord units -> ( Int, Int )
+rawCoord ( Quantity x, Quantity y ) =
+    ( x, y )
 
 
 type alias Coord units =

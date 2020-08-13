@@ -5,7 +5,7 @@ import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
-import Grid exposing (Grid)
+import Grid exposing (ChangeBroadcast, Grid)
 import Helper exposing (Coord)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
@@ -80,13 +80,10 @@ type ToBackend
 
 type BackendMsg
     = NoOpBackendMsg
+    | UserDisconnected SessionId ClientId
 
 
 type ToFrontend
     = NoOpToFrontend
     | LoadingData { userId : UserId, grid : Grid }
     | GridChangeBroadcast { changes : Nonempty ChangeBroadcast, user : UserId }
-
-
-type alias ChangeBroadcast =
-    { cellPosition : Coord CellUnit, localPosition : Int, change : Nonempty Ascii, changeId : Int }

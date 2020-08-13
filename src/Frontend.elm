@@ -1,5 +1,6 @@
 port module Frontend exposing (app, init, update, updateFromBackend, view)
 
+import Array
 import Ascii
 import Browser exposing (UrlRequest(..))
 import Browser.Dom
@@ -9,6 +10,7 @@ import Cursor
 import Dict exposing (Dict)
 import Element
 import Grid exposing (Grid)
+import GridCell
 import Helper
 import Html exposing (Html)
 import Html.Attributes
@@ -60,7 +62,10 @@ loadedInit key grid userId =
     ( Loaded
         { key = key
         , grid = grid
-        , meshes = Dict.empty
+        , meshes =
+            Grid.allCells grid
+                |> List.map (\( cellCoord, cell ) -> ( Helper.rawCoord cellCoord, Grid.mesh cellCoord (GridCell.flatten cell |> Array.toList) ))
+                |> Dict.fromList
         , viewPoint = Point2d.origin
         , cursor = { position = ( Units.asciiUnit 0, Units.asciiUnit 0 ), startingColumn = Units.asciiUnit 0 }
         , texture = Nothing
@@ -140,34 +145,42 @@ updateLoaded msg model =
             )
 
         KeyDown rawKey ->
-            ( case Keyboard.anyKeyOriginal rawKey of
+            case Keyboard.anyKeyOriginal rawKey of
                 Just Keyboard.ArrowLeft ->
-                    { model
+                    ( { model
                         | cursor =
                             Cursor.setCursor
                                 (Helper.addTuple model.cursor.position ( Units.asciiUnit -1, Units.asciiUnit 0 ))
-                    }
+                      }
+                    , Cmd.none
+                    )
 
                 Just Keyboard.ArrowRight ->
-                    { model
+                    ( { model
                         | cursor =
                             Cursor.setCursor
                                 (Helper.addTuple model.cursor.position ( Units.asciiUnit 1, Units.asciiUnit 0 ))
-                    }
+                      }
+                    , Cmd.none
+                    )
 
                 Just Keyboard.ArrowUp ->
-                    { model
+                    ( { model
                         | cursor =
                             Cursor.setCursor
                                 (Helper.addTuple model.cursor.position ( Units.asciiUnit 0, Units.asciiUnit -1 ))
-                    }
+                      }
+                    , Cmd.none
+                    )
 
                 Just Keyboard.ArrowDown ->
-                    { model
+                    ( { model
                         | cursor =
                             Cursor.setCursor
                                 (Helper.addTuple model.cursor.position ( Units.asciiUnit 0, Units.asciiUnit 1 ))
-                    }
+                      }
+                    , Cmd.none
+                    )
 
                 Just Keyboard.Backspace ->
                     let
@@ -175,15 +188,10 @@ updateLoaded msg model =
                             Cursor.setCursor
                                 (Helper.addTuple model.cursor.position ( Units.asciiUnit -1, Units.asciiUnit 0 ))
                     in
-                    { model
-                        | cursor = newCursor
-                        , grid = Grid.addChange model.userId newCursor.position (List.Nonempty.fromElement [ Ascii.default ]) model.grid
-                    }
+                    { model | cursor = newCursor } |> changeText " " |> Tuple.mapFirst (\m -> { m | cursor = newCursor })
 
                 _ ->
-                    model
-            , Cmd.none
-            )
+                    ( model, Cmd.none )
 
         Step _ ->
             ( model, Cmd.none )
@@ -195,30 +203,11 @@ updateLoaded msg model =
             ( { model | devicePixelRatio = devicePixelRatio }, Cmd.none )
 
         UserTyped text ->
-            ( if text == "\n" || text == "\n\u{000D}" then
-                { model | cursor = Cursor.newLine model.cursor }
+            if text == "\n" || text == "\n\u{000D}" then
+                ( { model | cursor = Cursor.newLine model.cursor }, Cmd.none )
 
-              else
-                String.filter ((/=) '\u{000D}') text
-                    |> String.split "\n"
-                    |> List.Nonempty.fromList
-                    |> Maybe.map (List.Nonempty.map (String.toList >> List.map (Ascii.charToAscii >> Maybe.withDefault Ascii.default)))
-                    |> Maybe.map
-                        (\lines ->
-                            { model
-                                | grid =
-                                    Grid.addChange model.userId model.cursor.position lines model.grid
-                                , cursor =
-                                    Cursor.moveCursor
-                                        ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
-                                        , Units.asciiUnit (List.Nonempty.length lines - 1)
-                                        )
-                                        model.cursor
-                            }
-                        )
-                    |> Maybe.withDefault model
-            , Cmd.none
-            )
+            else
+                changeText text model
 
         MouseDown mousePosition ->
             ( { model | mouseState = MouseLeftDown { start = mousePosition, current = mousePosition } }
@@ -265,6 +254,56 @@ updateLoaded msg model =
                     ( model, Cmd.none )
 
 
+changeText : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+changeText text model =
+    String.filter ((/=) '\u{000D}') text
+        |> String.split "\n"
+        |> List.Nonempty.fromList
+        |> Maybe.map (List.Nonempty.map (String.toList >> List.map (Ascii.charToAscii >> Maybe.withDefault Ascii.default)))
+        |> Maybe.map
+            (\lines ->
+                let
+                    changes =
+                        Grid.textToChange model.cursor.position lines
+
+                    newGrid =
+                        Grid.addChange model.userId changes model.grid
+                in
+                ( { model
+                    | grid = newGrid
+                    , meshes =
+                        changes
+                            |> List.map (\{ cellPosition } -> ( Helper.rawCoord cellPosition, cellPosition ))
+                            |> Dict.fromList
+                            |> Dict.values
+                            |> List.foldl
+                                (\cellCoord meshes ->
+                                    case Grid.getCell cellCoord newGrid of
+                                        Just cell ->
+                                            GridCell.flatten cell
+                                                |> Array.toList
+                                                |> Grid.mesh cellCoord
+                                                |> (\mesh -> Dict.insert (Helper.rawCoord cellCoord) mesh meshes)
+
+                                        Nothing ->
+                                            meshes
+                                )
+                                model.meshes
+                    , cursor =
+                        Cursor.moveCursor
+                            ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
+                            , Units.asciiUnit (List.Nonempty.length lines - 1)
+                            )
+                            model.cursor
+                  }
+                , List.Nonempty.fromList changes
+                    |> Maybe.map (\nonempty -> Lamdera.sendToBackend (GridChange { changes = nonempty }))
+                    |> Maybe.withDefault Cmd.none
+                )
+            )
+        |> Maybe.withDefault ( model, Cmd.none )
+
+
 offsetViewPoint : FrontendLoaded -> Point2d Pixels ScreenCoordinate -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
 offsetViewPoint { windowSize, viewPoint, devicePixelRatio } mouseStart mouseCurrent =
     let
@@ -295,8 +334,23 @@ updateFromBackend msg model =
             loadedInit key grid userId
 
         ( Loaded loaded, GridChangeBroadcast { changes, user } ) ->
-            Grid.addChange loaded.grid
-                ( model, Cmd.none )
+            ( Loaded
+                { loaded
+                    | grid =
+                        List.Nonempty.foldl
+                            (\change grid ->
+                                case Grid.addChangeBroadcast change grid of
+                                    Just newGrid ->
+                                        newGrid
+
+                                    Nothing ->
+                                        grid
+                            )
+                            loaded.grid
+                            changes
+                }
+            , Cmd.none
+            )
 
         _ ->
             ( model, Cmd.none )
@@ -425,7 +479,7 @@ canvasView model =
             , offset = Units.asciiToWorld model.cursor.position |> Helper.coordToVec
             , color = Math.Vector3.vec3 1 1 0
             }
-            :: (Maybe.map (drawText model.grid viewMatrix) model.texture |> Maybe.withDefault [])
+            :: (Maybe.map (drawText model.meshes viewMatrix) model.texture |> Maybe.withDefault [])
         )
 
 
