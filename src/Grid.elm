@@ -106,13 +106,15 @@ addChangeBroadcast change grid =
         changeCount_ =
             GridCell.changeCount cell
     in
-    if changeCount_ >= change.changeId then
-        GridCell.addLineWithChangeId change.changeId change.userId change.localPosition change.change cell
-            |> (\cell_ -> setCell change.cellPosition cell_ grid)
-            |> Just
+    --if changeCount_ >= change.changeId then
+    GridCell.addLineWithChangeId change.changeId change.userId change.localPosition change.change cell
+        |> (\cell_ -> setCell change.cellPosition cell_ grid)
+        |> Just
 
-    else
-        Nothing
+
+
+--else
+--    Nothing
 
 
 splitUpLine :

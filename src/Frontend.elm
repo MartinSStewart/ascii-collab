@@ -271,24 +271,7 @@ changeText text model =
                 in
                 ( { model
                     | grid = newGrid
-                    , meshes =
-                        changes
-                            |> List.map (\{ cellPosition } -> ( Helper.rawCoord cellPosition, cellPosition ))
-                            |> Dict.fromList
-                            |> Dict.values
-                            |> List.foldl
-                                (\cellCoord meshes ->
-                                    case Grid.getCell cellCoord newGrid of
-                                        Just cell ->
-                                            GridCell.flatten cell
-                                                |> Array.toList
-                                                |> Grid.mesh cellCoord
-                                                |> (\mesh -> Dict.insert (Helper.rawCoord cellCoord) mesh meshes)
-
-                                        Nothing ->
-                                            meshes
-                                )
-                                model.meshes
+                    , meshes = updateMeshes changes newGrid model.meshes
                     , cursor =
                         Cursor.moveCursor
                             ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
@@ -302,6 +285,31 @@ changeText text model =
                 )
             )
         |> Maybe.withDefault ( model, Cmd.none )
+
+
+updateMeshes :
+    List { a | cellPosition : Helper.Coord Units.CellUnit }
+    -> Grid
+    -> Dict ( Int, Int ) (WebGL.Mesh { position : Vec2, texturePosition : Vec2 })
+    -> Dict ( Int, Int ) (WebGL.Mesh { position : Vec2, texturePosition : Vec2 })
+updateMeshes changes grid meshes =
+    changes
+        |> List.map (\{ cellPosition } -> ( Helper.rawCoord cellPosition, cellPosition ))
+        |> Dict.fromList
+        |> Dict.values
+        |> List.foldl
+            (\cellCoord meshes_ ->
+                case Grid.getCell cellCoord grid of
+                    Just cell ->
+                        GridCell.flatten cell
+                            |> Array.toList
+                            |> Grid.mesh cellCoord
+                            |> (\mesh -> Dict.insert (Helper.rawCoord cellCoord) mesh meshes_)
+
+                    Nothing ->
+                        meshes_
+            )
+            meshes
 
 
 offsetViewPoint : FrontendLoaded -> Point2d Pixels ScreenCoordinate -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
@@ -334,20 +342,19 @@ updateFromBackend msg model =
             loadedInit key grid userId
 
         ( Loaded loaded, GridChangeBroadcast { changes, user } ) ->
+            let
+                newGrid =
+                    List.Nonempty.foldl
+                        (\change grid ->
+                            Grid.addChangeBroadcast change grid |> Maybe.withDefault grid
+                        )
+                        loaded.grid
+                        changes
+            in
             ( Loaded
                 { loaded
-                    | grid =
-                        List.Nonempty.foldl
-                            (\change grid ->
-                                case Grid.addChangeBroadcast change grid of
-                                    Just newGrid ->
-                                        newGrid
-
-                                    Nothing ->
-                                        grid
-                            )
-                            loaded.grid
-                            changes
+                    | grid = newGrid
+                    , meshes = updateMeshes (List.Nonempty.toList changes) newGrid loaded.meshes
                 }
             , Cmd.none
             )
