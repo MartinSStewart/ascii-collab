@@ -1,6 +1,5 @@
 module Grid exposing (Change, ChangeBroadcast, Grid, addChange, addChangeBroadcast, allCells, asciiBox, changeCount, empty, getCell, mesh, textToChange)
 
-import Array
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
 import GridCell exposing (Cell)
@@ -10,7 +9,6 @@ import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
 import Pixels
 import Quantity exposing (Quantity(..))
-import Serialize
 import Units exposing (CellUnit)
 import User exposing (UserId)
 import WebGL
@@ -183,7 +181,7 @@ baseMesh =
         ( Quantity w, Quantity h ) =
             Ascii.size
     in
-    List.range 0 (GridCell.cellSize * GridCell.cellSize)
+    List.range 0 (GridCell.cellSize * GridCell.cellSize - 1)
         |> List.foldl
             (\index { boxes, indices } ->
                 let
