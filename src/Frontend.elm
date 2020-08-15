@@ -189,6 +189,24 @@ updateLoaded msg model =
                     else
                         ( model, Cmd.none )
 
+                Just (Keyboard.Character "x") ->
+                    if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                        let
+                            bounds =
+                                Cursor.bounds model.cursor
+
+                            ( w, h ) =
+                                bounds.max |> Helper.minusTuple bounds.min |> Helper.toRawCoord
+                        in
+                        ( { model | cursor = Cursor.setCursor bounds.min }
+                            |> changeText (String.repeat w " " |> List.repeat h |> String.join "\n")
+                            |> (\m -> { m | cursor = model.cursor })
+                        , selectionToString bounds model.grid |> supermario_copy_to_clipboard_to_js
+                        )
+
+                    else
+                        ( model, Cmd.none )
+
                 Just Keyboard.ArrowLeft ->
                     ( { model
                         | cursor =
