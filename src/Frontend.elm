@@ -346,10 +346,10 @@ updateFromBackend msg model =
                 newGrid =
                     List.Nonempty.foldl
                         (\change grid ->
-                            Grid.addChangeBroadcast change grid |> Maybe.withDefault grid
+                            Grid.addChangeBroadcast user change grid |> Maybe.withDefault grid
                         )
                         loaded.grid
-                        changes
+                        (List.Nonempty.reverse changes)
             in
             ( Loaded
                 { loaded

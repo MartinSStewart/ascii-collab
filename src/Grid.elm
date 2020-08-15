@@ -41,7 +41,7 @@ type alias Change =
 
 
 type alias ChangeBroadcast =
-    { cellPosition : Coord CellUnit, localPosition : Int, change : Nonempty Ascii, changeId : Int, userId : UserId }
+    { cellPosition : Coord CellUnit, localPosition : Int, change : Nonempty Ascii, changeId : Int }
 
 
 textToChange : Coord Units.AsciiUnit -> Nonempty (List Ascii) -> List Change
@@ -92,8 +92,8 @@ changeCount ( Quantity x, Quantity y ) (Grid grid) =
             0
 
 
-addChangeBroadcast : ChangeBroadcast -> Grid -> Maybe Grid
-addChangeBroadcast change grid =
+addChangeBroadcast : UserId -> ChangeBroadcast -> Grid -> Maybe Grid
+addChangeBroadcast userId change grid =
     let
         cell : Cell
         cell =
@@ -105,7 +105,7 @@ addChangeBroadcast change grid =
             GridCell.changeCount cell
     in
     --if changeCount_ >= change.changeId then
-    GridCell.addLineWithChangeId change.changeId change.userId change.localPosition change.change cell
+    GridCell.addLineWithChangeId change.changeId userId change.localPosition change.change cell
         |> (\cell_ -> setCell change.cellPosition cell_ grid)
         |> Just
 

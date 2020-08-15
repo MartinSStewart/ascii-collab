@@ -53,24 +53,31 @@ updateFromFrontend sessionId clientId msg model =
             )
 
         GridChange { changes } ->
-            ( { model | grid = Grid.addChange (User.fromSessionId sessionId) (List.Nonempty.toList changes) model.grid }
-            , broadcast
-                (GridChangeBroadcast
-                    { changes =
-                        List.Nonempty.map
-                            (\{ cellPosition, localPosition, change } ->
-                                { cellPosition = cellPosition
-                                , localPosition = localPosition
-                                , change = change
-                                , changeId = Grid.changeCount cellPosition model.grid
-                                , userId = User.fromSessionId sessionId
-                                }
+            let
+                ( newGrid, changeBroadcast ) =
+                    List.Nonempty.toList changes
+                        |> List.foldl
+                            (\change ( grid, changeBroadcast_ ) ->
+                                ( Grid.addChange (User.fromSessionId sessionId) [ change ] grid
+                                , { cellPosition = change.cellPosition
+                                  , localPosition = change.localPosition
+                                  , change = change.change
+                                  , changeId = Grid.changeCount change.cellPosition grid
+                                  }
+                                    :: changeBroadcast_
+                                )
                             )
-                            changes
-                    , user = User.fromSessionId sessionId
-                    }
-                )
-                model
+                            ( model.grid, [] )
+            in
+            ( { model | grid = newGrid }
+            , case List.Nonempty.fromList changeBroadcast of
+                Just nonempty ->
+                    broadcast
+                        (GridChangeBroadcast { changes = nonempty, user = User.fromSessionId sessionId })
+                        model
+
+                Nothing ->
+                    Cmd.none
             )
 
 
