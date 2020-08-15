@@ -73,12 +73,8 @@ updateFromFrontend sessionId clientId msg model =
             , case List.Nonempty.fromList changeBroadcast of
                 Just nonempty ->
                     broadcast
-                        (\sessionId_ clientId_ ->
-                            if sessionId_ == sessionId && clientId_ == clientId then
-                                Nothing
-
-                            else
-                                GridChangeBroadcast { changes = nonempty, user = User.fromSessionId sessionId } |> Just
+                        (\_ _ ->
+                            GridChangeBroadcast { changes = nonempty, user = User.fromSessionId sessionId } |> Just
                         )
                         model
 

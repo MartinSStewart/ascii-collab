@@ -2,6 +2,7 @@ module GridCell exposing (Cell, addLine, addLineWithChangeId, cellSize, changeCo
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
+import List.Extra as List
 import List.Nonempty exposing (Nonempty)
 import User exposing (UserId)
 
@@ -17,10 +18,15 @@ addLine userId position line (Cell history) =
 
 addLineWithChangeId : Int -> UserId -> Int -> Nonempty Ascii -> Cell -> Cell
 addLineWithChangeId changeId userId position line (Cell history) =
-    List.take changeId (List.reverse history)
-        |> List.reverse
-        |> (::) { userId = userId, position = position, line = line }
-        |> Cell
+    let
+        length =
+            List.length history
+    in
+    if length < changeId then
+        { userId = userId, position = position, line = line } :: history |> Cell
+
+    else
+        List.setAt (length - changeId - 1) { userId = userId, position = position, line = line } history |> Cell
 
 
 changeCount : Cell -> Int
