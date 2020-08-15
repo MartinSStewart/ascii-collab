@@ -93,10 +93,10 @@ draw viewMatrix cursor =
             bounds cursor
 
         ( minX, minY ) =
-            Helper.rawCoord bounds_.min
+            Helper.toRawCoord bounds_.min
 
         ( maxX, maxY ) =
-            Helper.rawCoord bounds_.max
+            Helper.toRawCoord bounds_.max
     in
     WebGL.entity
         vertexShader

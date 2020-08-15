@@ -2,6 +2,7 @@ port module Frontend exposing (app, init, update, updateFromBackend, view)
 
 import Array
 import Ascii
+import BoundingBox2d exposing (BoundingBox2d)
 import Browser exposing (UrlRequest(..))
 import Browser.Dom
 import Browser.Events
@@ -70,7 +71,7 @@ loadedInit loading grid userId =
             Grid.allCells grid
                 |> List.map
                     (\( cellCoord, cell ) ->
-                        ( Helper.rawCoord cellCoord
+                        ( Helper.toRawCoord cellCoord
                         , Grid.mesh cellCoord (GridCell.flatten cell |> Array.toList)
                         )
                     )
@@ -270,20 +271,12 @@ updateLoaded msg model =
                         | mouseState = MouseLeftUp
                         , viewPoint = offsetViewPoint model start mousePosition
                         , cursor =
-                            if Vector2d.from start mousePosition |> Vector2d.length |> Quantity.lessThan (Pixels.pixels 15) then
-                                let
-                                    ( w, h ) =
-                                        model.windowSize
-                                in
-                                mousePosition
-                                    |> Point2d.translateBy
-                                        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h)
-                                            |> Vector2d.scaleBy -0.5
-                                        )
-                                    |> Point2d.at model.devicePixelRatio
-                                    |> Point2d.placeIn (Units.screenFrame model.viewPoint)
-                                    |> Units.worldToAscii
-                                    |> Cursor.setCursor
+                            if
+                                Vector2d.from start mousePosition
+                                    |> Vector2d.length
+                                    |> Quantity.lessThan (Pixels.pixels 15)
+                            then
+                                screenToWorld model mousePosition |> Units.worldToAscii |> Cursor.setCursor
 
                             else
                                 model.cursor
@@ -313,6 +306,18 @@ updateLoaded msg model =
             )
 
 
+screenToWorld : FrontendLoaded -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
+screenToWorld model =
+    let
+        ( w, h ) =
+            model.windowSize
+    in
+    Point2d.translateBy
+        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
+        >> Point2d.at model.devicePixelRatio
+        >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
+
+
 selectionToString : { min : Coord AsciiUnit, max : Coord AsciiUnit } -> Grid -> String
 selectionToString bounds grid =
     let
@@ -327,7 +332,7 @@ selectionToString bounds grid =
                 (\coord dict ->
                     case Grid.getCell coord grid of
                         Just cell ->
-                            Dict.insert (Helper.rawCoord coord) (GridCell.flatten cell) dict
+                            Dict.insert (Helper.toRawCoord coord) (GridCell.flatten cell) dict
 
                         Nothing ->
                             dict
@@ -343,7 +348,7 @@ selectionToString bounds grid =
                 ( cellCoord, localCoord ) =
                     Grid.asciiToCellAndLocalCoord coord
             in
-            (Dict.get (Helper.rawCoord cellCoord) flattenedCells
+            (Dict.get (Helper.toRawCoord cellCoord) flattenedCells
                 |> Maybe.andThen (Array.get localCoord)
                 |> Maybe.withDefault Ascii.default
                 |> Ascii.toChar
@@ -410,7 +415,7 @@ updateMeshes :
     -> Dict ( Int, Int ) (WebGL.Mesh { position : Vec2, texturePosition : Vec2 })
 updateMeshes changes grid meshes =
     changes
-        |> List.map (\{ cellPosition } -> ( Helper.rawCoord cellPosition, cellPosition ))
+        |> List.map (\{ cellPosition } -> ( Helper.toRawCoord cellPosition, cellPosition ))
         |> Dict.fromList
         |> Dict.values
         |> List.foldl
@@ -420,7 +425,7 @@ updateMeshes changes grid meshes =
                         GridCell.flatten cell
                             |> Array.toList
                             |> Grid.mesh cellCoord
-                            |> (\mesh -> Dict.insert (Helper.rawCoord cellCoord) mesh meshes_)
+                            |> (\mesh -> Dict.insert (Helper.toRawCoord cellCoord) mesh meshes_)
 
                     Nothing ->
                         meshes_
@@ -568,6 +573,22 @@ findPixelPerfectSize frontendModel =
 canvasView : FrontendLoaded -> Html FrontendMsg
 canvasView model =
     let
+        viewMin =
+            screenToWorld model Point2d.origin
+                |> Point2d.translateBy
+                    (Helper.fromRawCoord ( -1, -1 )
+                        |> Units.cellToAscii
+                        |> Units.asciiToWorld
+                        |> Helper.coordToVector2d
+                    )
+
+        viewMax =
+            screenToWorld model (Helper.coordToPoint model.windowSize)
+
+        viewBounds : BoundingBox2d WorldPixel WorldCoordinate
+        viewBounds =
+            BoundingBox2d.from viewMin viewMax
+
         ( windowWidth, windowHeight ) =
             actualCanvasSize
 
@@ -595,7 +616,23 @@ canvasView model =
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
         ]
         (Cursor.draw viewMatrix model.cursor
-            :: (Maybe.map (drawText model.meshes viewMatrix) model.texture |> Maybe.withDefault [])
+            :: (Maybe.map
+                    (drawText
+                        (Dict.filter
+                            (\key _ ->
+                                Helper.fromRawCoord key
+                                    |> Units.cellToAscii
+                                    |> Units.asciiToWorld
+                                    |> Helper.coordToPoint
+                                    |> (\p -> BoundingBox2d.contains p viewBounds)
+                            )
+                            model.meshes
+                        )
+                        viewMatrix
+                    )
+                    model.texture
+                    |> Maybe.withDefault []
+               )
         )
 
 

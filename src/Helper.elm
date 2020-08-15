@@ -1,7 +1,10 @@
-module Helper exposing (Coord, addTuple, coordRangeFold, coordRangeFoldReverse, coordToVec, maxTuple, minTuple, minusTuple, multiplyTuple, rawCoord)
+module Helper exposing (Coord, addTuple, boundsToBounds2d, coordRangeFold, coordRangeFoldReverse, coordToPoint, coordToVec, coordToVector2d, fromRawCoord, maxTuple, minTuple, minusTuple, multiplyTuple, toRawCoord)
 
+import BoundingBox2d exposing (BoundingBox2d)
 import Math.Vector2 exposing (Vec2)
+import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
+import Vector2d exposing (Vector2d)
 
 
 addTuple : Coord unit -> Coord unit -> Coord unit
@@ -34,19 +37,39 @@ coordToVec ( Quantity x, Quantity y ) =
     Math.Vector2.vec2 (toFloat x) (toFloat y)
 
 
-rawCoord : Coord units -> ( Int, Int )
-rawCoord ( Quantity x, Quantity y ) =
+coordToPoint : Coord units -> Point2d units coordinate
+coordToPoint ( x, y ) =
+    Point2d.xy (Quantity.toFloatQuantity x) (Quantity.toFloatQuantity y)
+
+
+coordToVector2d : Coord units -> Vector2d units coordinate
+coordToVector2d ( x, y ) =
+    Vector2d.xy (Quantity.toFloatQuantity x) (Quantity.toFloatQuantity y)
+
+
+toRawCoord : Coord units -> ( Int, Int )
+toRawCoord ( Quantity x, Quantity y ) =
     ( x, y )
+
+
+fromRawCoord : ( Int, Int ) -> Coord units
+fromRawCoord ( x, y ) =
+    ( Quantity x, Quantity y )
+
+
+boundsToBounds2d : { min : Coord units, max : Coord units } -> BoundingBox2d units coordinate
+boundsToBounds2d bounds =
+    BoundingBox2d.from (coordToPoint bounds.min) (coordToPoint bounds.max)
 
 
 coordRangeFold : (Coord units -> a -> a) -> (a -> a) -> Coord units -> Coord units -> a -> a
 coordRangeFold foldFunc rowChangeFunc minCoord maxCoord initialValue =
     let
         ( x0, y0 ) =
-            rawCoord (minTuple minCoord maxCoord)
+            toRawCoord (minTuple minCoord maxCoord)
 
         ( x1, y1 ) =
-            rawCoord (maxTuple minCoord maxCoord)
+            toRawCoord (maxTuple minCoord maxCoord)
     in
     coordRangeFoldHelper foldFunc rowChangeFunc x0 x1 y0 y1 x0 y0 initialValue
 
@@ -89,10 +112,10 @@ coordRangeFoldReverse : (Coord units -> a -> a) -> (a -> a) -> Coord units -> Co
 coordRangeFoldReverse foldFunc rowChangeFunc minCoord maxCoord initialValue =
     let
         ( x0, y0 ) =
-            rawCoord (minTuple minCoord maxCoord)
+            toRawCoord (minTuple minCoord maxCoord)
 
         ( x1, y1 ) =
-            rawCoord (maxTuple minCoord maxCoord)
+            toRawCoord (maxTuple minCoord maxCoord)
     in
     coordRangeFoldReverseHelper foldFunc rowChangeFunc x0 x1 y0 y1 x1 y1 initialValue
 

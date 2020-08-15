@@ -1,8 +1,9 @@
-module Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, asciiToWorld, asciiUnit, cellUnit, inWorldUnits, pixelToWorldPixel, screenFrame, worldToAscii, worldUnit)
+module Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, asciiToWorld, asciiUnit, cellToAscii, cellUnit, inWorldUnits, pixelToWorldPixel, screenFrame, worldToAscii, worldUnit)
 
 import Ascii
 import Axis2d
 import Frame2d exposing (Frame2d)
+import GridCell
 import Helper exposing (Coord)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -61,6 +62,11 @@ worldToAscii point =
             Point2d.unwrap point
     in
     ( Quantity.Quantity (x / Pixels.inPixels w |> floor), Quantity.Quantity (y / Pixels.inPixels h |> floor) )
+
+
+cellToAscii : Coord CellUnit -> Coord AsciiUnit
+cellToAscii coord =
+    Helper.multiplyTuple ( GridCell.cellSize, GridCell.cellSize ) coord |> Helper.toRawCoord |> Helper.fromRawCoord
 
 
 pixelToWorldPixel : Float -> Vector2d Pixels ScreenCoordinate -> Coord WorldPixel
