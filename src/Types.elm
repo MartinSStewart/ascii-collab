@@ -24,7 +24,7 @@ import WebGL.Texture exposing (Texture)
 
 
 type FrontendModel
-    = Loading { key : Browser.Navigation.Key }
+    = Loading { key : Browser.Navigation.Key, windowSize : Coord Pixels }
     | Loaded FrontendLoaded
 
 

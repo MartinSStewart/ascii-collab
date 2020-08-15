@@ -11,7 +11,7 @@ import Dict exposing (Dict)
 import Element
 import Grid exposing (Grid)
 import GridCell
-import Helper
+import Helper exposing (Coord)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -57,8 +57,8 @@ app =
         }
 
 
-loadedInit : Browser.Navigation.Key -> Grid -> UserId -> ( FrontendModel, Cmd FrontendMsg )
-loadedInit key grid userId =
+loadedInit : Browser.Navigation.Key -> Coord Pixels -> Grid -> UserId -> ( FrontendModel, Cmd FrontendMsg )
+loadedInit key windowSize grid userId =
     ( Loaded
         { key = key
         , grid = grid
@@ -70,7 +70,7 @@ loadedInit key grid userId =
         , cursor = { position = ( Units.asciiUnit 0, Units.asciiUnit 0 ), startingColumn = Units.asciiUnit 0 }
         , texture = Nothing
         , pressedKeys = []
-        , windowSize = ( Pixels.pixels 100, Pixels.pixels 100 )
+        , windowSize = windowSize
         , devicePixelRatio = Quantity.per Pixels.pixel (Units.worldUnit 1)
         , mouseState = MouseLeftUp
         , userId = userId
@@ -85,6 +85,15 @@ loadedInit key grid userId =
             }
             Ascii.textureData
             |> Task.attempt TextureLoaded
+        ]
+    )
+
+
+init : Url.Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
+init _ key =
+    ( Loading { key = key, windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 ) }
+    , Cmd.batch
+        [ Lamdera.sendToBackend RequestData
         , Task.perform
             (\{ viewport } -> WindowResized ( round viewport.width |> Pixels.pixels, round viewport.height |> Pixels.pixels ))
             Browser.Dom.getViewport
@@ -93,18 +102,16 @@ loadedInit key grid userId =
     )
 
 
-init : Url.Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
-init _ key =
-    ( Loading { key = key }
-    , Lamdera.sendToBackend RequestData
-    )
-
-
 update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 update msg model =
     case model of
-        Loading _ ->
-            ( model, Cmd.none )
+        Loading loadingModel ->
+            case msg of
+                WindowResized windowSize ->
+                    ( Loading { loadingModel | windowSize = windowSize }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
         Loaded frontendLoaded ->
             updateLoaded msg frontendLoaded |> Tuple.mapFirst Loaded
@@ -338,8 +345,8 @@ updateFromBackend msg model =
         ( _, NoOpToFrontend ) ->
             ( model, Cmd.none )
 
-        ( Loading { key }, LoadingData { grid, userId } ) ->
-            loadedInit key grid userId
+        ( Loading { key, windowSize }, LoadingData { grid, userId } ) ->
+            loadedInit key windowSize grid userId
 
         ( Loaded loaded, GridChangeBroadcast { changes, user } ) ->
             let
