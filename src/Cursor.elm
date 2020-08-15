@@ -1,7 +1,7 @@
-module Cursor exposing (Cursor, fragmentShader, mesh, moveCursor, newLine, setCursor, vertexShader)
+module Cursor exposing (Cursor, bounds, draw, fragmentShader, mesh, moveCursor, newLine, position, setCursor, vertexShader)
 
 import Ascii
-import Helper
+import Helper exposing (Coord)
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
@@ -10,29 +10,52 @@ import Units
 import WebGL exposing (Shader)
 
 
-type alias Cursor =
-    { position : ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit )
-    , startingColumn : Quantity Int Units.AsciiUnit
-    }
+type Cursor
+    = Cursor
+        { position : Coord Units.AsciiUnit
+        , startingColumn : Quantity Int Units.AsciiUnit
+        , size : Coord Units.AsciiUnit
+        }
 
 
-moveCursor : ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> Cursor -> Cursor
-moveCursor offset { position, startingColumn } =
-    { position = Helper.addTuple offset position
-    , startingColumn = startingColumn
-    }
+moveCursor : Bool -> ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> Cursor -> Cursor
+moveCursor isShiftDown offset (Cursor cursor) =
+    if isShiftDown then
+        Cursor
+            { cursor
+                | position = Helper.addTuple offset cursor.position
+                , size = cursor.size |> Helper.minusTuple offset
+            }
+
+    else
+        Cursor
+            { cursor
+                | position = Helper.addTuple offset cursor.position
+                , size = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+            }
 
 
 newLine : Cursor -> Cursor
-newLine { position, startingColumn } =
-    { position = ( startingColumn, Tuple.second position |> Quantity.plus (Units.asciiUnit 1) ), startingColumn = startingColumn }
+newLine (Cursor cursor) =
+    Cursor
+        { position = ( cursor.startingColumn, Tuple.second cursor.position |> Quantity.plus (Units.asciiUnit 1) )
+        , startingColumn = cursor.startingColumn
+        , size = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+        }
 
 
 setCursor : ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> Cursor
-setCursor position =
-    { position = position
-    , startingColumn = Tuple.first position
-    }
+setCursor setPosition =
+    Cursor
+        { position = setPosition
+        , startingColumn = Tuple.first setPosition
+        , size = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+        }
+
+
+position : Cursor -> Coord Units.AsciiUnit
+position (Cursor cursor) =
+    cursor.position
 
 
 mesh : WebGL.Mesh { position : Vec2 }
@@ -49,16 +72,54 @@ mesh =
         |> WebGL.triangleFan
 
 
-vertexShader : Shader { position : Vec2 } { u | view : Mat4, offset : Vec2 } {}
+bounds : Cursor -> { min : Coord Units.AsciiUnit, max : Coord Units.AsciiUnit }
+bounds (Cursor cursor) =
+    let
+        pos0 =
+            cursor.position
+
+        pos1 =
+            Helper.addTuple cursor.position cursor.size
+    in
+    { min = Helper.minTuple pos0 pos1
+    , max = Helper.maxTuple pos0 pos1 |> Helper.addTuple ( Units.asciiUnit 1, Units.asciiUnit 1 )
+    }
+
+
+draw : Mat4 -> Cursor -> WebGL.Entity
+draw viewMatrix cursor =
+    let
+        bounds_ =
+            bounds cursor
+
+        ( minX, minY ) =
+            Helper.rawCoord bounds_.min
+
+        ( maxX, maxY ) =
+            Helper.rawCoord bounds_.max
+    in
+    WebGL.entity
+        vertexShader
+        fragmentShader
+        mesh
+        { view = viewMatrix
+        , offset = bounds_.min |> Units.asciiToWorld |> Helper.coordToVec
+        , color = Math.Vector3.vec3 1 1 0
+        , size = Math.Vector2.vec2 (toFloat (maxX - minX)) (toFloat (maxY - minY))
+        }
+
+
+vertexShader : Shader { position : Vec2 } { u | view : Mat4, offset : Vec2, size : Vec2 } {}
 vertexShader =
     [glsl|
 
 attribute vec2 position;
 uniform mat4 view;
 uniform vec2 offset;
+uniform vec2 size;
 
 void main () {
-  gl_Position = view * vec4(position + offset, 0.0, 1.0);
+  gl_Position = view * vec4(position * size + offset, 0.0, 1.0);
 }
 
 |]

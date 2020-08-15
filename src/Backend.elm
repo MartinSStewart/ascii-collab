@@ -73,7 +73,13 @@ updateFromFrontend sessionId clientId msg model =
             , case List.Nonempty.fromList changeBroadcast of
                 Just nonempty ->
                     broadcast
-                        (GridChangeBroadcast { changes = nonempty, user = User.fromSessionId sessionId })
+                        (\sessionId_ clientId_ ->
+                            if sessionId_ == sessionId && clientId_ == clientId then
+                                Nothing
+
+                            else
+                                GridChangeBroadcast { changes = nonempty, user = User.fromSessionId sessionId } |> Just
+                        )
                         model
 
                 Nothing ->
@@ -81,6 +87,13 @@ updateFromFrontend sessionId clientId msg model =
             )
 
 
-broadcast : ToFrontend -> BackendModel -> Cmd BackendMsg
-broadcast msg model =
-    Set.toList model.users |> List.map (\( _, clientId ) -> Lamdera.sendToFrontend clientId msg) |> Cmd.batch
+broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Cmd BackendMsg
+broadcast msgFunc model =
+    Set.toList model.users
+        |> List.map
+            (\( sessionId, clientId ) ->
+                msgFunc sessionId clientId
+                    |> Maybe.map (Lamdera.sendToFrontend clientId)
+                    |> Maybe.withDefault Cmd.none
+            )
+        |> Cmd.batch

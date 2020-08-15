@@ -1,5 +1,6 @@
-module Ascii exposing (Ascii, CodecError(..), ascii, charToAscii, charsPerRow, codec, default, size, textureData, texturePosition)
+module Ascii exposing (Ascii, CodecError(..), ascii, charsPerRow, codec, default, fromChar, size, textureData, texturePosition, toChar)
 
+import Dict exposing (Dict)
 import List.Extra as List
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
@@ -15,9 +16,24 @@ asciiChars =
         |> (++) [ '│', '┤', '╡', '╢', '╖', '╕', '╣', '║', '╗', '╝', '╜', '╛', '┐', '└', '┴', '┬', '├', '─', '┼', '╞', '╟', '╚', '╔', '╩', '╦', '╠', '═', '╬', '╧', '╨', '╤', '╥', '╙', '╘', '╒', '╓', '╫', '╪', '┘', '┌' ]
 
 
-charToAscii : Char -> Maybe Ascii
-charToAscii char =
-    List.findIndex ((==) char) asciiChars |> Maybe.map Ascii
+charToAscii : Dict Char Ascii
+charToAscii =
+    asciiChars |> List.indexedMap (\index char -> ( char, Ascii index )) |> Dict.fromList
+
+
+asciiToChar : Dict Int Char
+asciiToChar =
+    asciiChars |> List.indexedMap (\index char -> ( index, char )) |> Dict.fromList
+
+
+fromChar : Char -> Maybe Ascii
+fromChar char =
+    Dict.get char charToAscii
+
+
+toChar : Ascii -> Char
+toChar (Ascii ascii_) =
+    Dict.get ascii_ asciiToChar |> Maybe.withDefault ' '
 
 
 asciiCharCount : Int

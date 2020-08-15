@@ -1,4 +1,4 @@
-module Grid exposing (Change, ChangeBroadcast, Grid, addChange, addChangeBroadcast, allCells, asciiBox, changeCount, empty, getCell, mesh, textToChange)
+module Grid exposing (Change, ChangeBroadcast, Grid, addChange, addChangeBroadcast, allCells, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, getCell, mesh, textToChange)
 
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)

@@ -1,4 +1,4 @@
-module Types exposing (BackendModel, BackendMsg(..), FrontendLoaded, FrontendModel(..), FrontendMsg(..), MouseState(..), ToBackend(..), ToFrontend(..), Vertex)
+module Types exposing (BackendModel, BackendMsg(..), FrontendLoaded, FrontendLoading, FrontendModel(..), FrontendMsg(..), MouseState(..), ToBackend(..), ToFrontend(..), Vertex)
 
 import Ascii exposing (Ascii)
 import Browser exposing (UrlRequest)
@@ -24,12 +24,19 @@ import WebGL.Texture exposing (Texture)
 
 
 type FrontendModel
-    = Loading { key : Browser.Navigation.Key, windowSize : Coord Pixels }
+    = Loading FrontendLoading
     | Loaded FrontendLoaded
 
 
 type alias Vertex =
     { position : Vec2, texturePosition : Vec2 }
+
+
+type alias FrontendLoading =
+    { key : Browser.Navigation.Key
+    , windowSize : Coord Pixels
+    , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
+    }
 
 
 type alias FrontendLoaded =
@@ -44,6 +51,7 @@ type alias FrontendLoaded =
     , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
     , mouseState : MouseState
     , userId : UserId
+    , pendingChanges : List Grid.Change
     }
 
 
@@ -70,6 +78,7 @@ type FrontendMsg
     | MouseDown (Point2d Pixels ScreenCoordinate)
     | MouseUp (Point2d Pixels ScreenCoordinate)
     | MouseMove (Point2d Pixels ScreenCoordinate)
+    | ShortIntervalElapsed Time.Posix
 
 
 type ToBackend

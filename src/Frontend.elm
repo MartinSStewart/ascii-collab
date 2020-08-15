@@ -28,8 +28,9 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Task
+import Time
 import Types exposing (..)
-import Units exposing (ScreenCoordinate, WorldCoordinate, WorldPixel)
+import Units exposing (AsciiUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url
 import User exposing (UserId(..))
 import Vector2d exposing (Vector2d)
@@ -45,6 +46,9 @@ port martinsstewart_elm_device_pixel_ratio_from_js : (Float -> msg) -> Sub msg
 port martinsstewart_elm_device_pixel_ratio_to_js : () -> Cmd msg
 
 
+port supermario_copy_to_clipboard_to_js : String -> Cmd msg
+
+
 app =
     Lamdera.frontend
         { init = init
@@ -57,23 +61,29 @@ app =
         }
 
 
-loadedInit : Browser.Navigation.Key -> Coord Pixels -> Grid -> UserId -> ( FrontendModel, Cmd FrontendMsg )
-loadedInit key windowSize grid userId =
+loadedInit : FrontendLoading -> Grid -> UserId -> ( FrontendModel, Cmd FrontendMsg )
+loadedInit loading grid userId =
     ( Loaded
-        { key = key
+        { key = loading.key
         , grid = grid
         , meshes =
             Grid.allCells grid
-                |> List.map (\( cellCoord, cell ) -> ( Helper.rawCoord cellCoord, Grid.mesh cellCoord (GridCell.flatten cell |> Array.toList) ))
+                |> List.map
+                    (\( cellCoord, cell ) ->
+                        ( Helper.rawCoord cellCoord
+                        , Grid.mesh cellCoord (GridCell.flatten cell |> Array.toList)
+                        )
+                    )
                 |> Dict.fromList
         , viewPoint = Point2d.origin
-        , cursor = { position = ( Units.asciiUnit 0, Units.asciiUnit 0 ), startingColumn = Units.asciiUnit 0 }
+        , cursor = Cursor.setCursor ( Units.asciiUnit 0, Units.asciiUnit 0 )
         , texture = Nothing
         , pressedKeys = []
-        , windowSize = windowSize
-        , devicePixelRatio = Quantity.per Pixels.pixel (Units.worldUnit 1)
+        , windowSize = loading.windowSize
+        , devicePixelRatio = loading.devicePixelRatio
         , mouseState = MouseLeftUp
         , userId = userId
+        , pendingChanges = []
         }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -85,19 +95,24 @@ loadedInit key windowSize grid userId =
             }
             Ascii.textureData
             |> Task.attempt TextureLoaded
+        , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
         ]
     )
 
 
 init : Url.Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
 init _ key =
-    ( Loading { key = key, windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 ) }
+    ( Loading { key = key, windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 ), devicePixelRatio = Quantity 1 }
     , Cmd.batch
         [ Lamdera.sendToBackend RequestData
         , Task.perform
-            (\{ viewport } -> WindowResized ( round viewport.width |> Pixels.pixels, round viewport.height |> Pixels.pixels ))
+            (\{ viewport } ->
+                WindowResized
+                    ( round viewport.width |> Pixels.pixels
+                    , round viewport.height |> Pixels.pixels
+                    )
+            )
             Browser.Dom.getViewport
-        , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
         ]
     )
 
@@ -108,7 +123,10 @@ update msg model =
         Loading loadingModel ->
             case msg of
                 WindowResized windowSize ->
-                    ( Loading { loadingModel | windowSize = windowSize }, Cmd.none )
+                    windowResizedUpdate windowSize loadingModel |> Tuple.mapFirst Loading
+
+                GotDevicePixelRatio devicePixelRatio ->
+                    devicePixelRatioUpdate devicePixelRatio loadingModel |> Tuple.mapFirst Loading
 
                 _ ->
                     ( model, Cmd.none )
@@ -153,11 +171,20 @@ updateLoaded msg model =
 
         KeyDown rawKey ->
             case Keyboard.anyKeyOriginal rawKey of
+                Just (Keyboard.Character "c") ->
+                    if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                        ( model, selectionToString (Cursor.bounds model.cursor) model.grid |> supermario_copy_to_clipboard_to_js )
+
+                    else
+                        ( model, Cmd.none )
+
                 Just Keyboard.ArrowLeft ->
                     ( { model
                         | cursor =
-                            Cursor.setCursor
-                                (Helper.addTuple model.cursor.position ( Units.asciiUnit -1, Units.asciiUnit 0 ))
+                            Cursor.moveCursor
+                                (keyDown Keyboard.Shift model)
+                                ( Units.asciiUnit -1, Units.asciiUnit 0 )
+                                model.cursor
                       }
                     , Cmd.none
                     )
@@ -165,8 +192,10 @@ updateLoaded msg model =
                 Just Keyboard.ArrowRight ->
                     ( { model
                         | cursor =
-                            Cursor.setCursor
-                                (Helper.addTuple model.cursor.position ( Units.asciiUnit 1, Units.asciiUnit 0 ))
+                            Cursor.moveCursor
+                                (keyDown Keyboard.Shift model)
+                                ( Units.asciiUnit 1, Units.asciiUnit 0 )
+                                model.cursor
                       }
                     , Cmd.none
                     )
@@ -174,8 +203,10 @@ updateLoaded msg model =
                 Just Keyboard.ArrowUp ->
                     ( { model
                         | cursor =
-                            Cursor.setCursor
-                                (Helper.addTuple model.cursor.position ( Units.asciiUnit 0, Units.asciiUnit -1 ))
+                            Cursor.moveCursor
+                                (keyDown Keyboard.Shift model)
+                                ( Units.asciiUnit 0, Units.asciiUnit -1 )
+                                model.cursor
                       }
                     , Cmd.none
                     )
@@ -183,8 +214,10 @@ updateLoaded msg model =
                 Just Keyboard.ArrowDown ->
                     ( { model
                         | cursor =
-                            Cursor.setCursor
-                                (Helper.addTuple model.cursor.position ( Units.asciiUnit 0, Units.asciiUnit 1 ))
+                            Cursor.moveCursor
+                                (keyDown Keyboard.Shift model)
+                                ( Units.asciiUnit 0, Units.asciiUnit 1 )
+                                model.cursor
                       }
                     , Cmd.none
                     )
@@ -192,10 +225,19 @@ updateLoaded msg model =
                 Just Keyboard.Backspace ->
                     let
                         newCursor =
-                            Cursor.setCursor
-                                (Helper.addTuple model.cursor.position ( Units.asciiUnit -1, Units.asciiUnit 0 ))
+                            Cursor.moveCursor
+                                False
+                                ( Units.asciiUnit -1, Units.asciiUnit 0 )
+                                model.cursor
                     in
-                    { model | cursor = newCursor } |> changeText " " |> Tuple.mapFirst (\m -> { m | cursor = newCursor })
+                    ( { model | cursor = newCursor } |> changeText " " |> (\m -> { m | cursor = newCursor })
+                    , Cmd.none
+                    )
+
+                Just Keyboard.Delete ->
+                    ( changeText " " model
+                    , Cmd.none
+                    )
 
                 _ ->
                     ( model, Cmd.none )
@@ -204,17 +246,17 @@ updateLoaded msg model =
             ( model, Cmd.none )
 
         WindowResized windowSize ->
-            ( { model | windowSize = windowSize }, martinsstewart_elm_device_pixel_ratio_to_js () )
+            windowResizedUpdate windowSize model
 
         GotDevicePixelRatio devicePixelRatio ->
-            ( { model | devicePixelRatio = devicePixelRatio }, Cmd.none )
+            devicePixelRatioUpdate devicePixelRatio model
 
         UserTyped text ->
             if text == "\n" || text == "\n\u{000D}" then
                 ( { model | cursor = Cursor.newLine model.cursor }, Cmd.none )
 
             else
-                changeText text model
+                ( changeText text model, Cmd.none )
 
         MouseDown mousePosition ->
             ( { model | mouseState = MouseLeftDown { start = mousePosition, current = mousePosition } }
@@ -260,38 +302,105 @@ updateLoaded msg model =
                 MouseLeftUp ->
                     ( model, Cmd.none )
 
+        ShortIntervalElapsed _ ->
+            ( { model | pendingChanges = [] }
+            , case List.Nonempty.fromList model.pendingChanges of
+                Just nonempty ->
+                    Lamdera.sendToBackend (GridChange { changes = nonempty })
 
-changeText : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+                Nothing ->
+                    Cmd.none
+            )
+
+
+selectionToString : { min : Coord AsciiUnit, max : Coord AsciiUnit } -> Grid -> String
+selectionToString bounds grid =
+    let
+        minCell =
+            Grid.asciiToCellAndLocalCoord bounds.min |> Tuple.first
+
+        maxCell =
+            Grid.asciiToCellAndLocalCoord bounds.max |> Tuple.first
+
+        flattenedCells =
+            Helper.coordRangeFold
+                (\coord dict ->
+                    case Grid.getCell coord grid of
+                        Just cell ->
+                            Dict.insert (Helper.rawCoord coord) (GridCell.flatten cell) dict
+
+                        Nothing ->
+                            dict
+                )
+                identity
+                minCell
+                maxCell
+                Dict.empty
+    in
+    Helper.coordRangeFoldReverse
+        (\coord chars ->
+            let
+                ( cellCoord, localCoord ) =
+                    Grid.asciiToCellAndLocalCoord coord
+            in
+            (Dict.get (Helper.rawCoord cellCoord) flattenedCells
+                |> Maybe.andThen (Array.get localCoord)
+                |> Maybe.withDefault Ascii.default
+                |> Ascii.toChar
+            )
+                :: chars
+        )
+        ((::) '\n')
+        bounds.min
+        (bounds.max |> Helper.minusTuple ( Units.asciiUnit 1, Units.asciiUnit 1 ))
+        []
+        |> String.fromList
+
+
+windowResizedUpdate : Coord Pixels -> { b | windowSize : Coord Pixels } -> ( { b | windowSize : Coord Pixels }, Cmd msg )
+windowResizedUpdate windowSize model =
+    ( { model | windowSize = windowSize }, martinsstewart_elm_device_pixel_ratio_to_js () )
+
+
+devicePixelRatioUpdate : a -> { b | devicePixelRatio : a } -> ( { b | devicePixelRatio : a }, Cmd msg )
+devicePixelRatioUpdate devicePixelRatio model =
+    ( { model | devicePixelRatio = devicePixelRatio }, Cmd.none )
+
+
+changeText : String -> FrontendLoaded -> FrontendLoaded
 changeText text model =
     String.filter ((/=) '\u{000D}') text
         |> String.split "\n"
         |> List.Nonempty.fromList
-        |> Maybe.map (List.Nonempty.map (String.toList >> List.map (Ascii.charToAscii >> Maybe.withDefault Ascii.default)))
+        |> Maybe.map (List.Nonempty.map (String.toList >> List.map (Ascii.fromChar >> Maybe.withDefault Ascii.default)))
         |> Maybe.map
             (\lines ->
                 let
                     changes =
-                        Grid.textToChange model.cursor.position lines
+                        Grid.textToChange (Cursor.position model.cursor) lines
 
                     newGrid =
                         Grid.addChange model.userId changes model.grid
                 in
-                ( { model
+                { model
                     | grid = newGrid
                     , meshes = updateMeshes changes newGrid model.meshes
                     , cursor =
                         Cursor.moveCursor
+                            (keyDown Keyboard.Shift model)
                             ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
                             , Units.asciiUnit (List.Nonempty.length lines - 1)
                             )
                             model.cursor
-                  }
-                , List.Nonempty.fromList changes
-                    |> Maybe.map (\nonempty -> Lamdera.sendToBackend (GridChange { changes = nonempty }))
-                    |> Maybe.withDefault Cmd.none
-                )
+                    , pendingChanges = model.pendingChanges ++ changes
+                }
             )
-        |> Maybe.withDefault ( model, Cmd.none )
+        |> Maybe.withDefault model
+
+
+keyDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
+keyDown key { pressedKeys } =
+    List.any ((==) key) pressedKeys
 
 
 updateMeshes :
@@ -345,8 +454,8 @@ updateFromBackend msg model =
         ( _, NoOpToFrontend ) ->
             ( model, Cmd.none )
 
-        ( Loading { key, windowSize }, LoadingData { grid, userId } ) ->
-            loadedInit key windowSize grid userId
+        ( Loading loading, LoadingData { grid, userId } ) ->
+            loadedInit loading grid userId
 
         ( Loaded loaded, GridChangeBroadcast { changes, user } ) ->
             let
@@ -485,14 +594,7 @@ canvasView model =
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
         ]
-        (WebGL.entity
-            Cursor.vertexShader
-            Cursor.fragmentShader
-            Cursor.mesh
-            { view = viewMatrix
-            , offset = Units.asciiToWorld model.cursor.position |> Helper.coordToVec
-            , color = Math.Vector3.vec3 1 1 0
-            }
+        (Cursor.draw viewMatrix model.cursor
             :: (Maybe.map (drawText model.meshes viewMatrix) model.texture |> Maybe.withDefault [])
         )
 
@@ -518,22 +620,26 @@ drawText meshes viewMatrix texture =
 
 subscriptions : FrontendModel -> Sub FrontendMsg
 subscriptions model =
-    case model of
-        Loading _ ->
-            Sub.none
+    Sub.batch
+        [ martinsstewart_elm_device_pixel_ratio_from_js
+            (Units.worldUnit >> Quantity.per Pixels.pixel >> GotDevicePixelRatio)
+        , Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
+        , case model of
+            Loading _ ->
+                Sub.none
 
-        Loaded loadedModel ->
-            Sub.batch
-                [ Sub.map KeyMsg Keyboard.subscriptions
-                , Keyboard.downs KeyDown
-                , if Keyboard.Arrows.arrowsDirection loadedModel.pressedKeys == Keyboard.Arrows.NoDirection then
-                    Sub.none
+            Loaded loadedModel ->
+                Sub.batch
+                    [ Sub.map KeyMsg Keyboard.subscriptions
+                    , Keyboard.downs KeyDown
+                    , if Keyboard.Arrows.arrowsDirection loadedModel.pressedKeys == Keyboard.Arrows.NoDirection then
+                        Sub.none
 
-                  else
-                    Browser.Events.onAnimationFrame Step
-                , Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
-                , martinsstewart_elm_device_pixel_ratio_from_js (Units.worldUnit >> Quantity.per Pixels.pixel >> GotDevicePixelRatio)
-                ]
+                      else
+                        Browser.Events.onAnimationFrame Step
+                    , Time.every 1000 ShortIntervalElapsed
+                    ]
+        ]
 
 
 type alias Uniforms =
