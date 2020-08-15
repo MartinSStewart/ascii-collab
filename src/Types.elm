@@ -36,6 +36,7 @@ type alias FrontendLoading =
     { key : Browser.Navigation.Key
     , windowSize : Coord Pixels
     , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
+    , zoomFactor : Int
     }
 
 
@@ -49,6 +50,7 @@ type alias FrontendLoaded =
     , pressedKeys : List Keyboard.Key
     , windowSize : Coord Pixels
     , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
+    , zoomFactor : Int
     , mouseState : MouseState
     , userId : UserId
     , pendingChanges : List Grid.Change
@@ -79,6 +81,7 @@ type FrontendMsg
     | MouseUp (Point2d Pixels ScreenCoordinate)
     | MouseMove (Point2d Pixels ScreenCoordinate)
     | ShortIntervalElapsed Time.Posix
+    | ZoomFactorPressed Int
 
 
 type ToBackend

@@ -9,7 +9,11 @@ import Browser.Events
 import Browser.Navigation
 import Cursor
 import Dict exposing (Dict)
-import Element
+import Element exposing (Element)
+import Element.Background
+import Element.Border
+import Element.Font
+import Element.Input
 import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord)
@@ -27,7 +31,7 @@ import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
-import Quantity exposing (Quantity(..))
+import Quantity exposing (Quantity(..), Rate)
 import Task
 import Time
 import Types exposing (..)
@@ -82,6 +86,7 @@ loadedInit loading grid userId =
         , pressedKeys = []
         , windowSize = loading.windowSize
         , devicePixelRatio = loading.devicePixelRatio
+        , zoomFactor = loading.zoomFactor
         , mouseState = MouseLeftUp
         , userId = userId
         , pendingChanges = []
@@ -103,7 +108,12 @@ loadedInit loading grid userId =
 
 init : Url.Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
 init _ key =
-    ( Loading { key = key, windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 ), devicePixelRatio = Quantity 1 }
+    ( Loading
+        { key = key
+        , windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 )
+        , devicePixelRatio = Quantity 1
+        , zoomFactor = 1
+        }
     , Cmd.batch
         [ Lamdera.sendToBackend RequestData
         , Task.perform
@@ -305,6 +315,9 @@ updateLoaded msg model =
                     Cmd.none
             )
 
+        ZoomFactorPressed zoomFactor ->
+            ( { model | zoomFactor = zoomFactor }, Cmd.none )
+
 
 screenToWorld : FrontendLoaded -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
 screenToWorld model =
@@ -314,7 +327,7 @@ screenToWorld model =
     in
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
-        >> Point2d.at model.devicePixelRatio
+        >> Point2d.at (Quantity.divideBy (toFloat model.zoomFactor) model.devicePixelRatio)
         >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
 
 
@@ -367,9 +380,17 @@ windowResizedUpdate windowSize model =
     ( { model | windowSize = windowSize }, martinsstewart_elm_device_pixel_ratio_to_js () )
 
 
-devicePixelRatioUpdate : a -> { b | devicePixelRatio : a } -> ( { b | devicePixelRatio : a }, Cmd msg )
+devicePixelRatioUpdate :
+    Quantity Float (Rate WorldPixel Pixels)
+    -> { b | devicePixelRatio : Quantity Float (Rate WorldPixel Pixels), zoomFactor : Int }
+    -> ( { b | devicePixelRatio : Quantity Float (Rate WorldPixel Pixels), zoomFactor : Int }, Cmd msg )
 devicePixelRatioUpdate devicePixelRatio model =
-    ( { model | devicePixelRatio = devicePixelRatio }, Cmd.none )
+    ( { model
+        | devicePixelRatio = devicePixelRatio
+        , zoomFactor = toFloat model.zoomFactor * Quantity.ratio devicePixelRatio model.devicePixelRatio |> round
+      }
+    , Cmd.none
+    )
 
 
 changeText : String -> FrontendLoaded -> FrontendLoaded
@@ -434,11 +455,13 @@ updateMeshes changes grid meshes =
 
 
 offsetViewPoint : FrontendLoaded -> Point2d Pixels ScreenCoordinate -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
-offsetViewPoint { windowSize, viewPoint, devicePixelRatio } mouseStart mouseCurrent =
+offsetViewPoint { windowSize, viewPoint, devicePixelRatio, zoomFactor } mouseStart mouseCurrent =
     let
         delta : Vector2d WorldPixel WorldCoordinate
         delta =
-            Vector2d.from mouseCurrent mouseStart |> Vector2d.at devicePixelRatio |> Vector2d.placeIn (Units.screenFrame viewPoint)
+            Vector2d.from mouseCurrent mouseStart
+                |> Vector2d.at (Quantity.divideBy (toFloat zoomFactor) devicePixelRatio)
+                |> Vector2d.placeIn (Units.screenFrame viewPoint)
     in
     Point2d.translateBy delta viewPoint
 
@@ -534,10 +557,93 @@ view model =
                                        )
                                 )
                                 []
+                    , Element.inFront (toolbarView loadedModel)
                     ]
                     (Element.html (canvasView loadedModel))
         ]
     }
+
+
+toolbarView : FrontendLoaded -> Element FrontendMsg
+toolbarView model =
+    Element.row
+        [ Element.Background.color lightColor
+        , Element.alignBottom
+        , Element.centerX
+        , Element.moveUp 16
+        , Element.spacing 8
+        , Element.padding 8
+        , Element.Border.color backgroundColor
+        , Element.Border.width 2
+        , Element.Font.color textColor
+        ]
+        (Element.text "🔎"
+            :: (List.range 1 3
+                    |> List.map
+                        (\zoom ->
+                            toolbarButton
+                                [ if model.zoomFactor == zoom then
+                                    Element.Background.color buttonHighlight
+
+                                  else
+                                    Element.Background.color buttonDefault
+                                ]
+                                (ZoomFactorPressed zoom)
+                                (Element.text (String.fromInt zoom ++ "x"))
+                        )
+               )
+            ++ [ verticalSeparator
+               ]
+        )
+
+
+lightColor : Element.Color
+lightColor =
+    Element.rgb255 239 249 240
+
+
+backgroundColor : Element.Color
+backgroundColor =
+    Element.rgb255 107 77 87
+
+
+buttonHighlight : Element.Color
+buttonHighlight =
+    Element.rgb255 221 200 196
+
+
+buttonDefault : Element.Color
+buttonDefault =
+    Element.rgb255 167 129 123
+
+
+textColor : Element.Color
+textColor =
+    Element.rgb255 19 7 12
+
+
+verticalSeparator : Element msg
+verticalSeparator =
+    Element.el
+        [ Element.width (Element.px 2)
+        , Element.height Element.fill
+        , Element.Background.color backgroundColor
+        ]
+        Element.none
+
+
+toolbarButton : List (Element.Attribute msg) -> msg -> Element msg -> Element msg
+toolbarButton attrubtes onPress label =
+    Element.Input.button
+        ([ Element.padding 8
+         , Element.Background.color buttonDefault
+         , Element.mouseOver [ Element.Background.color buttonHighlight ]
+         , Element.Border.width 2
+         , Element.Border.color backgroundColor
+         ]
+            ++ attrubtes
+        )
+        { onPress = Just onPress, label = label }
 
 
 findPixelPerfectSize : FrontendLoaded -> { canvasSize : ( Int, Int ), actualCanvasSize : ( Int, Int ) }
@@ -602,7 +708,7 @@ canvasView model =
             Point2d.unwrap (actualViewPoint model)
 
         viewMatrix =
-            Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
+            Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
                 |> Mat4.translate3
                     (negate <| toFloat <| round x)
                     (negate <| toFloat <| round y)
@@ -614,6 +720,8 @@ canvasView model =
         , Html.Attributes.height windowHeight
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
+        , Html.Attributes.style "image-rendering" "crisp-edges"
+        , Html.Attributes.style "image-rendering" "pixelated"
         ]
         (Cursor.draw viewMatrix model.cursor
             :: (Maybe.map
