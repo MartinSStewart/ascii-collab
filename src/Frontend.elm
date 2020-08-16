@@ -209,6 +209,20 @@ updateLoaded msg model =
                     else
                         ( model, Cmd.none )
 
+                Just Keyboard.Delete ->
+                    let
+                        bounds =
+                            Cursor.bounds model.cursor
+
+                        ( w, h ) =
+                            bounds.max |> Helper.minusTuple bounds.min |> Helper.toRawCoord
+                    in
+                    ( { model | cursor = Cursor.setCursor bounds.min }
+                        |> changeText (String.repeat w " " |> List.repeat h |> String.join "\n")
+                        |> (\m -> { m | cursor = model.cursor })
+                    , Cmd.none
+                    )
+
                 Just Keyboard.ArrowLeft ->
                     ( { model
                         | cursor =
@@ -262,11 +276,6 @@ updateLoaded msg model =
                                 model.cursor
                     in
                     ( { model | cursor = newCursor } |> changeText " " |> (\m -> { m | cursor = newCursor })
-                    , Cmd.none
-                    )
-
-                Just Keyboard.Delete ->
-                    ( changeText " " model
                     , Cmd.none
                     )
 
