@@ -22,7 +22,7 @@ init : ( BackendModel, Cmd BackendMsg )
 init =
     ( { grid = Grid.empty
       , userSessions = Set.empty
-      , userIds = Dict.empty
+      , users = Dict.empty
       }
     , Cmd.none
     )
@@ -50,26 +50,42 @@ updateFromFrontend sessionId clientId msg model =
             ( model, Cmd.none )
 
         RequestData ->
-            let
-                userId =
-                    Dict.size model.userIds |> User.userId
-            in
-            ( { model
-                | userSessions = Set.insert ( sessionId, clientId ) model.userSessions
-                , userIds = Dict.insert sessionId userId model.userIds
-              }
-            , Lamdera.sendToFrontend clientId (LoadingData { userId = userId, grid = model.grid })
-            )
+            case Dict.get sessionId model.users of
+                Just user ->
+                    ( { model
+                        | userSessions = Set.insert ( sessionId, clientId ) model.userSessions
+                      }
+                    , Lamdera.sendToFrontend
+                        clientId
+                        (LoadingData { user = user, grid = model.grid, otherUsers = Dict.values model.users })
+                    )
+
+                Nothing ->
+                    let
+                        user =
+                            Dict.size model.users |> User.fromIndex
+                    in
+                    ( { model
+                        | userSessions = Set.insert ( sessionId, clientId ) model.userSessions
+                        , users = Dict.insert sessionId user model.users
+                      }
+                    , Cmd.batch
+                        [ Lamdera.sendToFrontend
+                            clientId
+                            (LoadingData { user = user, grid = model.grid, otherUsers = Dict.values model.users })
+                        , broadcast (\sessionId clientId -> 0)
+                        ]
+                    )
 
         GridChange { changes } ->
-            case Dict.get sessionId model.userIds of
-                Just userId ->
+            case Dict.get sessionId model.users of
+                Just user ->
                     let
                         ( newGrid, changeBroadcast ) =
                             List.Nonempty.toList changes
                                 |> List.foldl
                                     (\change ( grid, changeBroadcast_ ) ->
-                                        ( Grid.addChange userId [ change ] grid
+                                        ( Grid.addChange (User.id user) [ change ] grid
                                         , { cellPosition = change.cellPosition
                                           , localPosition = change.localPosition
                                           , change = change.change
@@ -85,7 +101,7 @@ updateFromFrontend sessionId clientId msg model =
                         Just nonempty ->
                             broadcast
                                 (\_ _ ->
-                                    GridChangeBroadcast { changes = nonempty, userId = userId } |> Just
+                                    GridChangeBroadcast { changes = nonempty, userId = User.id user } |> Just
                                 )
                                 model
 

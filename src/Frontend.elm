@@ -571,8 +571,8 @@ updateFromBackend msg model =
         ( _, NoOpToFrontend ) ->
             ( model, Cmd.none )
 
-        ( Loading loading, LoadingData { grid, userId } ) ->
-            loadedInit loading grid userId
+        ( Loading loading, LoadingData { grid, user } ) ->
+            loadedInit loading grid user
 
         ( Loaded loaded, GridChangeBroadcast { changes, userId } ) ->
             let

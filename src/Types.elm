@@ -87,7 +87,7 @@ type MouseButtonState
 
 
 type alias BackendModel =
-    { grid : Grid, userSessions : Set ( SessionId, ClientId ), userIds : Dict SessionId UserId }
+    { grid : Grid, userSessions : Set ( SessionId, ClientId ), users : Dict SessionId User }
 
 
 type FrontendMsg
@@ -122,5 +122,6 @@ type BackendMsg
 
 type ToFrontend
     = NoOpToFrontend
-    | LoadingData { userId : UserId, grid : Grid }
+    | LoadingData { user : User, grid : Grid, otherUsers : List User }
     | GridChangeBroadcast { changes : Nonempty ChangeBroadcast, userId : UserId }
+    | UserChangeBroadcast (List User)
