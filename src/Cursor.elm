@@ -1,4 +1,4 @@
-module Cursor exposing (Cursor, bounds, draw, fragmentShader, mesh, moveCursor, newLine, position, setCursor, vertexShader)
+module Cursor exposing (Cursor, bounds, draw, fragmentShader, mesh, moveCursor, newLine, position, selection, setCursor, vertexShader)
 
 import Ascii
 import Helper exposing (Coord)
@@ -70,6 +70,15 @@ mesh =
     , { position = Math.Vector2.vec2 0 h }
     ]
         |> WebGL.triangleFan
+
+
+selection : Coord Units.AsciiUnit -> Coord Units.AsciiUnit -> Cursor
+selection start end =
+    { position = end
+    , size = Helper.minusTuple end start
+    , startingColumn = Quantity.min (Tuple.first start) (Tuple.first end)
+    }
+        |> Cursor
 
 
 bounds : Cursor -> { min : Coord Units.AsciiUnit, max : Coord Units.AsciiUnit }

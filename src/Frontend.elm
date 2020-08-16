@@ -20,7 +20,7 @@ import Helper exposing (Coord)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
-import Html.Events.Extra.Mouse
+import Html.Events.Extra.Mouse exposing (Button(..))
 import Keyboard
 import Keyboard.Arrows
 import Lamdera
@@ -87,9 +87,11 @@ loadedInit loading grid userId =
         , windowSize = loading.windowSize
         , devicePixelRatio = loading.devicePixelRatio
         , zoomFactor = loading.zoomFactor
-        , mouseState = MouseLeftUp
+        , mouseLeft = MouseButtonUp
+        , mouseMiddle = MouseButtonUp
         , userId = userId
         , pendingChanges = []
+        , tool = DragTool
         }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -287,20 +289,41 @@ updateLoaded msg model =
             else
                 ( changeText text model, Cmd.none )
 
-        MouseDown mousePosition ->
-            ( { model | mouseState = MouseLeftDown { start = mousePosition, current = mousePosition } }
+        MouseDown button mousePosition ->
+            ( if button == MainButton then
+                { model
+                    | mouseLeft =
+                        MouseButtonDown
+                            { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
+                }
+
+              else if button == MiddleButton then
+                { model
+                    | mouseMiddle =
+                        MouseButtonDown
+                            { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
+                }
+
+              else
+                model
             , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
             )
 
-        MouseUp mousePosition ->
-            case model.mouseState of
-                MouseLeftDown { start } ->
+        MouseUp button mousePosition ->
+            case ( button, model.mouseLeft, model.mouseMiddle ) of
+                ( MainButton, MouseButtonDown mouseState, _ ) ->
                     ( { model
-                        | mouseState = MouseLeftUp
-                        , viewPoint = offsetViewPoint model start mousePosition
+                        | mouseLeft = MouseButtonUp
+                        , viewPoint =
+                            case ( model.mouseMiddle, model.tool ) of
+                                ( MouseButtonUp, DragTool ) ->
+                                    offsetViewPoint model mouseState.start mousePosition
+
+                                _ ->
+                                    model.viewPoint
                         , cursor =
                             if
-                                Vector2d.from start mousePosition
+                                Vector2d.from mouseState.start mousePosition
                                     |> Vector2d.length
                                     |> Quantity.lessThan (Pixels.pixels 15)
                             then
@@ -312,16 +335,45 @@ updateLoaded msg model =
                     , Cmd.none
                     )
 
-                MouseLeftUp ->
+                ( MiddleButton, _, MouseButtonDown mouseState ) ->
+                    ( { model
+                        | mouseMiddle = MouseButtonUp
+                        , viewPoint = offsetViewPoint model mouseState.start mousePosition
+                      }
+                    , Cmd.none
+                    )
+
+                _ ->
                     ( model, Cmd.none )
 
         MouseMove mousePosition ->
-            case model.mouseState of
-                MouseLeftDown { start } ->
-                    ( { model | mouseState = MouseLeftDown { start = start, current = mousePosition } }, Cmd.none )
+            ( { model
+                | mouseLeft =
+                    case model.mouseLeft of
+                        MouseButtonDown mouseState ->
+                            MouseButtonDown { mouseState | current = mousePosition }
 
-                MouseLeftUp ->
-                    ( model, Cmd.none )
+                        MouseButtonUp ->
+                            MouseButtonUp
+                , mouseMiddle =
+                    case model.mouseMiddle of
+                        MouseButtonDown mouseState ->
+                            MouseButtonDown { mouseState | current = mousePosition }
+
+                        MouseButtonUp ->
+                            MouseButtonUp
+                , cursor =
+                    case ( model.mouseLeft, model.tool ) of
+                        ( MouseButtonDown mouseState, SelectTool ) ->
+                            Cursor.selection
+                                (mouseState.start_ |> Units.worldToAscii)
+                                (screenToWorld model mousePosition |> Units.worldToAscii)
+
+                        _ ->
+                            model.cursor
+              }
+            , Cmd.none
+            )
 
         ShortIntervalElapsed _ ->
             ( { model | pendingChanges = [] }
@@ -335,6 +387,9 @@ updateLoaded msg model =
 
         ZoomFactorPressed zoomFactor ->
             ( { model | zoomFactor = zoomFactor }, Cmd.none )
+
+        SelectToolPressed toolType ->
+            ( { model | tool = toolType }, Cmd.none )
 
 
 screenToWorld : FrontendLoaded -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
@@ -486,12 +541,19 @@ offsetViewPoint { windowSize, viewPoint, devicePixelRatio, zoomFactor } mouseSta
 
 actualViewPoint : FrontendLoaded -> Point2d WorldPixel WorldCoordinate
 actualViewPoint model =
-    case model.mouseState of
-        MouseLeftUp ->
-            model.viewPoint
-
-        MouseLeftDown { start, current } ->
+    case ( model.mouseLeft, model.mouseMiddle ) of
+        ( _, MouseButtonDown { start, current } ) ->
             offsetViewPoint model start current
+
+        ( MouseButtonDown { start, current }, _ ) ->
+            if model.tool == DragTool then
+                offsetViewPoint model start current
+
+            else
+                model.viewPoint
+
+        _ ->
+            model.viewPoint
 
 
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
@@ -550,27 +612,27 @@ view model =
                                  , Html.Attributes.style "width" "100%"
                                  , Html.Attributes.style "height" "100%"
                                  , Html.Attributes.style "resize" "none"
-                                 , Html.Attributes.style "background-color" "transparent"
-                                 , Html.Attributes.style "border-width" "0px"
+                                 , Html.Attributes.style "opacity" "0"
                                  , Html.Attributes.id "textareaId"
                                  , Html.Events.Extra.Mouse.onDown
-                                    (\{ clientPos } ->
-                                        MouseDown (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+                                    (\{ clientPos, button } ->
+                                        MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
                                     )
                                  , Html.Events.Extra.Mouse.onUp
-                                    (\{ clientPos } ->
-                                        MouseUp (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+                                    (\{ clientPos, button } ->
+                                        MouseUp button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
                                     )
                                  ]
-                                    ++ (case loadedModel.mouseState of
-                                            MouseLeftDown _ ->
-                                                [ Html.Events.Extra.Mouse.onMove
-                                                    (\{ clientPos } ->
-                                                        MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                                                    )
+                                    ++ (case ( loadedModel.mouseLeft, loadedModel.mouseMiddle ) of
+                                            ( MouseButtonDown _, _ ) ->
+                                                [ mouseMoveAttribute
                                                 ]
 
-                                            MouseLeftUp ->
+                                            ( _, MouseButtonDown _ ) ->
+                                                [ mouseMoveAttribute
+                                                ]
+
+                                            _ ->
                                                 []
                                        )
                                 )
@@ -582,8 +644,47 @@ view model =
     }
 
 
+mouseMoveAttribute : Html.Attribute FrontendMsg
+mouseMoveAttribute =
+    Html.Events.Extra.Mouse.onMove
+        (\{ clientPos } ->
+            MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+        )
+
+
 toolbarView : FrontendLoaded -> Element FrontendMsg
 toolbarView model =
+    let
+        zoomView =
+            List.range 1 3
+                |> List.map
+                    (\zoom ->
+                        toolbarButton
+                            [ if model.zoomFactor == zoom then
+                                Element.Background.color buttonHighlight
+
+                              else
+                                Element.Background.color buttonDefault
+                            ]
+                            (ZoomFactorPressed zoom)
+                            (Element.text (String.fromInt zoom ++ "x"))
+                    )
+
+        toolView =
+            List.map
+                (\( tool, icon ) ->
+                    toolbarButton
+                        [ if model.tool == tool then
+                            Element.Background.color buttonHighlight
+
+                          else
+                            Element.Background.color buttonDefault
+                        ]
+                        (SelectToolPressed tool)
+                        icon
+                )
+                tools
+    in
     Element.row
         [ Element.Background.color lightColor
         , Element.alignBottom
@@ -595,24 +696,32 @@ toolbarView model =
         , Element.Border.width 2
         , Element.Font.color textColor
         ]
-        (Element.text "🔎"
-            :: (List.range 1 3
-                    |> List.map
-                        (\zoom ->
-                            toolbarButton
-                                [ if model.zoomFactor == zoom then
-                                    Element.Background.color buttonHighlight
+        (Element.text "🔎" :: zoomView ++ [ verticalSeparator ] ++ toolView)
 
-                                  else
-                                    Element.Background.color buttonDefault
-                                ]
-                                (ZoomFactorPressed zoom)
-                                (Element.text (String.fromInt zoom ++ "x"))
-                        )
-               )
-            ++ [ verticalSeparator
-               ]
-        )
+
+tools : List ( ToolType, Element msg )
+tools =
+    [ ( DragTool
+      , Element.image
+            [ Element.width (Element.px 20) ]
+            { src = "4-direction-arrows.png", description = "Drag tool" }
+      )
+    , ( SelectTool
+      , Element.el
+            [ Element.Border.width 2
+            , Element.Border.dashed
+            , Element.width (Element.px 20)
+            , Element.height (Element.px 20)
+            ]
+            Element.none
+      )
+
+    --, ( RectangleTool
+    --  , Element.el
+    --        [ Element.Border.width 2, Element.width (Element.px 20), Element.height (Element.px 20) ]
+    --        Element.none
+    --  )
+    ]
 
 
 lightColor : Element.Color

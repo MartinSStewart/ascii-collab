@@ -1,12 +1,24 @@
-module Types exposing (BackendModel, BackendMsg(..), FrontendLoaded, FrontendLoading, FrontendModel(..), FrontendMsg(..), MouseState(..), ToBackend(..), ToFrontend(..), Vertex)
+module Types exposing
+    ( BackendModel
+    , BackendMsg(..)
+    , FrontendLoaded
+    , FrontendLoading
+    , FrontendModel(..)
+    , FrontendMsg(..)
+    , MouseButtonState(..)
+    , ToBackend(..)
+    , ToFrontend(..)
+    , ToolType(..)
+    , Vertex
+    )
 
-import Ascii exposing (Ascii)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Grid exposing (ChangeBroadcast, Grid)
 import Helper exposing (Coord)
+import Html.Events.Extra.Mouse exposing (Button)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
@@ -51,15 +63,27 @@ type alias FrontendLoaded =
     , windowSize : Coord Pixels
     , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
     , zoomFactor : Int
-    , mouseState : MouseState
+    , mouseLeft : MouseButtonState
+    , mouseMiddle : MouseButtonState
     , userId : UserId
     , pendingChanges : List Grid.Change
+    , tool : ToolType
     }
 
 
-type MouseState
-    = MouseLeftUp
-    | MouseLeftDown { start : Point2d Pixels ScreenCoordinate, current : Point2d Pixels ScreenCoordinate }
+type ToolType
+    = DragTool
+    | RectangleTool
+    | SelectTool
+
+
+type MouseButtonState
+    = MouseButtonUp
+    | MouseButtonDown
+        { start : Point2d Pixels ScreenCoordinate
+        , start_ : Point2d WorldPixel WorldCoordinate
+        , current : Point2d Pixels ScreenCoordinate
+        }
 
 
 type alias BackendModel =
@@ -77,11 +101,12 @@ type FrontendMsg
     | WindowResized (Coord Pixels)
     | GotDevicePixelRatio (Quantity Float (Rate WorldPixel Pixels))
     | UserTyped String
-    | MouseDown (Point2d Pixels ScreenCoordinate)
-    | MouseUp (Point2d Pixels ScreenCoordinate)
+    | MouseDown Button (Point2d Pixels ScreenCoordinate)
+    | MouseUp Button (Point2d Pixels ScreenCoordinate)
     | MouseMove (Point2d Pixels ScreenCoordinate)
     | ShortIntervalElapsed Time.Posix
     | ZoomFactorPressed Int
+    | SelectToolPressed ToolType
 
 
 type ToBackend
