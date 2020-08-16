@@ -7,6 +7,7 @@ import Browser exposing (UrlRequest(..))
 import Browser.Dom
 import Browser.Events
 import Browser.Navigation
+import ColorIndex
 import Cursor
 import Dict exposing (Dict)
 import Element exposing (Element)
@@ -569,32 +570,59 @@ actualViewPoint model =
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 updateFromBackend msg model =
     case ( model, msg ) of
-        ( _, NoOpToFrontend ) ->
-            ( model, Cmd.none )
-
         ( Loading loading, LoadingData { grid, user, otherUsers } ) ->
             loadedInit loading grid user otherUsers
 
-        ( Loaded loaded, GridChangeBroadcast { changes, userId } ) ->
+        ( Loaded loaded, _ ) ->
+            updateLoadedFromBackend msg loaded |> Tuple.mapFirst Loaded
+
+        _ ->
+            ( model, Cmd.none )
+
+
+updateLoadedFromBackend : ToFrontend -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+updateLoadedFromBackend msg model =
+    case msg of
+        NoOpToFrontend ->
+            ( model, Cmd.none )
+
+        LoadingData _ ->
+            ( model, Cmd.none )
+
+        GridChangeBroadcast { changes, userId } ->
             let
                 newGrid =
                     List.Nonempty.foldl
                         (\change grid ->
                             Grid.addChangeBroadcast userId change grid |> Maybe.withDefault grid
                         )
-                        loaded.grid
+                        model.grid
                         (List.Nonempty.reverse changes)
             in
-            ( Loaded
-                { loaded
-                    | grid = newGrid
-                    , meshes = updateMeshes (List.Nonempty.toList changes) newGrid loaded.meshes
-                }
+            ( { model
+                | grid = newGrid
+                , meshes = updateMeshes (List.Nonempty.toList changes) newGrid model.meshes
+              }
             , Cmd.none
             )
 
-        _ ->
-            ( model, Cmd.none )
+        NewUserBroadcast user ->
+            ( if User.id user == User.id model.user then
+                model
+
+              else
+                { model | otherUsers = model.otherUsers ++ [ user ] }
+            , Cmd.none
+            )
+
+        UserModifiedBroadcast user ->
+            ( if User.id user == User.id model.user then
+                { model | user = user }
+
+              else
+                { model | otherUsers = List.updateIf (User.id >> (==) (User.id user)) (always user) model.otherUsers }
+            , Cmd.none
+            )
 
 
 view : FrontendModel -> Browser.Document FrontendMsg
@@ -648,6 +676,7 @@ view model =
                                 )
                                 []
                     , Element.inFront (toolbarView loadedModel)
+                    , Element.inFront (userListView loadedModel)
                     ]
                     (Element.html (canvasView loadedModel))
         ]
@@ -659,6 +688,40 @@ mouseMoveAttribute =
     Html.Events.Extra.Mouse.onMove
         (\{ clientPos } ->
             MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+        )
+
+
+userListView : FrontendLoaded -> Element FrontendMsg
+userListView model =
+    Element.column
+        [ Element.Background.color lightColor, Element.alignRight, Element.spacing 8, Element.padding 8 ]
+        (Element.row
+            [ Element.spacing 8 ]
+            [ Element.el
+                [ Element.width (Element.px 16)
+                , Element.height (Element.px 16)
+                , Element.Background.color <| ColorIndex.toColor <| User.color model.user
+                ]
+                Element.none
+            , Element.row
+                [ Element.spacing 8 ]
+                [ Element.text (User.name model.user), Element.el [ Element.Font.bold ] (Element.text "(you)") ]
+            ]
+            :: List.map
+                (\otherUser ->
+                    Element.row [ Element.spacing 8 ]
+                        [ Element.el
+                            [ Element.width (Element.px 16)
+                            , Element.height (Element.px 16)
+                            , Element.Background.color <| ColorIndex.toColor <| User.color otherUser
+                            ]
+                            Element.none
+                        , Element.row
+                            [ Element.spacing 8 ]
+                            [ Element.text (User.name otherUser) ]
+                        ]
+                )
+                model.otherUsers
         )
 
 
@@ -860,7 +923,7 @@ canvasView model =
         , Html.Attributes.style "image-rendering" "crisp-edges"
         , Html.Attributes.style "image-rendering" "pixelated"
         ]
-        (Cursor.draw viewMatrix model.cursor
+        (Cursor.draw viewMatrix (User.color model.user |> ColorIndex.toColor) model.cursor
             :: (Maybe.map
                     (drawText
                         (Dict.filter

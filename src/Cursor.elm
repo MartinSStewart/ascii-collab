@@ -1,6 +1,8 @@
 module Cursor exposing (Cursor, bounds, draw, fragmentShader, mesh, moveCursor, newLine, position, selection, setCursor, vertexShader)
 
 import Ascii
+import ColorIndex exposing (ColorIndex)
+import Element
 import Helper exposing (Coord)
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
@@ -95,8 +97,8 @@ bounds (Cursor cursor) =
     }
 
 
-draw : Mat4 -> Cursor -> WebGL.Entity
-draw viewMatrix cursor =
+draw : Mat4 -> Element.Color -> Cursor -> WebGL.Entity
+draw viewMatrix color cursor =
     let
         bounds_ =
             bounds cursor
@@ -106,6 +108,9 @@ draw viewMatrix cursor =
 
         ( maxX, maxY ) =
             Helper.toRawCoord bounds_.max
+
+        { red, green, blue } =
+            Element.toRgb color
     in
     WebGL.entity
         vertexShader
@@ -113,7 +118,7 @@ draw viewMatrix cursor =
         mesh
         { view = viewMatrix
         , offset = bounds_.min |> Units.asciiToWorld |> Helper.coordToVec
-        , color = Math.Vector3.vec3 1 1 0
+        , color = Math.Vector3.vec3 red green blue
         , size = Math.Vector2.vec2 (toFloat (maxX - minX)) (toFloat (maxY - minY))
         }
 

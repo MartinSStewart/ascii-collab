@@ -20,7 +20,7 @@ userId index =
 fromIndex : Int -> User
 fromIndex index =
     User
-        { name = "User" ++ String.fromInt index
+        { name = "User " ++ String.fromInt index
         , id = userId index
         , color = List.getAt (modBy (List.length ColorIndex.colors) index) ColorIndex.colors |> Maybe.withDefault Green
         }
@@ -42,7 +42,7 @@ withName name_ (User user) =
         santizedName =
             String.trim name_
     in
-    if String.length santizedName < 1 || String.length santizedName > 20 then
+    if String.length santizedName < 1 || String.length santizedName > 12 then
         Nothing
 
     else

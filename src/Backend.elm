@@ -45,45 +45,16 @@ update msg model =
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 updateFromFrontend sessionId clientId msg model =
+    let
+        _ =
+            Debug.log "123" ( sessionId, clientId )
+    in
     case msg of
         NoOpToBackend ->
             ( model, Cmd.none )
 
         RequestData ->
-            case Dict.get sessionId model.users of
-                Just user ->
-                    ( { model
-                        | userSessions = Set.insert ( sessionId, clientId ) model.userSessions
-                      }
-                    , Lamdera.sendToFrontend
-                        clientId
-                        (LoadingData { user = user, grid = model.grid, otherUsers = Dict.values model.users })
-                    )
-
-                Nothing ->
-                    let
-                        user =
-                            Dict.size model.users |> User.fromIndex
-                    in
-                    ( { model
-                        | userSessions = Set.insert ( sessionId, clientId ) model.userSessions
-                        , users = Dict.insert sessionId user model.users
-                      }
-                    , Cmd.batch
-                        [ Lamdera.sendToFrontend
-                            clientId
-                            (LoadingData { user = user, grid = model.grid, otherUsers = Dict.values model.users })
-                        , broadcast
-                            (\sessionId_ clientId_ ->
-                                if sessionId == sessionId_ && clientId == clientId_ then
-                                    Nothing
-
-                                else
-                                    NewUserBroadcast user |> Just
-                            )
-                            model
-                        ]
-                    )
+            requestDataUpdate sessionId clientId model
 
         GridChange { changes } ->
             case Dict.get sessionId model.users of
@@ -121,17 +92,55 @@ updateFromFrontend sessionId clientId msg model =
                     ( model, Cmd.none )
 
         UserRename name ->
-            ( model, Cmd.none )
+            case Dict.get sessionId model.users |> Maybe.andThen (User.withName name) of
+                Just userRenamed ->
+                    ( { model | users = Dict.insert sessionId userRenamed model.users }
+                    , broadcast (\_ _ -> UserModifiedBroadcast userRenamed |> Just) model
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
 
+requestDataUpdate : SessionId -> ClientId -> BackendModel -> ( BackendModel, Cmd BackendMsg )
+requestDataUpdate sessionId clientId model =
+    case Dict.get sessionId model.users of
+        Just user ->
+            ( { model | userSessions = Set.insert ( sessionId, clientId ) model.userSessions }
+            , Lamdera.sendToFrontend
+                clientId
+                (LoadingData { user = user, grid = model.grid, otherUsers = Dict.values model.users })
+            )
 
---case Dict.get sessionId model.users of
---    Just user ->
---        case User.withName name user of
---            Just userRenamed ->
---                ( { model | users = Dict.insert sessionId (User.withName name user) model.users }
---                , broadcast (\_ _ -> UserModifiedBroadcast userRenamed) model
---                )
+        Nothing ->
+            let
+                user =
+                    Dict.size model.users |> User.fromIndex |> Debug.log "asdf"
+            in
+            ( { model
+                | userSessions = Set.insert ( sessionId, clientId ) model.userSessions
+                , users = Dict.insert sessionId user model.users
+              }
+            , Cmd.batch
+                [ Lamdera.sendToFrontend
+                    clientId
+                    (LoadingData
+                        { user = user
+                        , grid = model.grid
+                        , otherUsers = Dict.remove sessionId model.users |> Dict.values
+                        }
+                    )
+                , broadcast
+                    (\sessionId_ clientId_ ->
+                        if sessionId == sessionId_ && clientId == clientId_ then
+                            Nothing
+
+                        else
+                            NewUserBroadcast user |> Just
+                    )
+                    model
+                ]
+            )
 
 
 broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Cmd BackendMsg
