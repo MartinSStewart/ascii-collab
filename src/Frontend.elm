@@ -565,12 +565,12 @@ updateFromBackend msg model =
         ( Loading loading, LoadingData { grid, userId } ) ->
             loadedInit loading grid userId
 
-        ( Loaded loaded, GridChangeBroadcast { changes, user } ) ->
+        ( Loaded loaded, GridChangeBroadcast { changes, userId } ) ->
             let
                 newGrid =
                     List.Nonempty.foldl
                         (\change grid ->
-                            Grid.addChangeBroadcast user change grid |> Maybe.withDefault grid
+                            Grid.addChangeBroadcast userId change grid |> Maybe.withDefault grid
                         )
                         loaded.grid
                         (List.Nonempty.reverse changes)

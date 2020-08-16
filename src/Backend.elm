@@ -1,5 +1,6 @@
 module Backend exposing (app, init, update, updateFromFrontend)
 
+import Dict
 import Grid
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty
@@ -20,7 +21,8 @@ app =
 init : ( BackendModel, Cmd BackendMsg )
 init =
     ( { grid = Grid.empty
-      , users = Set.empty
+      , userSessions = Set.empty
+      , userIds = Dict.empty
       }
     , Cmd.none
     )
@@ -38,7 +40,7 @@ update msg model =
             ( model, Cmd.none )
 
         UserDisconnected sessionId clientId ->
-            ( { model | users = Set.remove ( sessionId, clientId ) model.users }, Cmd.none )
+            ( { model | userSessions = Set.remove ( sessionId, clientId ) model.userSessions }, Cmd.none )
 
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Cmd BackendMsg )
@@ -48,44 +50,56 @@ updateFromFrontend sessionId clientId msg model =
             ( model, Cmd.none )
 
         RequestData ->
-            ( { model | users = Set.insert ( sessionId, clientId ) model.users }
-            , Lamdera.sendToFrontend clientId (LoadingData { userId = User.fromSessionId sessionId, grid = model.grid })
+            let
+                userId =
+                    Dict.size model.userIds |> User.userId
+            in
+            ( { model
+                | userSessions = Set.insert ( sessionId, clientId ) model.userSessions
+                , userIds = Dict.insert sessionId userId model.userIds
+              }
+            , Lamdera.sendToFrontend clientId (LoadingData { userId = userId, grid = model.grid })
             )
 
         GridChange { changes } ->
-            let
-                ( newGrid, changeBroadcast ) =
-                    List.Nonempty.toList changes
-                        |> List.foldl
-                            (\change ( grid, changeBroadcast_ ) ->
-                                ( Grid.addChange (User.fromSessionId sessionId) [ change ] grid
-                                , { cellPosition = change.cellPosition
-                                  , localPosition = change.localPosition
-                                  , change = change.change
-                                  , changeId = Grid.changeCount change.cellPosition grid
-                                  }
-                                    :: changeBroadcast_
+            case Dict.get sessionId model.userIds of
+                Just userId ->
+                    let
+                        ( newGrid, changeBroadcast ) =
+                            List.Nonempty.toList changes
+                                |> List.foldl
+                                    (\change ( grid, changeBroadcast_ ) ->
+                                        ( Grid.addChange userId [ change ] grid
+                                        , { cellPosition = change.cellPosition
+                                          , localPosition = change.localPosition
+                                          , change = change.change
+                                          , changeId = Grid.changeCount change.cellPosition grid
+                                          }
+                                            :: changeBroadcast_
+                                        )
+                                    )
+                                    ( model.grid, [] )
+                    in
+                    ( { model | grid = newGrid }
+                    , case List.Nonempty.fromList changeBroadcast of
+                        Just nonempty ->
+                            broadcast
+                                (\_ _ ->
+                                    GridChangeBroadcast { changes = nonempty, userId = userId } |> Just
                                 )
-                            )
-                            ( model.grid, [] )
-            in
-            ( { model | grid = newGrid }
-            , case List.Nonempty.fromList changeBroadcast of
-                Just nonempty ->
-                    broadcast
-                        (\_ _ ->
-                            GridChangeBroadcast { changes = nonempty, user = User.fromSessionId sessionId } |> Just
-                        )
-                        model
+                                model
+
+                        Nothing ->
+                            Cmd.none
+                    )
 
                 Nothing ->
-                    Cmd.none
-            )
+                    ( model, Cmd.none )
 
 
 broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Cmd BackendMsg
 broadcast msgFunc model =
-    Set.toList model.users
+    Set.toList model.userSessions
         |> List.map
             (\( sessionId, clientId ) ->
                 msgFunc sessionId clientId
