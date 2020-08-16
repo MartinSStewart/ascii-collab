@@ -73,7 +73,15 @@ updateFromFrontend sessionId clientId msg model =
                         [ Lamdera.sendToFrontend
                             clientId
                             (LoadingData { user = user, grid = model.grid, otherUsers = Dict.values model.users })
-                        , broadcast (\sessionId clientId -> 0)
+                        , broadcast
+                            (\sessionId_ clientId_ ->
+                                if sessionId == sessionId_ && clientId == clientId_ then
+                                    Nothing
+
+                                else
+                                    NewUserBroadcast user |> Just
+                            )
+                            model
                         ]
                     )
 
@@ -111,6 +119,19 @@ updateFromFrontend sessionId clientId msg model =
 
                 Nothing ->
                     ( model, Cmd.none )
+
+        UserRename name ->
+            ( model, Cmd.none )
+
+
+
+--case Dict.get sessionId model.users of
+--    Just user ->
+--        case User.withName name user of
+--            Just userRenamed ->
+--                ( { model | users = Dict.insert sessionId (User.withName name user) model.users }
+--                , broadcast (\_ _ -> UserModifiedBroadcast userRenamed) model
+--                )
 
 
 broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Cmd BackendMsg

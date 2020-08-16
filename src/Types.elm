@@ -65,7 +65,8 @@ type alias FrontendLoaded =
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
     , mouseMiddle : MouseButtonState
-    , userId : UserId
+    , user : User
+    , otherUsers : List User
     , pendingChanges : List Grid.Change
     , tool : ToolType
     }
@@ -113,6 +114,7 @@ type ToBackend
     = NoOpToBackend
     | RequestData
     | GridChange { changes : Nonempty Grid.Change }
+    | UserRename String
 
 
 type BackendMsg
@@ -124,4 +126,5 @@ type ToFrontend
     = NoOpToFrontend
     | LoadingData { user : User, grid : Grid, otherUsers : List User }
     | GridChangeBroadcast { changes : Nonempty ChangeBroadcast, userId : UserId }
-    | UserChangeBroadcast (List User)
+    | NewUserBroadcast User
+    | UserModifiedBroadcast User

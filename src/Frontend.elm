@@ -37,7 +37,7 @@ import Time
 import Types exposing (..)
 import Units exposing (AsciiUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url
-import User exposing (UserId(..))
+import User exposing (User, UserId(..))
 import Vector2d exposing (Vector2d)
 import WebGL exposing (Shader)
 import WebGL.Settings
@@ -66,8 +66,8 @@ app =
         }
 
 
-loadedInit : FrontendLoading -> Grid -> UserId -> ( FrontendModel, Cmd FrontendMsg )
-loadedInit loading grid userId =
+loadedInit : FrontendLoading -> Grid -> User -> List User -> ( FrontendModel, Cmd FrontendMsg )
+loadedInit loading grid user otherUsers =
     ( Loaded
         { key = loading.key
         , grid = grid
@@ -89,7 +89,8 @@ loadedInit loading grid userId =
         , zoomFactor = loading.zoomFactor
         , mouseLeft = MouseButtonUp
         , mouseMiddle = MouseButtonUp
-        , userId = userId
+        , user = user
+        , otherUsers = otherUsers
         , pendingChanges = []
         , tool = DragTool
         }
@@ -488,7 +489,7 @@ changeText text model =
                         Grid.textToChange (Cursor.position model.cursor) lines
 
                     newGrid =
-                        Grid.addChange model.userId changes model.grid
+                        Grid.addChange (User.id model.user) changes model.grid
                 in
                 { model
                     | grid = newGrid
@@ -571,8 +572,8 @@ updateFromBackend msg model =
         ( _, NoOpToFrontend ) ->
             ( model, Cmd.none )
 
-        ( Loading loading, LoadingData { grid, user } ) ->
-            loadedInit loading grid user
+        ( Loading loading, LoadingData { grid, user, otherUsers } ) ->
+            loadedInit loading grid user otherUsers
 
         ( Loaded loaded, GridChangeBroadcast { changes, userId } ) ->
             let
