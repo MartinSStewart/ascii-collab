@@ -1,4 +1,4 @@
-module Grid exposing (Change, Grid, addChange, allCells, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, getCell, mesh, textToChange)
+module Grid exposing (Change, Grid, LocalChange, addChange, allCells, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, getCell, localChangeToChange, mesh, textToChange)
 
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
@@ -40,8 +40,21 @@ type alias Change =
     { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Nonempty Ascii, userId : UserId }
 
 
-textToChange : UserId -> Coord Units.AsciiUnit -> Nonempty (List Ascii) -> Nonempty Change
-textToChange userId asciiCoord lines =
+type alias LocalChange =
+    { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Nonempty Ascii }
+
+
+localChangeToChange : UserId -> LocalChange -> Change
+localChangeToChange userId change_ =
+    { cellPosition = change_.cellPosition
+    , localPosition = change_.localPosition
+    , change = change_.change
+    , userId = userId
+    }
+
+
+textToChange : Coord Units.AsciiUnit -> Nonempty (List Ascii) -> Nonempty LocalChange
+textToChange asciiCoord lines =
     List.Nonempty.toList lines
         |> List.indexedMap Tuple.pair
         |> List.filterMap
@@ -58,7 +71,6 @@ textToChange userId asciiCoord lines =
                                     { cellPosition = cellPosition
                                     , localPosition = localPosition
                                     , change = change
-                                    , userId = userId
                                     }
                                 )
                             |> Just
@@ -74,7 +86,6 @@ textToChange userId asciiCoord lines =
                 { cellPosition = ( Units.cellUnit 0, Units.cellUnit 0 )
                 , localPosition = 0
                 , change = List.Nonempty.fromElement Ascii.default
-                , userId = userId
                 }
             )
 

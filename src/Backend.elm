@@ -43,15 +43,6 @@ update msg model =
             ( { model | userSessions = Set.remove ( sessionId, clientId ) model.userSessions }, Cmd.none )
 
 
-changeToGridChange : UserId -> Change_ -> Grid.Change
-changeToGridChange userId change_ =
-    { cellPosition = change_.cellPosition
-    , localPosition = change_.localPosition
-    , change = change_.change
-    , userId = userId
-    }
-
-
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 updateFromFrontend sessionId clientId msg model =
     case msg of
@@ -66,7 +57,7 @@ updateFromFrontend sessionId clientId msg model =
                 Just user ->
                     let
                         gridChanges =
-                            List.Nonempty.map (changeToGridChange (User.id user)) changes
+                            List.Nonempty.map (Grid.localChangeToChange (User.id user)) changes
 
                         newGrid =
                             List.Nonempty.foldl Grid.addChange model.grid gridChanges

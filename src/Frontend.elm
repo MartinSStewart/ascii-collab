@@ -166,7 +166,7 @@ updateLoaded msg model =
                     , Browser.Navigation.load url
                     )
 
-        UrlChanged url ->
+        UrlChanged _ ->
             ( model, Cmd.none )
 
         NoOpFrontendMsg ->
@@ -491,13 +491,17 @@ changeText text model =
         |> Maybe.map
             (\lines ->
                 let
-                    changes : Nonempty Grid.Change
+                    changes : Nonempty Grid.LocalChange
                     changes =
-                        Grid.textToChange (User.id model.user) (Cursor.position model.cursor) lines
+                        Grid.textToChange (Cursor.position model.cursor) lines
 
                     newLocalModel : LocalModel Grid.Change Grid
                     newLocalModel =
-                        List.Nonempty.foldl (LocalModel.update localModelConfig) model.localModel changes
+                        changes
+                            |> List.Nonempty.map (Grid.localChangeToChange (User.id model.user))
+                            |> List.Nonempty.foldl
+                                (LocalModel.update localModelConfig)
+                                model.localModel
                 in
                 { model
                     | localModel = newLocalModel
@@ -513,21 +517,10 @@ changeText text model =
                             , Units.asciiUnit (List.Nonempty.length lines - 1)
                             )
                             model.cursor
-                    , pendingChanges =
-                        List.Nonempty.toList changes
-                            |> List.map gridChangeToChange
-                            |> (++) model.pendingChanges
+                    , pendingChanges = model.pendingChanges ++ List.Nonempty.toList changes
                 }
             )
         |> Maybe.withDefault model
-
-
-gridChangeToChange : Grid.Change -> Change_
-gridChangeToChange change_ =
-    { cellPosition = change_.cellPosition
-    , localPosition = change_.localPosition
-    , change = change_.change
-    }
 
 
 keyDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool

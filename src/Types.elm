@@ -1,7 +1,6 @@
 module Types exposing
     ( BackendModel
     , BackendMsg(..)
-    , Change_
     , FrontendLoaded
     , FrontendLoading
     , FrontendModel(..)
@@ -18,7 +17,7 @@ import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
-import Grid exposing (Grid)
+import Grid exposing (Grid, LocalChange)
 import Helper exposing (Coord)
 import Html.Events.Extra.Mouse exposing (Button)
 import Keyboard
@@ -70,7 +69,7 @@ type alias FrontendLoaded =
     , mouseMiddle : MouseButtonState
     , user : User
     , otherUsers : List User
-    , pendingChanges : List Change_
+    , pendingChanges : List LocalChange
     , tool : ToolType
     }
 
@@ -116,12 +115,8 @@ type FrontendMsg
 type ToBackend
     = NoOpToBackend
     | RequestData
-    | GridChange (Nonempty Change_)
+    | GridChange (Nonempty Grid.LocalChange)
     | UserRename String
-
-
-type alias Change_ =
-    { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Nonempty Ascii }
 
 
 type BackendMsg
