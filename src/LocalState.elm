@@ -17,19 +17,24 @@ init model =
 
 
 update : Config msg model -> msg -> LocalModel msg model -> LocalModel msg model
-update config msg (LocalModel localModel) =
+update config msg (LocalModel localModel_) =
     LocalModel
-        { localMsgs = localModel.localMsgs ++ [ msg ]
-        , localModel = config.update msg localModel.localModel
-        , model = localModel.model
+        { localMsgs = localModel_.localMsgs ++ [ msg ]
+        , localModel = config.update msg localModel_.localModel
+        , model = localModel_.model
         }
 
 
+localModel : LocalModel msg model -> model
+localModel (LocalModel localModel_) =
+    localModel_.localModel
+
+
 updateFromBackend : Config msg model -> msg -> LocalModel msg model -> LocalModel msg model
-updateFromBackend config msg (LocalModel localModel) =
+updateFromBackend config msg (LocalModel localModel_) =
     let
         newModel =
-            config.update msg localModel.model
+            config.update msg localModel_.model
 
         newLocalMsgs =
             List.foldl
@@ -44,7 +49,7 @@ updateFromBackend config msg (LocalModel localModel) =
                         ( localMsg :: newList, False )
                 )
                 ( [], False )
-                localModel.localMsgs
+                localModel_.localMsgs
                 |> Tuple.first
                 |> List.reverse
     in

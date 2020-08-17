@@ -777,7 +777,7 @@ tools =
     [ ( DragTool
       , Element.image
             [ Element.width (Element.px 20) ]
-            { src = "4-direction-arrows.png", description = "Drag tool" }
+            { src = "4-direction-arrows.svg", description = "Drag tool" }
       )
     , ( SelectTool
       , Element.el

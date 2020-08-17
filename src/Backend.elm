@@ -45,10 +45,6 @@ update msg model =
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 updateFromFrontend sessionId clientId msg model =
-    let
-        _ =
-            Debug.log "123" ( sessionId, clientId )
-    in
     case msg of
         NoOpToBackend ->
             ( model, Cmd.none )
