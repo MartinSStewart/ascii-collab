@@ -1,6 +1,7 @@
 module Types exposing
     ( BackendModel
     , BackendMsg(..)
+    , ChangeBroadcast
     , FrontendLoaded
     , FrontendLoading
     , FrontendModel(..)
@@ -16,12 +17,13 @@ import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
-import Grid exposing (ChangeBroadcast, Grid)
+import Grid exposing (Grid)
 import Helper exposing (Coord)
 import Html.Events.Extra.Mouse exposing (Button)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
+import LocalModel exposing (LocalModel)
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -54,7 +56,7 @@ type alias FrontendLoading =
 
 type alias FrontendLoaded =
     { key : Browser.Navigation.Key
-    , grid : Grid
+    , localModel : LocalModel ChangeBroadcast Grid
     , meshes : Dict ( Int, Int ) (WebGL.Mesh Vertex)
     , viewPoint : Point2d WorldPixel WorldCoordinate
     , cursor : Cursor
@@ -125,6 +127,10 @@ type BackendMsg
 type ToFrontend
     = NoOpToFrontend
     | LoadingData { user : User, grid : Grid, otherUsers : List User }
-    | GridChangeBroadcast { changes : Nonempty ChangeBroadcast, userId : UserId }
+    | GridChangeBroadcast ChangeBroadcast
     | NewUserBroadcast User
     | UserModifiedBroadcast User
+
+
+type alias ChangeBroadcast =
+    { changes : Nonempty Grid.Change, userId : UserId }

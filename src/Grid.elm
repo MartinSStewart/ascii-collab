@@ -1,4 +1,4 @@
-module Grid exposing (Change, ChangeBroadcast, Grid, addChange, addChangeBroadcast, allCells, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, getCell, mesh, textToChange)
+module Grid exposing (Change, Grid, addChange, addChangeBroadcast, allCells, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, getCell, mesh, textToChange)
 
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
@@ -40,11 +40,7 @@ type alias Change =
     { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Nonempty Ascii }
 
 
-type alias ChangeBroadcast =
-    { cellPosition : Coord CellUnit, localPosition : Int, change : Nonempty Ascii, changeId : Int }
-
-
-textToChange : Coord Units.AsciiUnit -> Nonempty (List Ascii) -> List Change
+textToChange : Coord Units.AsciiUnit -> Nonempty (List Ascii) -> Nonempty Change
 textToChange asciiCoord lines =
     List.Nonempty.toList lines
         |> List.indexedMap Tuple.pair
@@ -67,6 +63,15 @@ textToChange asciiCoord lines =
                         Nothing
             )
         |> List.concat
+        |> List.Nonempty.fromList
+        -- This should never happen
+        |> Maybe.withDefault
+            (List.Nonempty.fromElement
+                { cellPosition = ( Units.cellUnit 0, Units.cellUnit 0 )
+                , localPosition = 0
+                , change = List.Nonempty.fromElement Ascii.default
+                }
+            )
 
 
 addChange : UserId -> List Change -> Grid -> Grid
@@ -92,27 +97,16 @@ changeCount ( Quantity x, Quantity y ) (Grid grid) =
             0
 
 
-addChangeBroadcast : UserId -> ChangeBroadcast -> Grid -> Maybe Grid
+addChangeBroadcast : UserId -> Change -> Grid -> Grid
 addChangeBroadcast userId change grid =
     let
         cell : Cell
         cell =
             getCell change.cellPosition grid
                 |> Maybe.withDefault GridCell.empty
-
-        changeCount_ : Int
-        changeCount_ =
-            GridCell.changeCount cell
     in
-    --if changeCount_ >= change.changeId then
-    GridCell.addLineWithChangeId change.changeId userId change.localPosition change.change cell
+    GridCell.addLineWithChangeId userId change.localPosition change.change cell
         |> (\cell_ -> setCell change.cellPosition cell_ grid)
-        |> Just
-
-
-
---else
---    Nothing
 
 
 splitUpLine :

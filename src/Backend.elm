@@ -64,7 +64,6 @@ updateFromFrontend sessionId clientId msg model =
                                         , { cellPosition = change.cellPosition
                                           , localPosition = change.localPosition
                                           , change = change.change
-                                          , changeId = Grid.changeCount change.cellPosition grid
                                           }
                                             :: changeBroadcast_
                                         )

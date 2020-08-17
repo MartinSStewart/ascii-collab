@@ -26,7 +26,8 @@ import Keyboard
 import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
-import List.Nonempty
+import List.Nonempty exposing (Nonempty)
+import LocalModel
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
@@ -71,7 +72,7 @@ loadedInit : FrontendLoading -> Grid -> User -> List User -> ( FrontendModel, Cm
 loadedInit loading grid user otherUsers =
     ( Loaded
         { key = loading.key
-        , grid = grid
+        , localModel = LocalModel.init grid
         , meshes =
             Grid.allCells grid
                 |> List.map
@@ -188,7 +189,10 @@ updateLoaded msg model =
             case Keyboard.anyKeyOriginal rawKey of
                 Just (Keyboard.Character "c") ->
                     if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                        ( model, selectionToString (Cursor.bounds model.cursor) model.grid |> supermario_copy_to_clipboard_to_js )
+                        ( model
+                        , selectionToString (Cursor.bounds model.cursor) (LocalModel.localModel model.localModel)
+                            |> supermario_copy_to_clipboard_to_js
+                        )
 
                     else
                         ( model, Cmd.none )
@@ -205,7 +209,8 @@ updateLoaded msg model =
                         ( { model | cursor = Cursor.setCursor bounds.min }
                             |> changeText (String.repeat w " " |> List.repeat h |> String.join "\n")
                             |> (\m -> { m | cursor = model.cursor })
-                        , selectionToString bounds model.grid |> supermario_copy_to_clipboard_to_js
+                        , selectionToString bounds (LocalModel.localModel model.localModel)
+                            |> supermario_copy_to_clipboard_to_js
                         )
 
                     else
@@ -486,15 +491,23 @@ changeText text model =
         |> Maybe.map
             (\lines ->
                 let
+                    changes : Nonempty Grid.Change
                     changes =
                         Grid.textToChange (Cursor.position model.cursor) lines
 
-                    newGrid =
-                        Grid.addChange (User.id model.user) changes model.grid
+                    changeBroadcast =
+                        { changes = changes, userId = User.id model.user }
+
+                    newLocalModel =
+                        LocalModel.update localModelConfig changeBroadcast model.localModel
                 in
                 { model
-                    | grid = newGrid
-                    , meshes = updateMeshes changes newGrid model.meshes
+                    | localModel = newLocalModel
+                    , meshes =
+                        updateMeshes
+                            (List.Nonempty.toList changes)
+                            (LocalModel.localModel newLocalModel)
+                            model.meshes
                     , cursor =
                         Cursor.moveCursor
                             (keyDown Keyboard.Shift model)
@@ -502,7 +515,7 @@ changeText text model =
                             , Units.asciiUnit (List.Nonempty.length lines - 1)
                             )
                             model.cursor
-                    , pendingChanges = model.pendingChanges ++ changes
+                    , pendingChanges = model.pendingChanges ++ List.Nonempty.toList changes
                 }
             )
         |> Maybe.withDefault model
@@ -580,6 +593,19 @@ updateFromBackend msg model =
             ( model, Cmd.none )
 
 
+localModelConfig =
+    { msgEqual = \msg0 msg1 -> msg0 == msg1
+    , update =
+        \{ changes, userId } model ->
+            List.Nonempty.foldl
+                (\change grid ->
+                    Grid.addChangeBroadcast userId change grid
+                )
+                model
+                (List.Nonempty.reverse changes)
+    }
+
+
 updateLoadedFromBackend : ToFrontend -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 updateLoadedFromBackend msg model =
     case msg of
@@ -589,19 +615,18 @@ updateLoadedFromBackend msg model =
         LoadingData _ ->
             ( model, Cmd.none )
 
-        GridChangeBroadcast { changes, userId } ->
+        GridChangeBroadcast changeBroadcast ->
             let
-                newGrid =
-                    List.Nonempty.foldl
-                        (\change grid ->
-                            Grid.addChangeBroadcast userId change grid |> Maybe.withDefault grid
-                        )
-                        model.grid
-                        (List.Nonempty.reverse changes)
+                newLocalModel =
+                    LocalModel.updateFromBackend localModelConfig changeBroadcast model.localModel
             in
             ( { model
-                | grid = newGrid
-                , meshes = updateMeshes (List.Nonempty.toList changes) newGrid model.meshes
+                | localModel = newLocalModel
+                , meshes =
+                    updateMeshes
+                        (List.Nonempty.toList changeBroadcast.changes)
+                        (LocalModel.localModel newLocalModel)
+                        model.meshes
               }
             , Cmd.none
             )

@@ -1,4 +1,4 @@
-module LocalState exposing (Config, LocalModel, init, update, updateFromBackend)
+module LocalModel exposing (Config, LocalModel, init, localModel, update, updateFromBackend)
 
 
 type LocalModel msg model
