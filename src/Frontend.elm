@@ -27,7 +27,7 @@ import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty)
-import LocalModel
+import LocalModel exposing (LocalModel)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
@@ -395,7 +395,7 @@ updateLoaded msg model =
             ( { model | pendingChanges = [] }
             , case List.Nonempty.fromList model.pendingChanges of
                 Just nonempty ->
-                    Lamdera.sendToBackend (GridChange { changes = nonempty })
+                    Lamdera.sendToBackend (GridChange nonempty)
 
                 Nothing ->
                     Cmd.none
@@ -493,13 +493,11 @@ changeText text model =
                 let
                     changes : Nonempty Grid.Change
                     changes =
-                        Grid.textToChange (Cursor.position model.cursor) lines
+                        Grid.textToChange (User.id model.user) (Cursor.position model.cursor) lines
 
-                    changeBroadcast =
-                        { changes = changes, userId = User.id model.user }
-
+                    newLocalModel : LocalModel Grid.Change Grid
                     newLocalModel =
-                        LocalModel.update localModelConfig changeBroadcast model.localModel
+                        List.Nonempty.foldl (LocalModel.update localModelConfig) model.localModel changes
                 in
                 { model
                     | localModel = newLocalModel
@@ -515,10 +513,21 @@ changeText text model =
                             , Units.asciiUnit (List.Nonempty.length lines - 1)
                             )
                             model.cursor
-                    , pendingChanges = model.pendingChanges ++ List.Nonempty.toList changes
+                    , pendingChanges =
+                        List.Nonempty.toList changes
+                            |> List.map gridChangeToChange
+                            |> (++) model.pendingChanges
                 }
             )
         |> Maybe.withDefault model
+
+
+gridChangeToChange : Grid.Change -> Change_
+gridChangeToChange change_ =
+    { cellPosition = change_.cellPosition
+    , localPosition = change_.localPosition
+    , change = change_.change
+    }
 
 
 keyDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
@@ -593,16 +602,10 @@ updateFromBackend msg model =
             ( model, Cmd.none )
 
 
+localModelConfig : LocalModel.Config Grid.Change Grid
 localModelConfig =
     { msgEqual = \msg0 msg1 -> msg0 == msg1
-    , update =
-        \{ changes, userId } model ->
-            List.Nonempty.foldl
-                (\change grid ->
-                    Grid.addChangeBroadcast userId change grid
-                )
-                model
-                (List.Nonempty.reverse changes)
+    , update = Grid.addChange
     }
 
 
@@ -624,7 +627,7 @@ updateLoadedFromBackend msg model =
                 | localModel = newLocalModel
                 , meshes =
                     updateMeshes
-                        (List.Nonempty.toList changeBroadcast.changes)
+                        (List.Nonempty.toList changeBroadcast)
                         (LocalModel.localModel newLocalModel)
                         model.meshes
               }

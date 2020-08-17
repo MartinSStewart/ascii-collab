@@ -1,5 +1,7 @@
 module LocalModel exposing (Config, LocalModel, init, localModel, update, updateFromBackend)
 
+import List.Nonempty exposing (Nonempty)
+
 
 type LocalModel msg model
     = LocalModel { localMsgs : List msg, localModel : model, model : model }
@@ -30,28 +32,33 @@ localModel (LocalModel localModel_) =
     localModel_.localModel
 
 
-updateFromBackend : Config msg model -> msg -> LocalModel msg model -> LocalModel msg model
-updateFromBackend config msg (LocalModel localModel_) =
+updateFromBackend : Config msg model -> Nonempty msg -> LocalModel msg model -> LocalModel msg model
+updateFromBackend config msgs (LocalModel localModel_) =
     let
         newModel =
-            config.update msg localModel_.model
+            List.Nonempty.foldl config.update localModel_.model msgs
 
         newLocalMsgs =
-            List.foldl
-                (\localMsg ( newList, isDone ) ->
-                    if isDone then
-                        ( localMsg :: newList, True )
+            List.Nonempty.foldl
+                (\serverMsg localMsgs ->
+                    List.foldl
+                        (\localMsg ( newList, isDone ) ->
+                            if isDone then
+                                ( localMsg :: newList, True )
 
-                    else if config.msgEqual localMsg msg then
-                        ( newList, True )
+                            else if config.msgEqual localMsg serverMsg then
+                                ( newList, True )
 
-                    else
-                        ( localMsg :: newList, False )
+                            else
+                                ( localMsg :: newList, False )
+                        )
+                        ( [], False )
+                        localMsgs
+                        |> Tuple.first
+                        |> List.reverse
                 )
-                ( [], False )
                 localModel_.localMsgs
-                |> Tuple.first
-                |> List.reverse
+                msgs
     in
     LocalModel
         { localMsgs = newLocalMsgs

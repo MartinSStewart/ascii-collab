@@ -1,4 +1,4 @@
-module Grid exposing (Change, Grid, addChange, addChangeBroadcast, allCells, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, getCell, mesh, textToChange)
+module Grid exposing (Change, Grid, addChange, allCells, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, getCell, mesh, textToChange)
 
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
@@ -37,11 +37,11 @@ asciiToCellAndLocalCoord ( Quantity x, Quantity y ) =
 
 
 type alias Change =
-    { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Nonempty Ascii }
+    { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Nonempty Ascii, userId : UserId }
 
 
-textToChange : Coord Units.AsciiUnit -> Nonempty (List Ascii) -> Nonempty Change
-textToChange asciiCoord lines =
+textToChange : UserId -> Coord Units.AsciiUnit -> Nonempty (List Ascii) -> Nonempty Change
+textToChange userId asciiCoord lines =
     List.Nonempty.toList lines
         |> List.indexedMap Tuple.pair
         |> List.filterMap
@@ -55,7 +55,11 @@ textToChange asciiCoord lines =
                                         ( cellPosition, localPosition ) =
                                             asciiToCellAndLocalCoord pos
                                     in
-                                    { cellPosition = cellPosition, localPosition = localPosition, change = change }
+                                    { cellPosition = cellPosition
+                                    , localPosition = localPosition
+                                    , change = change
+                                    , userId = userId
+                                    }
                                 )
                             |> Just
 
@@ -70,21 +74,9 @@ textToChange asciiCoord lines =
                 { cellPosition = ( Units.cellUnit 0, Units.cellUnit 0 )
                 , localPosition = 0
                 , change = List.Nonempty.fromElement Ascii.default
+                , userId = userId
                 }
             )
-
-
-addChange : UserId -> List Change -> Grid -> Grid
-addChange userId changes grid =
-    List.foldl
-        (\change state ->
-            getCell change.cellPosition state
-                |> Maybe.withDefault GridCell.empty
-                |> GridCell.addLine userId change.localPosition change.change
-                |> (\cell -> setCell change.cellPosition cell state)
-        )
-        grid
-        changes
 
 
 changeCount : Coord Units.CellUnit -> Grid -> Int
@@ -97,15 +89,15 @@ changeCount ( Quantity x, Quantity y ) (Grid grid) =
             0
 
 
-addChangeBroadcast : UserId -> Change -> Grid -> Grid
-addChangeBroadcast userId change grid =
+addChange : Change -> Grid -> Grid
+addChange change grid =
     let
         cell : Cell
         cell =
             getCell change.cellPosition grid
                 |> Maybe.withDefault GridCell.empty
     in
-    GridCell.addLineWithChangeId userId change.localPosition change.change cell
+    GridCell.addLine change.userId change.localPosition change.change cell
         |> (\cell_ -> setCell change.cellPosition cell_ grid)
 
 

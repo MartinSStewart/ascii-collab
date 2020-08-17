@@ -43,6 +43,15 @@ update msg model =
             ( { model | userSessions = Set.remove ( sessionId, clientId ) model.userSessions }, Cmd.none )
 
 
+changeToGridChange : UserId -> Change_ -> Grid.Change
+changeToGridChange userId change_ =
+    { cellPosition = change_.cellPosition
+    , localPosition = change_.localPosition
+    , change = change_.change
+    , userId = userId
+    }
+
+
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 updateFromFrontend sessionId clientId msg model =
     case msg of
@@ -52,35 +61,18 @@ updateFromFrontend sessionId clientId msg model =
         RequestData ->
             requestDataUpdate sessionId clientId model
 
-        GridChange { changes } ->
+        GridChange changes ->
             case Dict.get sessionId model.users of
                 Just user ->
                     let
-                        ( newGrid, changeBroadcast ) =
-                            List.Nonempty.toList changes
-                                |> List.foldl
-                                    (\change ( grid, changeBroadcast_ ) ->
-                                        ( Grid.addChange (User.id user) [ change ] grid
-                                        , { cellPosition = change.cellPosition
-                                          , localPosition = change.localPosition
-                                          , change = change.change
-                                          }
-                                            :: changeBroadcast_
-                                        )
-                                    )
-                                    ( model.grid, [] )
+                        gridChanges =
+                            List.Nonempty.map (changeToGridChange (User.id user)) changes
+
+                        newGrid =
+                            List.Nonempty.foldl Grid.addChange model.grid gridChanges
                     in
                     ( { model | grid = newGrid }
-                    , case List.Nonempty.fromList changeBroadcast of
-                        Just nonempty ->
-                            broadcast
-                                (\_ _ ->
-                                    GridChangeBroadcast { changes = nonempty, userId = User.id user } |> Just
-                                )
-                                model
-
-                        Nothing ->
-                            Cmd.none
+                    , broadcast (\_ _ -> GridChangeBroadcast gridChanges |> Just) model
                     )
 
                 Nothing ->
@@ -110,7 +102,7 @@ requestDataUpdate sessionId clientId model =
         Nothing ->
             let
                 user =
-                    Dict.size model.users |> User.fromIndex |> Debug.log "asdf"
+                    Dict.size model.users |> User.fromIndex
             in
             ( { model
                 | userSessions = Set.insert ( sessionId, clientId ) model.userSessions

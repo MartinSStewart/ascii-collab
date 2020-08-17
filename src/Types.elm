@@ -1,7 +1,7 @@
 module Types exposing
     ( BackendModel
     , BackendMsg(..)
-    , ChangeBroadcast
+    , Change_
     , FrontendLoaded
     , FrontendLoading
     , FrontendModel(..)
@@ -13,6 +13,7 @@ module Types exposing
     , Vertex
     )
 
+import Ascii exposing (Ascii)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Cursor exposing (Cursor)
@@ -56,7 +57,7 @@ type alias FrontendLoading =
 
 type alias FrontendLoaded =
     { key : Browser.Navigation.Key
-    , localModel : LocalModel ChangeBroadcast Grid
+    , localModel : LocalModel Grid.Change Grid
     , meshes : Dict ( Int, Int ) (WebGL.Mesh Vertex)
     , viewPoint : Point2d WorldPixel WorldCoordinate
     , cursor : Cursor
@@ -69,7 +70,7 @@ type alias FrontendLoaded =
     , mouseMiddle : MouseButtonState
     , user : User
     , otherUsers : List User
-    , pendingChanges : List Grid.Change
+    , pendingChanges : List Change_
     , tool : ToolType
     }
 
@@ -115,8 +116,12 @@ type FrontendMsg
 type ToBackend
     = NoOpToBackend
     | RequestData
-    | GridChange { changes : Nonempty Grid.Change }
+    | GridChange (Nonempty Change_)
     | UserRename String
+
+
+type alias Change_ =
+    { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Nonempty Ascii }
 
 
 type BackendMsg
@@ -127,10 +132,6 @@ type BackendMsg
 type ToFrontend
     = NoOpToFrontend
     | LoadingData { user : User, grid : Grid, otherUsers : List User }
-    | GridChangeBroadcast ChangeBroadcast
+    | GridChangeBroadcast (Nonempty Grid.Change)
     | NewUserBroadcast User
     | UserModifiedBroadcast User
-
-
-type alias ChangeBroadcast =
-    { changes : Nonempty Grid.Change, userId : UserId }
