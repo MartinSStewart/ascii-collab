@@ -1,4 +1,4 @@
-module Grid exposing (Change, Grid, LocalChange, addChange, allCells, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, getCell, localChangeToChange, mesh, textToChange)
+module Grid exposing (Change, Grid, LocalChange, addChange, allCells, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, getCell, localChangeToChange, mesh, setUndoPoints, textToChange, undoPoint)
 
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
@@ -88,6 +88,25 @@ textToChange asciiCoord lines =
                 , change = List.Nonempty.fromElement Ascii.default
                 }
             )
+
+
+setUndoPoints : UserId -> Dict ( Int, Int ) Int -> Grid -> Grid
+setUndoPoints userId undoPoints (Grid grid) =
+    Dict.map
+        (\coord cell ->
+            Dict.get coord undoPoints
+                |> Maybe.map (\undoPoint_ -> GridCell.setUndoPoint userId undoPoint_ cell)
+                |> Maybe.withDefault cell
+        )
+        grid
+        |> Grid
+
+
+undoPoint : UserId -> Grid -> Dict ( Int, Int ) Int
+undoPoint userId (Grid grid) =
+    Dict.toList grid
+        |> List.filterMap (\( coord, cell ) -> GridCell.undoPoint userId cell |> Maybe.map (Tuple.pair coord))
+        |> Dict.fromList
 
 
 changeCount : Coord Units.CellUnit -> Grid -> Int

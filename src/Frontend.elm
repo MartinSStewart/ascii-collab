@@ -73,7 +73,7 @@ loadedInit : FrontendLoading -> Grid -> User -> List User -> ( FrontendModel, Cm
 loadedInit loading grid user otherUsers =
     ( Loaded
         { key = loading.key
-        , localModel = LocalModel.init grid
+        , localModel = LocalModel.init { grid = grid, undoHistory = [], redoHistory = [] }
         , meshes =
             Grid.allCells grid
                 |> List.map
@@ -96,7 +96,6 @@ loadedInit loading grid user otherUsers =
         , otherUsers = otherUsers
         , pendingChanges = []
         , tool = DragTool
-        , undoHistory = List.Zipper.singleton Dict.empty
         }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -192,7 +191,9 @@ updateLoaded msg model =
                 Just (Keyboard.Character "c") ->
                     if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
                         ( model
-                        , selectionToString (Cursor.bounds model.cursor) (LocalModel.localModel model.localModel)
+                        , LocalModel.localModel model.localModel
+                            |> .grid
+                            |> selectionToString (Cursor.bounds model.cursor)
                             |> supermario_copy_to_clipboard_to_js
                         )
 
@@ -206,7 +207,9 @@ updateLoaded msg model =
                                 Cursor.bounds model.cursor
                         in
                         ( clearTextSelection bounds model
-                        , selectionToString bounds (LocalModel.localModel model.localModel)
+                        , LocalModel.localModel model.localModel
+                            |> .grid
+                            |> selectionToString bounds
                             |> supermario_copy_to_clipboard_to_js
                         )
 
@@ -400,14 +403,42 @@ updateLoaded msg model =
             ( { model | tool = toolType }, Cmd.none )
 
         UndoPressed ->
-            ( { model | undoHistory = List.Zipper.previous model.undoHistory |> Maybe.withDefault model.undoHistory }
+            undo model
+
+        RedoPressed ->
+            redo model
+
+
+undo : LocalGrid -> LocalGrid
+undo model =
+    case model.undoHistory of
+        head :: rest ->
+            ( { model | undoHistory = model.undoHistory |> Maybe.withDefault model.undoHistory }
             , Cmd.none
             )
 
-        RedoPressed ->
-            ( { model | undoHistory = List.Zipper.next model.undoHistory |> Maybe.withDefault model.undoHistory }
+        [] ->
+            ( model, Cmd.none )
+
+
+redo : LocalGrid -> LocalGrid
+redo model =
+    case model.redoHistory of
+        head :: rest ->
+            ( { model | undoHistory = model.undoHistory |> Maybe.withDefault model.undoHistory }
             , Cmd.none
             )
+
+        [] ->
+            ( model, Cmd.none )
+
+
+currentUndo : FrontendLoaded -> Dict ( Int, Int ) Int
+currentUndo model =
+    LocalModel.localModel model.localModel
+        |> Grid.allCells
+        |> List.map (Tuple.mapBoth Helper.toRawCoord GridCell.changeCount)
+        |> Dict.fromList
 
 
 clearTextSelection bounds model =
@@ -534,25 +565,6 @@ changeText text model =
                 }
             )
         |> Maybe.withDefault model
-
-
-undoHistoryAdd : FrontendLoaded -> FrontendLoaded
-undoHistoryAdd model =
-    let
-        current : Dict ( Int, Int ) Int
-        current =
-            LocalModel.localModel model.localModel
-                |> Grid.allCells
-                |> List.map (Tuple.mapBoth Helper.toRawCoord GridCell.changeCount)
-                |> Dict.fromList
-    in
-    { model
-        | undoHistory =
-            List.Zipper.from
-                (List.Zipper.current model.undoHistory :: List.Zipper.before model.undoHistory)
-                current
-                []
-    }
 
 
 keyDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
@@ -817,7 +829,7 @@ toolbarView model =
                 UndoPressed
                 (Element.image
                     [ Element.width (Element.px 20)
-                    , if List.Zipper.previous model.undoHistory == Nothing then
+                    , if List.isEmpty model.undoHistory then
                         Element.alpha 0.5
 
                       else
@@ -830,7 +842,7 @@ toolbarView model =
                 RedoPressed
                 (Element.image
                     [ Element.width (Element.px 20)
-                    , if List.Zipper.next model.undoHistory == Nothing then
+                    , if List.isEmpty model.redoHistory then
                         Element.alpha 0.5
 
                       else

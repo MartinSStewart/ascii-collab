@@ -5,6 +5,8 @@ module Types exposing
     , FrontendLoading
     , FrontendModel(..)
     , FrontendMsg(..)
+    , LocalChange(..)
+    , LocalGrid
     , MouseButtonState(..)
     , ToBackend(..)
     , ToFrontend(..)
@@ -22,7 +24,6 @@ import Html.Events.Extra.Mouse exposing (Button)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
-import List.Zipper exposing (Zipper)
 import LocalModel exposing (LocalModel)
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
@@ -32,7 +33,7 @@ import Set exposing (Set)
 import Time
 import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
-import User exposing (User, UserId)
+import User exposing (RawUserId, User, UserId)
 import WebGL
 import WebGL.Texture exposing (Texture)
 
@@ -56,7 +57,7 @@ type alias FrontendLoading =
 
 type alias FrontendLoaded =
     { key : Browser.Navigation.Key
-    , localModel : LocalModel Grid.Change Grid
+    , localModel : LocalModel LocalChange LocalGrid
     , meshes : Dict ( Int, Int ) (WebGL.Mesh Vertex)
     , viewPoint : Point2d WorldPixel WorldCoordinate
     , cursor : Cursor
@@ -71,7 +72,19 @@ type alias FrontendLoaded =
     , otherUsers : List User
     , pendingChanges : List LocalChange
     , tool : ToolType
-    , undoHistory : Zipper (Dict ( Int, Int ) Int)
+    }
+
+
+type LocalChange
+    = LocalGridChange Grid.Change
+    | LocalUndoChange
+    | LocalRedoChange
+
+
+type alias LocalGrid =
+    { grid : Grid
+    , undoHistory : List (Dict ( Int, Int ) Int)
+    , redoHistory : List (Dict ( Int, Int ) Int)
     }
 
 
@@ -91,7 +104,11 @@ type MouseButtonState
 
 
 type alias BackendModel =
-    { grid : Grid, userSessions : Set ( SessionId, ClientId ), users : Dict SessionId User }
+    { grid : Grid
+    , undoPoints : Dict RawUserId (Dict ( Int, Int ) Int)
+    , userSessions : Set ( SessionId, ClientId )
+    , users : Dict SessionId User
+    }
 
 
 type FrontendMsg
@@ -118,7 +135,7 @@ type FrontendMsg
 type ToBackend
     = NoOpToBackend
     | RequestData
-    | GridChange (Nonempty Grid.LocalChange)
+    | GridChange (Nonempty LocalChange)
     | UserRename String
 
 

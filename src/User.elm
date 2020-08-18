@@ -1,4 +1,4 @@
-module User exposing (User(..), UserId, color, fromIndex, id, name, rawId, withName)
+module User exposing (RawUserId, User(..), UserId, color, fromIndex, id, name, rawId, withName)
 
 import ColorIndex exposing (ColorIndex(..))
 import List.Extra as List
@@ -10,6 +10,10 @@ type User
 
 type UserId
     = UserId Int
+
+
+type alias RawUserId =
+    Int
 
 
 userId : Int -> UserId

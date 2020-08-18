@@ -1,15 +1,11 @@
-module GridCell exposing (Cell, addLine, cellSize, changeCount, empty, flatten)
+module GridCell exposing (Cell, addLine, cellSize, changeCount, empty, flatten, setUndoPoint, undoPoint)
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty)
-import User exposing (UserId)
-
-
-type alias RawUserId =
-    Int
+import User exposing (RawUserId, UserId)
 
 
 type Cell
@@ -17,15 +13,28 @@ type Cell
 
 
 addLine : UserId -> Int -> Nonempty Ascii -> Cell -> Cell
-addLine userId position line (Cell { history, undoPoint }) =
+addLine userId position line (Cell cell) =
     Cell
-        { history = { userId = userId, position = position, line = line } :: history
+        { history = { userId = userId, position = position, line = line } :: cell.history
         , undoPoint =
             Dict.update
                 (User.rawId userId)
                 (Maybe.map ((+) 1) >> Maybe.withDefault 1 >> Just)
-                undoPoint
+                cell.undoPoint
         }
+
+
+setUndoPoint : UserId -> Int -> Cell -> Cell
+setUndoPoint userId newUndoPoint (Cell cell) =
+    Cell
+        { history = cell.history
+        , undoPoint = Dict.update (User.rawId userId) (\_ -> Just newUndoPoint) cell.undoPoint
+        }
+
+
+undoPoint : UserId -> Cell -> Maybe Int
+undoPoint userId (Cell cell) =
+    Dict.get (User.rawId userId) cell.undoPoint
 
 
 
@@ -56,7 +65,7 @@ changeCount (Cell { history }) =
 
 
 flatten : Cell -> Array Ascii
-flatten (Cell { history, undoPoint }) =
+flatten (Cell cell) =
     List.foldr
         (\{ userId, position, line } state ->
             case Dict.get (User.rawId userId) state.undoPoint of
@@ -79,8 +88,8 @@ flatten (Cell { history, undoPoint }) =
                 Nothing ->
                     state
         )
-        { array = Array.initialize (cellSize * cellSize) (\_ -> Ascii.default), undoPoint = undoPoint }
-        history
+        { array = Array.initialize (cellSize * cellSize) (\_ -> Ascii.default), undoPoint = cell.undoPoint }
+        cell.history
         |> .array
 
 

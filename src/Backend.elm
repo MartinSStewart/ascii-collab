@@ -23,6 +23,7 @@ init =
     ( { grid = Grid.empty
       , userSessions = Set.empty
       , users = Dict.empty
+      , undoPoints = Dict.empty
       }
     , Cmd.none
     )
