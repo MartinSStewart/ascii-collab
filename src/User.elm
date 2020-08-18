@@ -1,4 +1,4 @@
-module User exposing (User(..), UserId, color, fromIndex, id, name, withName)
+module User exposing (User(..), UserId, color, fromIndex, id, name, rawId, withName)
 
 import ColorIndex exposing (ColorIndex(..))
 import List.Extra as List
@@ -9,12 +9,12 @@ type User
 
 
 type UserId
-    = TempUserId Int
+    = UserId Int
 
 
 userId : Int -> UserId
 userId index =
-    TempUserId index
+    UserId index
 
 
 fromIndex : Int -> User
@@ -29,6 +29,11 @@ fromIndex index =
 id : User -> UserId
 id (User user) =
     user.id
+
+
+rawId : UserId -> Int
+rawId (UserId userId_) =
+    userId_
 
 
 name : User -> String

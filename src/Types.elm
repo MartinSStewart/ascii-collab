@@ -12,7 +12,6 @@ module Types exposing
     , Vertex
     )
 
-import Ascii exposing (Ascii)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Cursor exposing (Cursor)
@@ -23,6 +22,7 @@ import Html.Events.Extra.Mouse exposing (Button)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
+import List.Zipper exposing (Zipper)
 import LocalModel exposing (LocalModel)
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
@@ -71,6 +71,7 @@ type alias FrontendLoaded =
     , otherUsers : List User
     , pendingChanges : List LocalChange
     , tool : ToolType
+    , undoHistory : Zipper (Dict ( Int, Int ) Int)
     }
 
 
@@ -110,6 +111,8 @@ type FrontendMsg
     | ShortIntervalElapsed Time.Posix
     | ZoomFactorPressed Int
     | SelectToolPressed ToolType
+    | UndoPressed
+    | RedoPressed
 
 
 type ToBackend

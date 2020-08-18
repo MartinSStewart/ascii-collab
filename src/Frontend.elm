@@ -27,6 +27,7 @@ import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty)
+import List.Zipper
 import LocalModel exposing (LocalModel)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
@@ -95,6 +96,7 @@ loadedInit loading grid user otherUsers =
         , otherUsers = otherUsers
         , pendingChanges = []
         , tool = DragTool
+        , undoHistory = List.Zipper.singleton Dict.empty
         }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -202,13 +204,8 @@ updateLoaded msg model =
                         let
                             bounds =
                                 Cursor.bounds model.cursor
-
-                            ( w, h ) =
-                                bounds.max |> Helper.minusTuple bounds.min |> Helper.toRawCoord
                         in
-                        ( { model | cursor = Cursor.setCursor bounds.min }
-                            |> changeText (String.repeat w " " |> List.repeat h |> String.join "\n")
-                            |> (\m -> { m | cursor = model.cursor })
+                        ( clearTextSelection bounds model
                         , selectionToString bounds (LocalModel.localModel model.localModel)
                             |> supermario_copy_to_clipboard_to_js
                         )
@@ -220,13 +217,8 @@ updateLoaded msg model =
                     let
                         bounds =
                             Cursor.bounds model.cursor
-
-                        ( w, h ) =
-                            bounds.max |> Helper.minusTuple bounds.min |> Helper.toRawCoord
                     in
-                    ( { model | cursor = Cursor.setCursor bounds.min }
-                        |> changeText (String.repeat w " " |> List.repeat h |> String.join "\n")
-                        |> (\m -> { m | cursor = model.cursor })
+                    ( clearTextSelection bounds model
                     , Cmd.none
                     )
 
@@ -392,20 +384,41 @@ updateLoaded msg model =
             )
 
         ShortIntervalElapsed _ ->
-            ( { model | pendingChanges = [] }
-            , case List.Nonempty.fromList model.pendingChanges of
+            case List.Nonempty.fromList model.pendingChanges of
                 Just nonempty ->
-                    Lamdera.sendToBackend (GridChange nonempty)
+                    ( { model | pendingChanges = [] } |> undoHistoryAdd
+                    , Lamdera.sendToBackend (GridChange nonempty)
+                    )
 
                 Nothing ->
-                    Cmd.none
-            )
+                    ( model, Cmd.none )
 
         ZoomFactorPressed zoomFactor ->
             ( { model | zoomFactor = zoomFactor }, Cmd.none )
 
         SelectToolPressed toolType ->
             ( { model | tool = toolType }, Cmd.none )
+
+        UndoPressed ->
+            ( { model | undoHistory = List.Zipper.previous model.undoHistory |> Maybe.withDefault model.undoHistory }
+            , Cmd.none
+            )
+
+        RedoPressed ->
+            ( { model | undoHistory = List.Zipper.next model.undoHistory |> Maybe.withDefault model.undoHistory }
+            , Cmd.none
+            )
+
+
+clearTextSelection bounds model =
+    let
+        ( w, h ) =
+            bounds.max |> Helper.minusTuple bounds.min |> Helper.toRawCoord
+    in
+    { model | cursor = Cursor.setCursor bounds.min }
+        |> changeText (String.repeat w " " |> List.repeat h |> String.join "\n")
+        |> undoHistoryAdd
+        |> (\m -> { m | cursor = model.cursor })
 
 
 screenToWorld : FrontendLoaded -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
@@ -521,6 +534,25 @@ changeText text model =
                 }
             )
         |> Maybe.withDefault model
+
+
+undoHistoryAdd : FrontendLoaded -> FrontendLoaded
+undoHistoryAdd model =
+    let
+        current : Dict ( Int, Int ) Int
+        current =
+            LocalModel.localModel model.localModel
+                |> Grid.allCells
+                |> List.map (Tuple.mapBoth Helper.toRawCoord GridCell.changeCount)
+                |> Dict.fromList
+    in
+    { model
+        | undoHistory =
+            List.Zipper.from
+                (List.Zipper.current model.undoHistory :: List.Zipper.before model.undoHistory)
+                current
+                []
+    }
 
 
 keyDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
@@ -778,19 +810,55 @@ toolbarView model =
                         icon
                 )
                 tools
+
+        undoRedoView =
+            [ toolbarButton
+                []
+                UndoPressed
+                (Element.image
+                    [ Element.width (Element.px 20)
+                    , if List.Zipper.previous model.undoHistory == Nothing then
+                        Element.alpha 0.5
+
+                      else
+                        Element.alpha 1
+                    ]
+                    { src = "undo.svg", description = "Undo button" }
+                )
+            , toolbarButton
+                []
+                RedoPressed
+                (Element.image
+                    [ Element.width (Element.px 20)
+                    , if List.Zipper.next model.undoHistory == Nothing then
+                        Element.alpha 0.5
+
+                      else
+                        Element.alpha 1
+                    ]
+                    { src = "redo.svg", description = "Undo button" }
+                )
+            ]
+
+        groups =
+            [ Element.text "🔎" :: zoomView
+            , toolView
+            , undoRedoView
+            ]
     in
-    Element.row
-        [ Element.Background.color lightColor
-        , Element.alignBottom
-        , Element.centerX
-        , Element.moveUp 16
-        , Element.spacing 8
-        , Element.padding 8
-        , Element.Border.color backgroundColor
-        , Element.Border.width 2
-        , Element.Font.color textColor
-        ]
-        (Element.text "🔎" :: zoomView ++ [ verticalSeparator ] ++ toolView)
+    List.intersperse [ verticalSeparator ] groups
+        |> List.concat
+        |> Element.row
+            [ Element.Background.color lightColor
+            , Element.alignBottom
+            , Element.centerX
+            , Element.moveUp 16
+            , Element.spacing 8
+            , Element.padding 8
+            , Element.Border.color backgroundColor
+            , Element.Border.width 2
+            , Element.Font.color textColor
+            ]
 
 
 tools : List ( ToolType, Element msg )
