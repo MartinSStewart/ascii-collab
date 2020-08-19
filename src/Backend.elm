@@ -57,14 +57,47 @@ updateFromFrontend sessionId clientId msg model =
             case Dict.get sessionId model.users of
                 Just user ->
                     let
-                        gridChanges =
-                            List.Nonempty.map (Grid.localChangeToChange (User.id user)) changes
+                        a =
+                            List.map identity []
 
-                        newGrid =
-                            List.Nonempty.foldl Grid.addChange model.grid gridChanges
+                        --gridChanges : List.Nonempty.Nonempty ServerChange
+                        --gridChanges =
+                        --    List.Nonempty.map (localToServerChange (User.id user)) changes
+                        ( newModel, serverChanges ) =
+                            List.Nonempty.foldl
+                                (\change ( model_, serverChanges_ ) ->
+                                    case change of
+                                        LocalUndo ->
+                                            ( model_, serverChanges_ )
+
+                                        LocalGridChange localChange ->
+                                            ( { model
+                                                | grid =
+                                                    Grid.addChange
+                                                        (Grid.localChangeToChange (User.id user) localChange)
+                                                        model.grid
+                                              }
+                                            , ServerGridChange (Grid.localChangeToChange (User.id user) localChange)
+                                                :: serverChanges_
+                                            )
+
+                                        LocalRedo ->
+                                            ( model_, serverChanges_ )
+                                )
+                                ( model, [] )
+                                changes
+                                |> Tuple.mapSecond List.reverse
                     in
-                    ( { model | grid = newGrid }
-                    , broadcast (\_ _ -> GridChangeBroadcast gridChanges |> Just) model
+                    ( newModel
+                    , broadcast
+                        (\sessionId_ clientId_ ->
+                            if sessionId == sessionId_ && clientId == clientId_ then
+                                LocalChangeResponse changes |> Just
+
+                            else
+                                List.Nonempty.fromList serverChanges |> Maybe.map ServerChangeBroadcast
+                        )
+                        model
                     )
 
                 Nothing ->

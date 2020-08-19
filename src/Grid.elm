@@ -1,4 +1,4 @@
-module Grid exposing (Change, Grid, LocalChange, addChange, allCells, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, getCell, localChangeToChange, mesh, setUndoPoints, textToChange, undoPoint)
+module Grid exposing (Change, Grid, LocalChange, addChange, allCells, allCellsDict, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, getCell, localChangeToChange, mesh, setUndoPoints, textToChange, undoPoint)
 
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
@@ -179,6 +179,11 @@ splitUpLine asciiCoord offsetY line =
 allCells : Grid -> List ( Coord CellUnit, Cell )
 allCells (Grid grid) =
     Dict.toList grid |> List.map (Tuple.mapFirst (\( x, y ) -> ( Units.cellUnit x, Units.cellUnit y )))
+
+
+allCellsDict : Grid -> Dict ( Int, Int ) Cell
+allCellsDict (Grid grid) =
+    grid
 
 
 getCell : Coord Units.CellUnit -> Grid -> Maybe Cell

@@ -1,6 +1,7 @@
 module Types exposing
     ( BackendModel
     , BackendMsg(..)
+    , Change(..)
     , FrontendLoaded
     , FrontendLoading
     , FrontendModel(..)
@@ -8,6 +9,7 @@ module Types exposing
     , LocalChange(..)
     , LocalGrid
     , MouseButtonState(..)
+    , ServerChange(..)
     , ToBackend(..)
     , ToFrontend(..)
     , ToolType(..)
@@ -57,7 +59,7 @@ type alias FrontendLoading =
 
 type alias FrontendLoaded =
     { key : Browser.Navigation.Key
-    , localModel : LocalModel LocalChange LocalGrid
+    , localModel : LocalModel Change LocalGrid
     , meshes : Dict ( Int, Int ) (WebGL.Mesh Vertex)
     , viewPoint : Point2d WorldPixel WorldCoordinate
     , cursor : Cursor
@@ -75,10 +77,20 @@ type alias FrontendLoaded =
     }
 
 
+type Change
+    = LocalChange LocalChange
+    | ServerChange ServerChange
+
+
 type LocalChange
-    = LocalGridChange Grid.Change
-    | LocalUndoChange
-    | LocalRedoChange
+    = LocalGridChange Grid.LocalChange
+    | LocalUndo
+    | LocalRedo
+
+
+type ServerChange
+    = ServerGridChange Grid.Change
+    | ServerUndoPoint { userId : UserId, undoPoints : Dict ( Int, Int ) Int }
 
 
 type alias LocalGrid =
@@ -147,6 +159,7 @@ type BackendMsg
 type ToFrontend
     = NoOpToFrontend
     | LoadingData { user : User, grid : Grid, otherUsers : List User }
-    | GridChangeBroadcast (Nonempty Grid.Change)
+    | ServerChangeBroadcast (Nonempty ServerChange)
+    | LocalChangeResponse (Nonempty LocalChange)
     | NewUserBroadcast User
     | UserModifiedBroadcast User

@@ -149,7 +149,7 @@ update msg model =
                     ( model, Cmd.none )
 
         Loaded frontendLoaded ->
-            updateLoaded msg frontendLoaded |> Tuple.mapFirst Loaded
+            updateLoaded msg frontendLoaded |> Tuple.mapFirst (updateMeshes frontendLoaded) |> Tuple.mapFirst Loaded
 
 
 updateLoaded : FrontendMsg -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
@@ -389,7 +389,7 @@ updateLoaded msg model =
         ShortIntervalElapsed _ ->
             case List.Nonempty.fromList model.pendingChanges of
                 Just nonempty ->
-                    ( { model | pendingChanges = [] } |> undoHistoryAdd
+                    ( { model | pendingChanges = [] }
                     , Lamdera.sendToBackend (GridChange nonempty)
                     )
 
@@ -539,21 +539,16 @@ changeText text model =
                     changes =
                         Grid.textToChange (Cursor.position model.cursor) lines
 
-                    newLocalModel : LocalModel Grid.Change Grid
+                    newLocalModel : LocalModel Change LocalGrid
                     newLocalModel =
                         changes
-                            |> List.Nonempty.map (Grid.localChangeToChange (User.id model.user))
+                            |> List.Nonempty.map (LocalGridChange >> LocalChange)
                             |> List.Nonempty.foldl
                                 (LocalModel.update localModelConfig)
                                 model.localModel
                 in
                 { model
                     | localModel = newLocalModel
-                    , meshes =
-                        updateMeshes
-                            (List.Nonempty.toList changes)
-                            (LocalModel.localModel newLocalModel)
-                            model.meshes
                     , cursor =
                         Cursor.moveCursor
                             (keyDown Keyboard.Shift model)
@@ -561,7 +556,10 @@ changeText text model =
                             , Units.asciiUnit (List.Nonempty.length lines - 1)
                             )
                             model.cursor
-                    , pendingChanges = model.pendingChanges ++ List.Nonempty.toList changes
+                    , pendingChanges =
+                        List.Nonempty.toList changes
+                            |> List.map LocalGridChange
+                            |> (++) model.pendingChanges
                 }
             )
         |> Maybe.withDefault model
@@ -572,29 +570,63 @@ keyDown key { pressedKeys } =
     List.any ((==) key) pressedKeys
 
 
-updateMeshes :
-    List { a | cellPosition : Helper.Coord Units.CellUnit }
-    -> Grid
-    -> Dict ( Int, Int ) (WebGL.Mesh { position : Vec2, texturePosition : Vec2 })
-    -> Dict ( Int, Int ) (WebGL.Mesh { position : Vec2, texturePosition : Vec2 })
-updateMeshes changes grid meshes =
-    changes
-        |> List.map (\{ cellPosition } -> ( Helper.toRawCoord cellPosition, cellPosition ))
-        |> Dict.fromList
-        |> Dict.values
-        |> List.foldl
-            (\cellCoord meshes_ ->
-                case Grid.getCell cellCoord grid of
-                    Just cell ->
-                        GridCell.flatten cell
-                            |> Array.toList
-                            |> Grid.mesh cellCoord
-                            |> (\mesh -> Dict.insert (Helper.toRawCoord cellCoord) mesh meshes_)
 
-                    Nothing ->
-                        meshes_
-            )
-            meshes
+--updateMeshes :
+--    List { a | cellPosition : Helper.Coord Units.CellUnit }
+--    -> Grid
+--    -> Dict ( Int, Int ) (WebGL.Mesh { position : Vec2, texturePosition : Vec2 })
+--    -> Dict ( Int, Int ) (WebGL.Mesh { position : Vec2, texturePosition : Vec2 })
+--updateMeshes changes grid meshes =
+--    changes
+--        |> List.map (\{ cellPosition } -> ( Helper.toRawCoord cellPosition, cellPosition ))
+--        |> Dict.fromList
+--        |> Dict.values
+--        |> List.foldl
+--            (\cellCoord meshes_ ->
+--                case Grid.getCell cellCoord grid of
+--                    Just cell ->
+--                        GridCell.flatten cell
+--                            |> Array.toList
+--                            |> Grid.mesh cellCoord
+--                            |> (\mesh -> Dict.insert (Helper.toRawCoord cellCoord) mesh meshes_)
+--
+--                    Nothing ->
+--                        meshes_
+--            )
+--            meshes
+
+
+updateMeshes : FrontendLoaded -> FrontendLoaded -> FrontendLoaded
+updateMeshes oldModel newModel =
+    let
+        oldCells =
+            LocalModel.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
+
+        newCells =
+            LocalModel.localModel newModel.localModel |> .grid |> Grid.allCellsDict
+    in
+    { newModel
+        | meshes =
+            Dict.map
+                (\coord newCell ->
+                    case Dict.get coord oldCells of
+                        Just oldCell ->
+                            if oldCell == newCell then
+                                case Dict.get coord newModel.meshes of
+                                    Just mesh ->
+                                        mesh
+
+                                    Nothing ->
+                                        Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten newCell |> Array.toList)
+
+                            else
+                                Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten newCell |> Array.toList)
+
+                        Nothing ->
+                            Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten newCell |> Array.toList)
+                )
+                newCells
+    }
 
 
 offsetViewPoint : FrontendLoaded -> Point2d Pixels ScreenCoordinate -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
@@ -633,13 +665,13 @@ updateFromBackend msg model =
             loadedInit loading grid user otherUsers
 
         ( Loaded loaded, _ ) ->
-            updateLoadedFromBackend msg loaded |> Tuple.mapFirst Loaded
+            updateLoadedFromBackend msg loaded |> Tuple.mapFirst (updateMeshes loaded) |> Tuple.mapFirst Loaded
 
         _ ->
             ( model, Cmd.none )
 
 
-localModelConfig : LocalModel.Config Grid.Change Grid
+localModelConfig : LocalModel.Config Change LocalGrid
 localModelConfig =
     { msgEqual = \msg0 msg1 -> msg0 == msg1
     , update = Grid.addChange
@@ -655,19 +687,12 @@ updateLoadedFromBackend msg model =
         LoadingData _ ->
             ( model, Cmd.none )
 
-        GridChangeBroadcast changeBroadcast ->
+        ServerChangeBroadcast changeBroadcast ->
             let
                 newLocalModel =
                     LocalModel.updateFromBackend localModelConfig changeBroadcast model.localModel
             in
-            ( { model
-                | localModel = newLocalModel
-                , meshes =
-                    updateMeshes
-                        (List.Nonempty.toList changeBroadcast)
-                        (LocalModel.localModel newLocalModel)
-                        model.meshes
-              }
+            ( { model | localModel = newLocalModel }
             , Cmd.none
             )
 
@@ -686,6 +711,17 @@ updateLoadedFromBackend msg model =
 
               else
                 { model | otherUsers = List.updateIf (User.id >> (==) (User.id user)) (always user) model.otherUsers }
+            , Cmd.none
+            )
+
+        LocalChangeResponse changes ->
+            ( { model
+                | localModel =
+                    LocalModel.updateFromBackend
+                        localModelConfig
+                        (List.Nonempty.map LocalChange changes)
+                        model.localModel
+              }
             , Cmd.none
             )
 
