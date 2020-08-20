@@ -83,6 +83,9 @@ updateFromFrontend sessionId clientId msg model =
 
                                         LocalRedo ->
                                             ( model_, serverChanges_ )
+
+                                        AddUndo ->
+                                            ( model_, serverChanges_ )
                                 )
                                 ( model, [] )
                                 changes

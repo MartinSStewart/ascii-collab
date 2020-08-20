@@ -74,6 +74,8 @@ type alias FrontendLoaded =
     , otherUsers : List User
     , pendingChanges : List LocalChange
     , tool : ToolType
+    , undoAddLast : Time.Posix
+    , time : Time.Posix
     }
 
 
@@ -86,6 +88,7 @@ type LocalChange
     = LocalGridChange Grid.LocalChange
     | LocalUndo
     | LocalRedo
+    | AddUndo
 
 
 type ServerChange

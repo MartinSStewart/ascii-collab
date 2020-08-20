@@ -94,9 +94,11 @@ setUndoPoints : UserId -> Dict ( Int, Int ) Int -> Grid -> Grid
 setUndoPoints userId undoPoints (Grid grid) =
     Dict.map
         (\coord cell ->
-            Dict.get coord undoPoints
-                |> Maybe.map (\undoPoint_ -> GridCell.setUndoPoint userId undoPoint_ cell)
-                |> Maybe.withDefault cell
+            let
+                undoPoint_ =
+                    Dict.get coord undoPoints |> Maybe.withDefault 0
+            in
+            GridCell.setUndoPoint userId undoPoint_ cell
         )
         grid
         |> Grid

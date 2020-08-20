@@ -10,6 +10,7 @@ import Browser.Navigation
 import ColorIndex
 import Cursor
 import Dict exposing (Dict)
+import Duration
 import Element exposing (Element)
 import Element.Background
 import Element.Border
@@ -27,7 +28,6 @@ import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty)
-import List.Zipper
 import LocalModel exposing (LocalModel)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
@@ -96,6 +96,8 @@ loadedInit loading grid user otherUsers =
         , otherUsers = otherUsers
         , pendingChanges = []
         , tool = DragTool
+        , undoAddLast = Time.millisToPosix 0
+        , time = Time.millisToPosix 0
         }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -386,15 +388,19 @@ updateLoaded msg model =
             , Cmd.none
             )
 
-        ShortIntervalElapsed _ ->
-            case List.Nonempty.fromList model.pendingChanges of
+        ShortIntervalElapsed time ->
+            let
+                model_ =
+                    { model | time = time }
+            in
+            case List.Nonempty.fromList model_.pendingChanges of
                 Just nonempty ->
-                    ( { model | pendingChanges = [] }
-                    , Lamdera.sendToBackend (GridChange nonempty)
+                    ( { model_ | pendingChanges = [] }
+                    , GridChange nonempty |> Lamdera.sendToBackend
                     )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model_, Cmd.none )
 
         ZoomFactorPressed zoomFactor ->
             ( { model | zoomFactor = zoomFactor }, Cmd.none )
@@ -403,43 +409,42 @@ updateLoaded msg model =
             ( { model | tool = toolType }, Cmd.none )
 
         UndoPressed ->
-            ( model, Cmd.none )
+            ( undo model, Cmd.none )
 
         RedoPressed ->
-            ( model, Cmd.none )
+            ( redo model, Cmd.none )
 
 
+undo : FrontendLoaded -> FrontendLoaded
+undo =
+    updateLocalModel LocalUndo >> Debug.log "undo"
 
---undo : LocalGrid -> LocalGrid
---undo model =
---    case model.undoHistory of
---        head :: rest ->
---            ( { model | undoHistory = model.undoHistory |> Maybe.withDefault model.undoHistory }
---            , Cmd.none
---            )
---
---        [] ->
---            ( model, Cmd.none )
---
---
---redo : LocalGrid -> LocalGrid
---redo model =
---    case model.redoHistory of
---        head :: rest ->
---            ( { model | undoHistory = model.undoHistory |> Maybe.withDefault model.undoHistory }
---            , Cmd.none
---            )
---
---        [] ->
---            ( model, Cmd.none )
---
---
---currentUndo : FrontendLoaded -> Dict ( Int, Int ) Int
---currentUndo model =
---    LocalModel.localModel model.localModel
---        |> Grid.allCells
---        |> List.map (Tuple.mapBoth Helper.toRawCoord GridCell.changeCount)
---        |> Dict.fromList
+
+redo : FrontendLoaded -> FrontendLoaded
+redo =
+    updateLocalModel LocalRedo >> Debug.log "redo"
+
+
+updateLocalModel : LocalChange -> FrontendLoaded -> FrontendLoaded
+updateLocalModel msg model =
+    { model
+        | pendingChanges = model.pendingChanges ++ [ msg ]
+        , localModel =
+            LocalModel.update
+                (localModelConfig (User.id model.user))
+                (LocalChange msg)
+                model.localModel
+    }
+
+
+isGridChange : LocalChange -> Bool
+isGridChange localChange =
+    case localChange of
+        LocalGridChange _ ->
+            True
+
+        _ ->
+            False
 
 
 clearTextSelection bounds model =
@@ -535,32 +540,25 @@ changeText text model =
         |> Maybe.map
             (\lines ->
                 let
-                    changes : Nonempty Grid.LocalChange
-                    changes =
-                        Grid.textToChange (Cursor.position model.cursor) lines
+                    model_ =
+                        if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 2) then
+                            updateLocalModel AddUndo { model | undoAddLast = model.time }
 
-                    newLocalModel : LocalModel Change LocalGrid
-                    newLocalModel =
-                        changes
-                            |> List.Nonempty.map (LocalGridChange >> LocalChange)
-                            |> List.Nonempty.foldl
-                                (LocalModel.update (localModelConfig (User.id model.user)))
-                                model.localModel
+                        else
+                            model
                 in
-                { model
-                    | localModel = newLocalModel
-                    , cursor =
-                        Cursor.moveCursor
-                            (keyDown Keyboard.Shift model)
-                            ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
-                            , Units.asciiUnit (List.Nonempty.length lines - 1)
-                            )
-                            model.cursor
-                    , pendingChanges =
-                        List.Nonempty.toList changes
-                            |> List.map LocalGridChange
-                            |> (++) model.pendingChanges
-                }
+                Grid.textToChange (Cursor.position model_.cursor) lines
+                    |> List.Nonempty.map LocalGridChange
+                    |> List.Nonempty.foldl updateLocalModel
+                        { model_
+                            | cursor =
+                                Cursor.moveCursor
+                                    (keyDown Keyboard.Shift model_)
+                                    ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
+                                    , Units.asciiUnit (List.Nonempty.length lines - 1)
+                                    )
+                                    model_.cursor
+                        }
             )
         |> Maybe.withDefault model
 
@@ -568,32 +566,6 @@ changeText text model =
 keyDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
 keyDown key { pressedKeys } =
     List.any ((==) key) pressedKeys
-
-
-
---updateMeshes :
---    List { a | cellPosition : Helper.Coord Units.CellUnit }
---    -> Grid
---    -> Dict ( Int, Int ) (WebGL.Mesh { position : Vec2, texturePosition : Vec2 })
---    -> Dict ( Int, Int ) (WebGL.Mesh { position : Vec2, texturePosition : Vec2 })
---updateMeshes changes grid meshes =
---    changes
---        |> List.map (\{ cellPosition } -> ( Helper.toRawCoord cellPosition, cellPosition ))
---        |> Dict.fromList
---        |> Dict.values
---        |> List.foldl
---            (\cellCoord meshes_ ->
---                case Grid.getCell cellCoord grid of
---                    Just cell ->
---                        GridCell.flatten cell
---                            |> Array.toList
---                            |> Grid.mesh cellCoord
---                            |> (\mesh -> Dict.insert (Helper.toRawCoord cellCoord) mesh meshes_)
---
---                    Nothing ->
---                        meshes_
---            )
---            meshes
 
 
 updateMeshes : FrontendLoaded -> FrontendLoaded -> FrontendLoaded
@@ -617,7 +589,9 @@ updateMeshes oldModel newModel =
                                         mesh
 
                                     Nothing ->
-                                        Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten newCell |> Array.toList)
+                                        Grid.mesh
+                                            (Helper.fromRawCoord coord)
+                                            (GridCell.flatten newCell |> Array.toList)
 
                             else
                                 Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten newCell |> Array.toList)
@@ -629,7 +603,11 @@ updateMeshes oldModel newModel =
     }
 
 
-offsetViewPoint : FrontendLoaded -> Point2d Pixels ScreenCoordinate -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
+offsetViewPoint :
+    FrontendLoaded
+    -> Point2d Pixels ScreenCoordinate
+    -> Point2d Pixels ScreenCoordinate
+    -> Point2d WorldPixel WorldCoordinate
 offsetViewPoint { windowSize, viewPoint, devicePixelRatio, zoomFactor } mouseStart mouseCurrent =
     let
         delta : Vector2d WorldPixel WorldCoordinate
@@ -678,19 +656,46 @@ localModelConfig userId =
         \msg model ->
             case msg of
                 LocalChange (LocalGridChange gridChange) ->
-                    { model | grid = Grid.addChange (Grid.localChangeToChange userId gridChange) model.grid }
+                    { model
+                        | redoHistory = []
+                        , grid = Grid.addChange (Grid.localChangeToChange userId gridChange) model.grid
+                    }
 
                 LocalChange LocalRedo ->
-                    model
+                    case model.redoHistory of
+                        head :: rest ->
+                            { model
+                                | undoHistory = Grid.undoPoint userId model.grid :: model.redoHistory
+                                , redoHistory = rest
+                                , grid = Grid.setUndoPoints userId head model.grid
+                            }
+
+                        [] ->
+                            model
 
                 LocalChange LocalUndo ->
-                    model
+                    case model.undoHistory of
+                        head :: rest ->
+                            { model
+                                | undoHistory = rest
+                                , redoHistory = Grid.undoPoint userId model.grid :: model.redoHistory
+                                , grid = Grid.setUndoPoints userId head model.grid
+                            }
+
+                        [] ->
+                            model
+
+                LocalChange AddUndo ->
+                    { model
+                        | redoHistory = []
+                        , undoHistory = Grid.undoPoint userId model.grid :: model.undoHistory
+                    }
 
                 ServerChange (ServerGridChange gridChange) ->
                     { model | grid = Grid.addChange gridChange model.grid }
 
                 ServerChange (ServerUndoPoint undoPoint) ->
-                    model
+                    { model | grid = Grid.setUndoPoints undoPoint.userId undoPoint.undoPoints model.grid }
     }
 
 

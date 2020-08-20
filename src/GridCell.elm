@@ -14,12 +14,33 @@ type Cell
 
 addLine : UserId -> Int -> Nonempty Ascii -> Cell -> Cell
 addLine userId position line (Cell cell) =
+    let
+        userUndoPoint =
+            Dict.get (User.rawId userId) cell.undoPoint |> Maybe.withDefault 0
+    in
     Cell
-        { history = { userId = userId, position = position, line = line } :: cell.history
+        { history =
+            List.foldr
+                (\change ( newHistory, counter ) ->
+                    if change.userId == userId then
+                        if counter > 0 then
+                            ( change :: newHistory, counter - 1 )
+
+                        else
+                            ( newHistory, counter )
+
+                    else
+                        ( change :: newHistory, counter )
+                )
+                ( [], userUndoPoint )
+                cell.history
+                |> Tuple.first
+                --|> List.reverse
+                |> (::) { userId = userId, position = position, line = line }
         , undoPoint =
-            Dict.update
+            Dict.insert
                 (User.rawId userId)
-                (Maybe.map ((+) 1) >> Maybe.withDefault 1 >> Just)
+                (userUndoPoint + 1)
                 cell.undoPoint
         }
 
@@ -35,28 +56,6 @@ setUndoPoint userId newUndoPoint (Cell cell) =
 undoPoint : UserId -> Cell -> Maybe Int
 undoPoint userId (Cell cell) =
     Dict.get (User.rawId userId) cell.undoPoint
-
-
-
---removeLinesAfter : UserId -> Int -> Cell -> Cell
---removeLinesAfter userId changeCount_ (Cell history) =
---    List.foldl
---        (\change ( newHistory, counter ) ->
---            if change.userId == userId then
---                if counter > 0 then
---                    ( change :: newHistory, counter - 1 )
---
---                else
---                    ( newHistory, counter )
---
---            else
---                ( change :: newHistory, counter )
---        )
---        ( history, changeCount_ )
---        history
---        |> Tuple.first
---        |> List.reverse
---        |> Cell
 
 
 changeCount : Cell -> Int
