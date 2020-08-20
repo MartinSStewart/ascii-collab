@@ -409,20 +409,24 @@ updateLoaded msg model =
             ( { model | tool = toolType }, Cmd.none )
 
         UndoPressed ->
-            ( undo model, Cmd.none )
+            let
+                model_ =
+                    updateLocalModel LocalUndo model
+
+                _ =
+                    Debug.log "undo" model_.localModel
+            in
+            ( model_, Cmd.none )
 
         RedoPressed ->
-            ( redo model, Cmd.none )
+            let
+                model_ =
+                    updateLocalModel LocalRedo model
 
-
-undo : FrontendLoaded -> FrontendLoaded
-undo =
-    updateLocalModel LocalUndo >> Debug.log "undo"
-
-
-redo : FrontendLoaded -> FrontendLoaded
-redo =
-    updateLocalModel LocalRedo >> Debug.log "redo"
+                _ =
+                    Debug.log "redo" model_.localModel
+            in
+            ( model_, Cmd.none )
 
 
 updateLocalModel : LocalChange -> FrontendLoaded -> FrontendLoaded
@@ -546,6 +550,9 @@ changeText text model =
 
                         else
                             model
+
+                    _ =
+                        Debug.log "add" model_.localModel
                 in
                 Grid.textToChange (Cursor.position model_.cursor) lines
                     |> List.Nonempty.map LocalGridChange
@@ -665,7 +672,7 @@ localModelConfig userId =
                     case model.redoHistory of
                         head :: rest ->
                             { model
-                                | undoHistory = Grid.undoPoint userId model.grid :: model.redoHistory
+                                | undoHistory = Grid.undoPoint userId model.grid :: model.undoHistory
                                 , redoHistory = rest
                                 , grid = Grid.setUndoPoints userId head model.grid
                             }
