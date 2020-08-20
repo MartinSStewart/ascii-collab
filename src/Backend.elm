@@ -71,11 +71,11 @@ updateFromFrontend sessionId clientId msg model =
                                             ( model_, serverChanges_ )
 
                                         LocalGridChange localChange ->
-                                            ( { model
+                                            ( { model_
                                                 | grid =
                                                     Grid.addChange
                                                         (Grid.localChangeToChange (User.id user) localChange)
-                                                        model.grid
+                                                        model_.grid
                                               }
                                             , ServerGridChange (Grid.localChangeToChange (User.id user) localChange)
                                                 :: serverChanges_

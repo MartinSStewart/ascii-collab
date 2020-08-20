@@ -403,42 +403,43 @@ updateLoaded msg model =
             ( { model | tool = toolType }, Cmd.none )
 
         UndoPressed ->
-            undo model
+            ( model, Cmd.none )
 
         RedoPressed ->
-            redo model
-
-
-undo : LocalGrid -> LocalGrid
-undo model =
-    case model.undoHistory of
-        head :: rest ->
-            ( { model | undoHistory = model.undoHistory |> Maybe.withDefault model.undoHistory }
-            , Cmd.none
-            )
-
-        [] ->
             ( model, Cmd.none )
 
 
-redo : LocalGrid -> LocalGrid
-redo model =
-    case model.redoHistory of
-        head :: rest ->
-            ( { model | undoHistory = model.undoHistory |> Maybe.withDefault model.undoHistory }
-            , Cmd.none
-            )
 
-        [] ->
-            ( model, Cmd.none )
-
-
-currentUndo : FrontendLoaded -> Dict ( Int, Int ) Int
-currentUndo model =
-    LocalModel.localModel model.localModel
-        |> Grid.allCells
-        |> List.map (Tuple.mapBoth Helper.toRawCoord GridCell.changeCount)
-        |> Dict.fromList
+--undo : LocalGrid -> LocalGrid
+--undo model =
+--    case model.undoHistory of
+--        head :: rest ->
+--            ( { model | undoHistory = model.undoHistory |> Maybe.withDefault model.undoHistory }
+--            , Cmd.none
+--            )
+--
+--        [] ->
+--            ( model, Cmd.none )
+--
+--
+--redo : LocalGrid -> LocalGrid
+--redo model =
+--    case model.redoHistory of
+--        head :: rest ->
+--            ( { model | undoHistory = model.undoHistory |> Maybe.withDefault model.undoHistory }
+--            , Cmd.none
+--            )
+--
+--        [] ->
+--            ( model, Cmd.none )
+--
+--
+--currentUndo : FrontendLoaded -> Dict ( Int, Int ) Int
+--currentUndo model =
+--    LocalModel.localModel model.localModel
+--        |> Grid.allCells
+--        |> List.map (Tuple.mapBoth Helper.toRawCoord GridCell.changeCount)
+--        |> Dict.fromList
 
 
 clearTextSelection bounds model =
@@ -448,7 +449,6 @@ clearTextSelection bounds model =
     in
     { model | cursor = Cursor.setCursor bounds.min }
         |> changeText (String.repeat w " " |> List.repeat h |> String.join "\n")
-        |> undoHistoryAdd
         |> (\m -> { m | cursor = model.cursor })
 
 
@@ -544,7 +544,7 @@ changeText text model =
                         changes
                             |> List.Nonempty.map (LocalGridChange >> LocalChange)
                             |> List.Nonempty.foldl
-                                (LocalModel.update localModelConfig)
+                                (LocalModel.update (localModelConfig (User.id model.user)))
                                 model.localModel
                 in
                 { model
@@ -671,10 +671,26 @@ updateFromBackend msg model =
             ( model, Cmd.none )
 
 
-localModelConfig : LocalModel.Config Change LocalGrid
-localModelConfig =
+localModelConfig : UserId -> LocalModel.Config Change LocalGrid
+localModelConfig userId =
     { msgEqual = \msg0 msg1 -> msg0 == msg1
-    , update = Grid.addChange
+    , update =
+        \msg model ->
+            case msg of
+                LocalChange (LocalGridChange gridChange) ->
+                    { model | grid = Grid.addChange (Grid.localChangeToChange userId gridChange) model.grid }
+
+                LocalChange LocalRedo ->
+                    model
+
+                LocalChange LocalUndo ->
+                    model
+
+                ServerChange (ServerGridChange gridChange) ->
+                    { model | grid = Grid.addChange gridChange model.grid }
+
+                ServerChange (ServerUndoPoint undoPoint) ->
+                    model
     }
 
 
@@ -690,7 +706,10 @@ updateLoadedFromBackend msg model =
         ServerChangeBroadcast changeBroadcast ->
             let
                 newLocalModel =
-                    LocalModel.updateFromBackend localModelConfig changeBroadcast model.localModel
+                    LocalModel.updateFromBackend
+                        (localModelConfig (User.id model.user))
+                        (List.Nonempty.map ServerChange changeBroadcast)
+                        model.localModel
             in
             ( { model | localModel = newLocalModel }
             , Cmd.none
@@ -718,7 +737,7 @@ updateLoadedFromBackend msg model =
             ( { model
                 | localModel =
                     LocalModel.updateFromBackend
-                        localModelConfig
+                        (localModelConfig (User.id model.user))
                         (List.Nonempty.map LocalChange changes)
                         model.localModel
               }
@@ -865,7 +884,7 @@ toolbarView model =
                 UndoPressed
                 (Element.image
                     [ Element.width (Element.px 20)
-                    , if List.isEmpty model.undoHistory then
+                    , if LocalModel.localModel model.localModel |> .undoHistory |> List.isEmpty then
                         Element.alpha 0.5
 
                       else
@@ -878,7 +897,7 @@ toolbarView model =
                 RedoPressed
                 (Element.image
                     [ Element.width (Element.px 20)
-                    , if List.isEmpty model.redoHistory then
+                    , if LocalModel.localModel model.localModel |> .redoHistory |> List.isEmpty then
                         Element.alpha 0.5
 
                       else
