@@ -6,6 +6,7 @@ module Types exposing
     , FrontendLoading
     , FrontendModel(..)
     , FrontendMsg(..)
+    , LoadingData_
     , LocalChange(..)
     , LocalGrid
     , MouseButtonState(..)
@@ -165,8 +166,17 @@ type BackendMsg
 
 type ToFrontend
     = NoOpToFrontend
-    | LoadingData { user : User, grid : Grid, otherUsers : List User }
+    | LoadingData LoadingData_
     | ServerChangeBroadcast (Nonempty ServerChange)
     | LocalChangeResponse (Nonempty LocalChange)
     | NewUserBroadcast User
     | UserModifiedBroadcast User
+
+
+type alias LoadingData_ =
+    { user : User
+    , grid : Grid
+    , otherUsers : List User
+    , undoHistory : List (Dict ( Int, Int ) Int)
+    , redoHistory : List (Dict ( Int, Int ) Int)
+    }

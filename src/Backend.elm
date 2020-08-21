@@ -44,6 +44,20 @@ update msg model =
             ( { model | userSessions = Set.remove ( sessionId, clientId ) model.userSessions }, Cmd.none )
 
 
+isSameUser : SessionId -> ClientId -> SessionId -> ClientId -> Bool
+isSameUser s0 c0 s1 c1 =
+    s0 == s1
+
+
+
+--s0 == s1
+
+
+isSameClient : SessionId -> ClientId -> SessionId -> ClientId -> Bool
+isSameClient s0 c0 s1 c1 =
+    s0 == s1 && c0 == c1
+
+
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 updateFromFrontend sessionId clientId msg model =
     case msg of
@@ -60,23 +74,20 @@ updateFromFrontend sessionId clientId msg model =
                         userId =
                             User.id user
 
-                        --gridChanges : List.Nonempty.Nonempty ServerChange
-                        --gridChanges =
-                        --    List.Nonempty.map (localToServerChange (User.id user)) changes
                         ( newModel, serverChanges ) =
                             List.Nonempty.foldl
                                 (\change ( model_, serverChanges_ ) ->
-                                    updateLocalChange change model_
+                                    updateLocalChange userId change model_
                                         |> Tuple.mapSecond (\serverChange -> serverChange :: serverChanges_)
                                 )
                                 ( model, [] )
                                 changes
-                                |> Tuple.mapSecond List.reverse
+                                |> Tuple.mapSecond (List.filterMap identity >> List.reverse)
                     in
                     ( newModel
                     , broadcast
                         (\sessionId_ clientId_ ->
-                            if sessionId == sessionId_ && clientId == clientId_ then
+                            if isSameUser sessionId clientId sessionId_ clientId_ then
                                 LocalChangeResponse changes |> Just
 
                             else
@@ -103,7 +114,28 @@ updateLocalChange : UserId -> LocalChange -> BackendModel -> ( BackendModel, May
 updateLocalChange userId change model =
     case change of
         LocalUndo ->
-            ( model, Nothing )
+            case Dict.get (User.rawId userId) model.undoPoints of
+                Just undoPoint ->
+                    case undoPoint.undoHistory of
+                        head :: rest ->
+                            ( { model
+                                | undoPoints =
+                                    Dict.insert (User.rawId userId)
+                                        { undoPoint
+                                            | undoHistory = rest
+                                            , redoHistory = Grid.undoPoint userId model.grid :: undoPoint.redoHistory
+                                        }
+                                        model.undoPoints
+                                , grid = Grid.setUndoPoints userId head model.grid
+                              }
+                            , ServerUndoPoint { userId = userId, undoPoints = head } |> Just
+                            )
+
+                        [] ->
+                            ( model, Nothing )
+
+                Nothing ->
+                    ( model, Nothing )
 
         LocalGridChange localChange ->
             ( { model
@@ -130,7 +162,7 @@ updateLocalChange userId change model =
                                         model.undoPoints
                                 , grid = Grid.setUndoPoints userId head model.grid
                               }
-                            , Nothing
+                            , ServerUndoPoint { userId = userId, undoPoints = head } |> Just
                             )
 
                         [] ->
@@ -169,10 +201,21 @@ requestDataUpdate : SessionId -> ClientId -> BackendModel -> ( BackendModel, Cmd
 requestDataUpdate sessionId clientId model =
     case Dict.get sessionId model.users of
         Just user ->
+            let
+                undoPoints =
+                    Dict.get (User.id user |> User.rawId) model.undoPoints
+            in
             ( { model | userSessions = Set.insert ( sessionId, clientId ) model.userSessions }
             , Lamdera.sendToFrontend
                 clientId
-                (LoadingData { user = user, grid = model.grid, otherUsers = Dict.values model.users })
+                (LoadingData
+                    { user = user
+                    , grid = model.grid
+                    , otherUsers = Dict.values model.users
+                    , undoHistory = Maybe.map .undoHistory undoPoints |> Maybe.withDefault []
+                    , redoHistory = Maybe.map .redoHistory undoPoints |> Maybe.withDefault []
+                    }
+                )
             )
 
         Nothing ->
@@ -191,11 +234,13 @@ requestDataUpdate sessionId clientId model =
                         { user = user
                         , grid = model.grid
                         , otherUsers = Dict.remove sessionId model.users |> Dict.values
+                        , undoHistory = []
+                        , redoHistory = []
                         }
                     )
                 , broadcast
                     (\sessionId_ clientId_ ->
-                        if sessionId == sessionId_ && clientId == clientId_ then
+                        if isSameUser sessionId clientId sessionId_ clientId_ then
                             Nothing
 
                         else

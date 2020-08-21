@@ -69,11 +69,11 @@ app =
         }
 
 
-loadedInit : FrontendLoading -> Grid -> User -> List User -> ( FrontendModel, Cmd FrontendMsg )
-loadedInit loading grid user otherUsers =
+loadedInit : FrontendLoading -> LoadingData_ -> ( FrontendModel, Cmd FrontendMsg )
+loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
     ( Loaded
         { key = loading.key
-        , localModel = LocalModel.init { grid = grid, undoHistory = [], redoHistory = [] }
+        , localModel = LocalModel.init { grid = grid, undoHistory = undoHistory, redoHistory = redoHistory }
         , meshes =
             Grid.allCells grid
                 |> List.map
@@ -413,8 +413,8 @@ updateLoaded msg model =
                 model_ =
                     updateLocalModel LocalUndo model
 
-                _ =
-                    Debug.log "undo" model_.localModel
+                --_ =
+                --    Debug.log "undo" model_.localModel
             in
             ( model_, Cmd.none )
 
@@ -423,8 +423,8 @@ updateLoaded msg model =
                 model_ =
                     updateLocalModel LocalRedo model
 
-                _ =
-                    Debug.log "redo" model_.localModel
+                --_ =
+                --    Debug.log "redo" model_.localModel
             in
             ( model_, Cmd.none )
 
@@ -550,9 +550,6 @@ changeText text model =
 
                         else
                             model
-
-                    _ =
-                        Debug.log "add" model_.localModel
                 in
                 Grid.textToChange (Cursor.position model_.cursor) lines
                     |> List.Nonempty.map LocalGridChange
@@ -646,8 +643,8 @@ actualViewPoint model =
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
 updateFromBackend msg model =
     case ( model, msg ) of
-        ( Loading loading, LoadingData { grid, user, otherUsers } ) ->
-            loadedInit loading grid user otherUsers
+        ( Loading loading, LoadingData loadingData ) ->
+            loadedInit loading loadingData
 
         ( Loaded loaded, _ ) ->
             updateLoadedFromBackend msg loaded |> Tuple.mapFirst (updateMeshes loaded) |> Tuple.mapFirst Loaded
@@ -699,9 +696,17 @@ localModelConfig userId =
                     }
 
                 ServerChange (ServerGridChange gridChange) ->
+                    let
+                        _ =
+                            Debug.log "gridChange" gridChange
+                    in
                     { model | grid = Grid.addChange gridChange model.grid }
 
                 ServerChange (ServerUndoPoint undoPoint) ->
+                    let
+                        _ =
+                            Debug.log "undoPoint" undoPoint
+                    in
                     { model | grid = Grid.setUndoPoints undoPoint.userId undoPoint.undoPoints model.grid }
     }
 
@@ -808,7 +813,8 @@ view model =
                                 )
                                 []
                     , Element.inFront (toolbarView loadedModel)
-                    , Element.inFront (userListView loadedModel)
+
+                    --, Element.inFront (userListView loadedModel)
                     ]
                     (Element.html (canvasView loadedModel))
         ]
