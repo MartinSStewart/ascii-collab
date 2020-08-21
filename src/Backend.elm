@@ -57,8 +57,8 @@ updateFromFrontend sessionId clientId msg model =
             case Dict.get sessionId model.users of
                 Just user ->
                     let
-                        a =
-                            List.map identity []
+                        userId =
+                            User.id user
 
                         --gridChanges : List.Nonempty.Nonempty ServerChange
                         --gridChanges =
@@ -66,26 +66,8 @@ updateFromFrontend sessionId clientId msg model =
                         ( newModel, serverChanges ) =
                             List.Nonempty.foldl
                                 (\change ( model_, serverChanges_ ) ->
-                                    case change of
-                                        LocalUndo ->
-                                            ( model_, serverChanges_ )
-
-                                        LocalGridChange localChange ->
-                                            ( { model_
-                                                | grid =
-                                                    Grid.addChange
-                                                        (Grid.localChangeToChange (User.id user) localChange)
-                                                        model_.grid
-                                              }
-                                            , ServerGridChange (Grid.localChangeToChange (User.id user) localChange)
-                                                :: serverChanges_
-                                            )
-
-                                        LocalRedo ->
-                                            ( model_, serverChanges_ )
-
-                                        AddUndo ->
-                                            ( model_, serverChanges_ )
+                                    updateLocalChange change model_
+                                        |> Tuple.mapSecond (\serverChange -> serverChange :: serverChanges_)
                                 )
                                 ( model, [] )
                                 changes
@@ -115,6 +97,72 @@ updateFromFrontend sessionId clientId msg model =
 
                 Nothing ->
                     ( model, Cmd.none )
+
+
+updateLocalChange : UserId -> LocalChange -> BackendModel -> ( BackendModel, Maybe ServerChange )
+updateLocalChange userId change model =
+    case change of
+        LocalUndo ->
+            ( model, Nothing )
+
+        LocalGridChange localChange ->
+            ( { model
+                | grid =
+                    Grid.addChange
+                        (Grid.localChangeToChange userId localChange)
+                        model.grid
+              }
+            , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
+            )
+
+        LocalRedo ->
+            case Dict.get (User.rawId userId) model.undoPoints of
+                Just undoPoint ->
+                    case undoPoint.redoHistory of
+                        head :: rest ->
+                            ( { model
+                                | undoPoints =
+                                    Dict.insert (User.rawId userId)
+                                        { undoPoint
+                                            | undoHistory = Grid.undoPoint userId model.grid :: undoPoint.undoHistory
+                                            , redoHistory = rest
+                                        }
+                                        model.undoPoints
+                                , grid = Grid.setUndoPoints userId head model.grid
+                              }
+                            , Nothing
+                            )
+
+                        [] ->
+                            ( model, Nothing )
+
+                Nothing ->
+                    ( model, Nothing )
+
+        AddUndo ->
+            ( { model
+                | undoPoints =
+                    Dict.update
+                        (User.rawId userId)
+                        (\maybeValue ->
+                            (case maybeValue of
+                                Just value ->
+                                    { value
+                                        | redoHistory = []
+                                        , undoHistory = Grid.undoPoint userId model.grid :: value.undoHistory
+                                    }
+
+                                Nothing ->
+                                    { redoHistory = []
+                                    , undoHistory = [ Grid.undoPoint userId model.grid ]
+                                    }
+                            )
+                                |> Just
+                        )
+                        model.undoPoints
+              }
+            , Nothing
+            )
 
 
 requestDataUpdate : SessionId -> ClientId -> BackendModel -> ( BackendModel, Cmd BackendMsg )

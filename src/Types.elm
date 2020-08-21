@@ -120,7 +120,11 @@ type MouseButtonState
 
 type alias BackendModel =
     { grid : Grid
-    , undoPoints : Dict RawUserId (Dict ( Int, Int ) Int)
+    , undoPoints :
+        Dict RawUserId
+            { undoHistory : List (Dict ( Int, Int ) Int)
+            , redoHistory : List (Dict ( Int, Int ) Int)
+            }
     , userSessions : Set ( SessionId, ClientId )
     , users : Dict SessionId User
     }
