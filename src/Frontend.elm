@@ -412,9 +412,6 @@ updateLoaded msg model =
             let
                 model_ =
                     updateLocalModel LocalUndo model
-
-                --_ =
-                --    Debug.log "undo" model_.localModel
             in
             ( model_, Cmd.none )
 
@@ -422,9 +419,6 @@ updateLoaded msg model =
             let
                 model_ =
                     updateLocalModel LocalRedo model
-
-                --_ =
-                --    Debug.log "redo" model_.localModel
             in
             ( model_, Cmd.none )
 
@@ -696,17 +690,9 @@ localModelConfig userId =
                     }
 
                 ServerChange (ServerGridChange gridChange) ->
-                    let
-                        _ =
-                            Debug.log "gridChange" gridChange
-                    in
                     { model | grid = Grid.addChange gridChange model.grid }
 
                 ServerChange (ServerUndoPoint undoPoint) ->
-                    let
-                        _ =
-                            Debug.log "undoPoint" undoPoint
-                    in
                     { model | grid = Grid.setUndoPoints undoPoint.userId undoPoint.undoPoints model.grid }
     }
 
