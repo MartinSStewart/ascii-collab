@@ -62,6 +62,7 @@ type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
     , meshes : Dict ( Int, Int ) (WebGL.Mesh Vertex)
+    , cursorMesh : WebGL.Mesh { position : Vec2 }
     , viewPoint : Point2d WorldPixel WorldCoordinate
     , cursor : Cursor
     , texture : Maybe Texture

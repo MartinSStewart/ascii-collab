@@ -71,6 +71,10 @@ app =
 
 loadedInit : FrontendLoading -> LoadingData_ -> ( FrontendModel, Cmd FrontendMsg )
 loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
+    let
+        cursor =
+            Cursor.setCursor ( Units.asciiUnit 0, Units.asciiUnit 0 )
+    in
     ( Loaded
         { key = loading.key
         , localModel = LocalModel.init { grid = grid, undoHistory = undoHistory, redoHistory = redoHistory }
@@ -83,8 +87,9 @@ loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
                         )
                     )
                 |> Dict.fromList
+        , cursorMesh = Cursor.toMesh cursor
         , viewPoint = Point2d.origin
-        , cursor = Cursor.setCursor ( Units.asciiUnit 0, Units.asciiUnit 0 )
+        , cursor = cursor
         , texture = Nothing
         , pressedKeys = []
         , windowSize = loading.windowSize
@@ -151,7 +156,9 @@ update msg model =
                     ( model, Cmd.none )
 
         Loaded frontendLoaded ->
-            updateLoaded msg frontendLoaded |> Tuple.mapFirst (updateMeshes frontendLoaded) |> Tuple.mapFirst Loaded
+            updateLoaded msg frontendLoaded
+                |> Tuple.mapFirst (updateMeshes frontendLoaded >> Cursor.updateMesh frontendLoaded)
+                |> Tuple.mapFirst Loaded
 
 
 updateLoaded : FrontendMsg -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
@@ -1096,7 +1103,7 @@ canvasView model =
         , Html.Attributes.style "image-rendering" "crisp-edges"
         , Html.Attributes.style "image-rendering" "pixelated"
         ]
-        (Cursor.draw viewMatrix (User.color model.user |> ColorIndex.toColor) model.cursor
+        (Cursor.draw viewMatrix (User.color model.user |> ColorIndex.toColor) model
             :: (Maybe.map
                     (drawText
                         (Dict.filter
