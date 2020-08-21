@@ -218,6 +218,27 @@ updateLoaded msg model =
                     else
                         ( model, Cmd.none )
 
+                Just (Keyboard.Character "z") ->
+                    if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                        ( updateLocalModel LocalUndo model, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
+
+                Just (Keyboard.Character "Z") ->
+                    if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                        ( updateLocalModel LocalRedo model, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
+
+                Just (Keyboard.Character "y") ->
+                    if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                        ( updateLocalModel LocalRedo model, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
+
                 Just Keyboard.Delete ->
                     let
                         bounds =
@@ -409,18 +430,10 @@ updateLoaded msg model =
             ( { model | tool = toolType }, Cmd.none )
 
         UndoPressed ->
-            let
-                model_ =
-                    updateLocalModel LocalUndo model
-            in
-            ( model_, Cmd.none )
+            ( updateLocalModel LocalUndo model, Cmd.none )
 
         RedoPressed ->
-            let
-                model_ =
-                    updateLocalModel LocalRedo model
-            in
-            ( model_, Cmd.none )
+            ( updateLocalModel LocalRedo model, Cmd.none )
 
 
 updateLocalModel : LocalChange -> FrontendLoaded -> FrontendLoaded
