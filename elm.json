@@ -32,8 +32,7 @@
             "mdgriffith/elm-ui": "1.1.8",
             "mgold/elm-nonempty-list": "4.1.0",
             "mpizenberg/elm-pointer-events": "4.0.2",
-            "ohanhi/keyboard": "2.0.1",
-            "wernerdegroot/listzipper": "4.0.0"
+            "ohanhi/keyboard": "2.0.1"
         },
         "indirect": {
             "bburdette/toop": "1.0.1",

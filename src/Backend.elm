@@ -6,7 +6,7 @@ import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty
 import Set
 import Types exposing (..)
-import User exposing (UserId)
+import User exposing (User, UserId)
 
 
 app =
@@ -45,12 +45,8 @@ update msg model =
 
 
 isSameUser : SessionId -> ClientId -> SessionId -> ClientId -> Bool
-isSameUser s0 c0 s1 c1 =
+isSameUser s0 _ s1 _ =
     s0 == s1
-
-
-
---s0 == s1
 
 
 isSameClient : SessionId -> ClientId -> SessionId -> ClientId -> Bool
@@ -94,16 +90,6 @@ updateFromFrontend sessionId clientId msg model =
                                 List.Nonempty.fromList serverChanges |> Maybe.map ServerChangeBroadcast
                         )
                         model
-                    )
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-        UserRename name ->
-            case Dict.get sessionId model.users |> Maybe.andThen (User.withName name) of
-                Just userRenamed ->
-                    ( { model | users = Dict.insert sessionId userRenamed model.users }
-                    , broadcast (\_ _ -> UserModifiedBroadcast userRenamed |> Just) model
                     )
 
                 Nothing ->
@@ -171,7 +157,7 @@ updateLocalChange userId change model =
                 Nothing ->
                     ( model, Nothing )
 
-        AddUndo ->
+        LocalAddUndo ->
             ( { model
                 | undoPoints =
                     Dict.update
@@ -195,6 +181,16 @@ updateLocalChange userId change model =
               }
             , Nothing
             )
+
+        LocalRename name ->
+            ( { model | users = Dict.map }
+            , ServerUserRename userId name |> Just
+            )
+
+
+isOnline : BackendModel -> SessionId -> Bool
+isOnline model sessionId =
+    Set.toList model.userSessions |> List.any (Tuple.first >> (==) sessionId)
 
 
 requestDataUpdate : SessionId -> ClientId -> BackendModel -> ( BackendModel, Cmd BackendMsg )
@@ -233,7 +229,10 @@ requestDataUpdate sessionId clientId model =
                     (LoadingData
                         { user = user
                         , grid = model.grid
-                        , otherUsers = Dict.remove sessionId model.users |> Dict.values
+                        , otherUsers =
+                            Dict.remove sessionId model.users
+                                |> Dict.filter (\k _ -> isOnline model k)
+                                |> Dict.values
                         , undoHistory = []
                         , redoHistory = []
                         }
@@ -244,7 +243,7 @@ requestDataUpdate sessionId clientId model =
                             Nothing
 
                         else
-                            NewUserBroadcast user |> Just
+                            List.Nonempty.fromElement (ServerUserConnected user) |> ServerChangeBroadcast |> Just
                     )
                     model
                 ]

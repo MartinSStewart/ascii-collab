@@ -77,7 +77,14 @@ loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
     in
     ( Loaded
         { key = loading.key
-        , localModel = LocalModel.init { grid = grid, undoHistory = undoHistory, redoHistory = redoHistory }
+        , localModel =
+            LocalModel.init
+                { grid = grid
+                , undoHistory = undoHistory
+                , redoHistory = redoHistory
+                , user = user
+                , otherUsers = otherUsers
+                }
         , meshes =
             Grid.allCells grid
                 |> List.map
@@ -97,8 +104,6 @@ loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
         , zoomFactor = loading.zoomFactor
         , mouseLeft = MouseButtonUp
         , mouseMiddle = MouseButtonUp
-        , user = user
-        , otherUsers = otherUsers
         , pendingChanges = []
         , tool = DragTool
         , undoAddLast = Time.millisToPosix 0
@@ -449,7 +454,7 @@ updateLocalModel msg model =
         | pendingChanges = model.pendingChanges ++ [ msg ]
         , localModel =
             LocalModel.update
-                (localModelConfig (User.id model.user))
+                localModelConfig
                 (LocalChange msg)
                 model.localModel
     }
@@ -560,7 +565,7 @@ changeText text model =
                 let
                     model_ =
                         if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 2) then
-                            updateLocalModel AddUndo { model | undoAddLast = model.time }
+                            updateLocalModel LocalAddUndo { model | undoAddLast = model.time }
 
                         else
                             model
@@ -667,11 +672,15 @@ updateFromBackend msg model =
             ( model, Cmd.none )
 
 
-localModelConfig : UserId -> LocalModel.Config Change LocalGrid
-localModelConfig userId =
+localModelConfig : LocalModel.Config Change LocalGrid
+localModelConfig =
     { msgEqual = \msg0 msg1 -> msg0 == msg1
     , update =
         \msg model ->
+            let
+                userId =
+                    User.id model.user
+            in
             case msg of
                 LocalChange (LocalGridChange gridChange) ->
                     { model
@@ -703,7 +712,7 @@ localModelConfig userId =
                         [] ->
                             model
 
-                LocalChange AddUndo ->
+                LocalChange LocalAddUndo ->
                     { model
                         | redoHistory = []
                         , undoHistory = Grid.undoPoint userId model.grid :: model.undoHistory
@@ -730,7 +739,7 @@ updateLoadedFromBackend msg model =
             let
                 newLocalModel =
                     LocalModel.updateFromBackend
-                        (localModelConfig (User.id model.user))
+                        localModelConfig
                         (List.Nonempty.map ServerChange changeBroadcast)
                         model.localModel
             in
@@ -738,29 +747,11 @@ updateLoadedFromBackend msg model =
             , Cmd.none
             )
 
-        NewUserBroadcast user ->
-            ( if User.id user == User.id model.user then
-                model
-
-              else
-                { model | otherUsers = model.otherUsers ++ [ user ] }
-            , Cmd.none
-            )
-
-        UserModifiedBroadcast user ->
-            ( if User.id user == User.id model.user then
-                { model | user = user }
-
-              else
-                { model | otherUsers = List.updateIf (User.id >> (==) (User.id user)) (always user) model.otherUsers }
-            , Cmd.none
-            )
-
         LocalChangeResponse changes ->
             ( { model
                 | localModel =
                     LocalModel.updateFromBackend
-                        (localModelConfig (User.id model.user))
+                        localModelConfig
                         (List.Nonempty.map LocalChange changes)
                         model.localModel
               }
@@ -837,6 +828,13 @@ mouseMoveAttribute =
 
 userListView : FrontendLoaded -> Element FrontendMsg
 userListView model =
+    let
+        user =
+            LocalModel.localModel model.localModel |> .user
+
+        otherUsers =
+            LocalModel.localModel model.localModel |> .otherUsers
+    in
     Element.column
         [ Element.Background.color lightColor, Element.alignRight, Element.spacing 8, Element.padding 8 ]
         (Element.row
@@ -844,12 +842,15 @@ userListView model =
             [ Element.el
                 [ Element.width (Element.px 16)
                 , Element.height (Element.px 16)
-                , Element.Background.color <| ColorIndex.toColor <| User.color model.user
+                , Element.Background.color <| ColorIndex.toColor <| User.color user
                 ]
                 Element.none
             , Element.row
                 [ Element.spacing 8 ]
-                [ Element.text (User.name model.user), Element.el [ Element.Font.bold ] (Element.text "(you)") ]
+                [ Element.text
+                    (User.name user)
+                , Element.el [ Element.Font.bold ] (Element.text "(you)")
+                ]
             ]
             :: List.map
                 (\otherUser ->
@@ -865,7 +866,7 @@ userListView model =
                             [ Element.text (User.name otherUser) ]
                         ]
                 )
-                model.otherUsers
+                otherUsers
         )
 
 
@@ -1093,6 +1094,9 @@ canvasView model =
                     (negate <| toFloat <| round x)
                     (negate <| toFloat <| round y)
                     0
+
+        color =
+            LocalModel.localModel model.localModel |> .user |> User.color |> ColorIndex.toColor
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False, WebGL.antialias ]
@@ -1103,7 +1107,7 @@ canvasView model =
         , Html.Attributes.style "image-rendering" "crisp-edges"
         , Html.Attributes.style "image-rendering" "pixelated"
         ]
-        (Cursor.draw viewMatrix (User.color model.user |> ColorIndex.toColor) model
+        (Cursor.draw viewMatrix color model
             :: (Maybe.map
                     (drawText
                         (Dict.filter

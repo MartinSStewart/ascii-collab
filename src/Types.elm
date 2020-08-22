@@ -72,8 +72,6 @@ type alias FrontendLoaded =
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
     , mouseMiddle : MouseButtonState
-    , user : User
-    , otherUsers : List User
     , pendingChanges : List LocalChange
     , tool : ToolType
     , undoAddLast : Time.Posix
@@ -90,18 +88,24 @@ type LocalChange
     = LocalGridChange Grid.LocalChange
     | LocalUndo
     | LocalRedo
-    | AddUndo
+    | LocalAddUndo
+    | LocalRename String
 
 
 type ServerChange
     = ServerGridChange Grid.Change
     | ServerUndoPoint { userId : UserId, undoPoints : Dict ( Int, Int ) Int }
+    | ServerUserConnected User
+    | ServerUserDisconnected UserId
+    | ServerUserRename UserId String
 
 
 type alias LocalGrid =
     { grid : Grid
     , undoHistory : List (Dict ( Int, Int ) Int)
     , redoHistory : List (Dict ( Int, Int ) Int)
+    , user : User
+    , otherUsers : List User
     }
 
 
@@ -157,7 +161,6 @@ type ToBackend
     = NoOpToBackend
     | RequestData
     | GridChange (Nonempty LocalChange)
-    | UserRename String
 
 
 type BackendMsg
@@ -170,8 +173,6 @@ type ToFrontend
     | LoadingData LoadingData_
     | ServerChangeBroadcast (Nonempty ServerChange)
     | LocalChangeResponse (Nonempty LocalChange)
-    | NewUserBroadcast User
-    | UserModifiedBroadcast User
 
 
 type alias LoadingData_ =
