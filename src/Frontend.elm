@@ -551,7 +551,8 @@ devicePixelRatioUpdate devicePixelRatio model =
 
 changeText : String -> FrontendLoaded -> FrontendLoaded
 changeText text model =
-    String.filter ((/=) '\u{000D}') text
+    String.left 5000 text
+        |> String.filter ((/=) '\u{000D}')
         |> String.split "\n"
         |> List.Nonempty.fromList
         |> Maybe.map (List.Nonempty.map (String.toList >> List.map (Ascii.fromChar >> Maybe.withDefault Ascii.default)))
@@ -571,7 +572,7 @@ changeText text model =
                         { model_
                             | cursor =
                                 Cursor.moveCursor
-                                    (keyDown Keyboard.Shift model_)
+                                    False
                                     ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
                                     , Units.asciiUnit (List.Nonempty.length lines - 1)
                                     )
