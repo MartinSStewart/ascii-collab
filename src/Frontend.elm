@@ -23,6 +23,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
+import Html.Events.Extra.Touch
 import Keyboard
 import Keyboard.Arrows
 import Lamdera
@@ -787,6 +788,20 @@ updateLoadedFromBackend msg model =
 
 view : FrontendModel -> Browser.Document FrontendMsg
 view model =
+    let
+        touchEvent msg =
+            \event ->
+                case event.touches of
+                    head :: _ ->
+                        let
+                            ( x, y ) =
+                                head.pagePos
+                        in
+                        msg (Point2d.pixels x y)
+
+                    [] ->
+                        NoOpFrontendMsg
+    in
     { title = "Ascii Art"
     , body =
         [ case model of
@@ -812,6 +827,10 @@ view model =
                                  , Html.Attributes.style "resize" "none"
                                  , Html.Attributes.style "opacity" "0"
                                  , Html.Attributes.id "textareaId"
+                                 , Html.Events.Extra.Touch.onStart (touchEvent (MouseDown MainButton))
+                                 , Html.Events.Extra.Touch.onMove (touchEvent MouseMove)
+                                 , Html.Events.Extra.Touch.onEnd (touchEvent (MouseUp MainButton))
+                                 , Html.Events.Extra.Touch.onCancel (touchEvent (MouseUp MainButton))
                                  , Html.Events.Extra.Mouse.onDown
                                     (\{ clientPos, button } ->
                                         MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
@@ -986,7 +1005,7 @@ toolbarView model =
             [ Element.paddingXY 8 0
             , Element.alignBottom
             , Element.centerX
-            , Element.moveUp 16
+            , Element.moveUp 8
             ]
 
 
