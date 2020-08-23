@@ -3,7 +3,7 @@
 // In future this will be more structured + restricted once the design is done
 
 const devicePixelRatio = require('./elm-pkg-js/devicePixelRatio.js');
-const copyToClipboard = require('./elm-pkg-js/copyToClipboard.js');
+const copyToClipboard = require('./elm-pkg-js/copy-to-clipboard.js');
 
 exports.init = async function init(app) {
   // @WARNING: this only runs for Lamdera production deploys!
