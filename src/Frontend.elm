@@ -199,28 +199,14 @@ updateLoaded msg model =
             case Keyboard.anyKeyOriginal rawKey of
                 Just (Keyboard.Character "c") ->
                     if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                        ( model
-                        , LocalModel.localModel model.localModel
-                            |> .grid
-                            |> selectionToString (Cursor.bounds model.cursor)
-                            |> supermario_copy_to_clipboard_to_js
-                        )
+                        copyText model
 
                     else
                         ( model, Cmd.none )
 
                 Just (Keyboard.Character "x") ->
                     if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                        let
-                            bounds =
-                                Cursor.bounds model.cursor
-                        in
-                        ( clearTextSelection bounds model
-                        , LocalModel.localModel model.localModel
-                            |> .grid
-                            |> selectionToString bounds
-                            |> supermario_copy_to_clipboard_to_js
-                        )
+                        cutText model
 
                     else
                         ( model, Cmd.none )
@@ -441,6 +427,36 @@ updateLoaded msg model =
 
         RedoPressed ->
             ( updateLocalModel LocalRedo model, Cmd.none )
+
+        CopyPressed ->
+            copyText model
+
+        CutPressed ->
+            cutText model
+
+
+copyText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+copyText model =
+    ( model
+    , LocalModel.localModel model.localModel
+        |> .grid
+        |> selectionToString (Cursor.bounds model.cursor)
+        |> supermario_copy_to_clipboard_to_js
+    )
+
+
+cutText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+cutText model =
+    let
+        bounds =
+            Cursor.bounds model.cursor
+    in
+    ( clearTextSelection bounds model
+    , LocalModel.localModel model.localModel
+        |> .grid
+        |> selectionToString bounds
+        |> supermario_copy_to_clipboard_to_js
+    )
 
 
 updateLocalModel : LocalChange -> FrontendLoaded -> FrontendLoaded
@@ -932,24 +948,45 @@ toolbarView model =
                 )
             ]
 
+        copyView =
+            [ toolbarButton
+                []
+                CopyPressed
+                (Element.image
+                    [ Element.width (Element.px 20) ]
+                    { src = "copy.svg", description = "Copy text button" }
+                )
+            , toolbarButton
+                []
+                CutPressed
+                (Element.image
+                    [ Element.width (Element.px 20) ]
+                    { src = "cut.svg", description = "Cut text button" }
+                )
+            ]
+
         groups =
-            [ Element.text "🔎" :: zoomView
+            [ Element.el [ Element.paddingXY 2 0 ] (Element.text "🔎") :: zoomView
             , toolView
             , undoRedoView
+            , copyView
             ]
+                |> List.map (Element.row [ Element.spacing 2 ])
     in
-    List.intersperse [ verticalSeparator ] groups
-        |> List.concat
-        |> Element.row
-            [ Element.Background.color lightColor
+    Element.wrappedRow
+        [ Element.Background.color lightColor
+        , Element.spacing 8
+        , Element.padding 8
+        , Element.Border.color backgroundColor
+        , Element.Border.width 2
+        , Element.Font.color textColor
+        ]
+        groups
+        |> Element.el
+            [ Element.paddingXY 8 0
             , Element.alignBottom
             , Element.centerX
             , Element.moveUp 16
-            , Element.spacing 8
-            , Element.padding 8
-            , Element.Border.color backgroundColor
-            , Element.Border.width 2
-            , Element.Font.color textColor
             ]
 
 

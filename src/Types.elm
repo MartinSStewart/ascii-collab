@@ -151,6 +151,8 @@ type FrontendMsg
     | SelectToolPressed ToolType
     | UndoPressed
     | RedoPressed
+    | CopyPressed
+    | CutPressed
 
 
 type ToBackend
