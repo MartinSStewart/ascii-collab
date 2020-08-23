@@ -827,10 +827,11 @@ view model =
                                  , Html.Attributes.style "resize" "none"
                                  , Html.Attributes.style "opacity" "0"
                                  , Html.Attributes.id "textareaId"
-                                 , Html.Events.Extra.Touch.onStart (touchEvent (MouseDown MainButton))
-                                 , Html.Events.Extra.Touch.onMove (touchEvent MouseMove)
-                                 , Html.Events.Extra.Touch.onEnd (touchEvent (MouseUp MainButton))
-                                 , Html.Events.Extra.Touch.onCancel (touchEvent (MouseUp MainButton))
+
+                                 --, Html.Events.Extra.Touch.onWithOptions "touchstart" { stopPropagation = False, preventDefault = False } (touchEvent (MouseDown MainButton))
+                                 --, Html.Events.Extra.Touch.onWithOptions "touchmove" { stopPropagation = False, preventDefault = False } (touchEvent MouseMove)
+                                 , Html.Events.Extra.Touch.onWithOptions "touchend" { stopPropagation = False, preventDefault = True } (touchEvent (MouseUp MainButton >> Debug.log ""))
+                                 , Html.Events.Extra.Touch.onWithOptions "touchcancel" { stopPropagation = False, preventDefault = True } (touchEvent (MouseUp MainButton >> Debug.log ""))
                                  , Html.Events.Extra.Mouse.onDown
                                     (\{ clientPos, button } ->
                                         MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
