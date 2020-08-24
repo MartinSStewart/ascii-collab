@@ -146,6 +146,8 @@ type FrontendMsg
     | MouseDown Button (Point2d Pixels ScreenCoordinate)
     | MouseUp Button (Point2d Pixels ScreenCoordinate)
     | MouseMove (Point2d Pixels ScreenCoordinate)
+    | TouchMove (Point2d Pixels ScreenCoordinate)
+    | TouchMoveElapsed (Point2d Pixels ScreenCoordinate)
     | ShortIntervalElapsed Time.Posix
     | ZoomFactorPressed Int
     | SelectToolPressed ToolType

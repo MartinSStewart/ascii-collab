@@ -35,6 +35,7 @@ import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
+import Process
 import Quantity exposing (Quantity(..), Rate)
 import Task
 import Time
@@ -340,28 +341,7 @@ updateLoaded msg model =
         MouseUp button mousePosition ->
             case ( button, model.mouseLeft, model.mouseMiddle ) of
                 ( MainButton, MouseButtonDown mouseState, _ ) ->
-                    ( { model
-                        | mouseLeft = MouseButtonUp
-                        , viewPoint =
-                            case ( model.mouseMiddle, model.tool ) of
-                                ( MouseButtonUp, DragTool ) ->
-                                    offsetViewPoint model mouseState.start mousePosition
-
-                                _ ->
-                                    model.viewPoint
-                        , cursor =
-                            if
-                                Vector2d.from mouseState.start mousePosition
-                                    |> Vector2d.length
-                                    |> Quantity.lessThan (Pixels.pixels 15)
-                            then
-                                screenToWorld model mousePosition |> Units.worldToAscii |> Cursor.setCursor
-
-                            else
-                                model.cursor
-                      }
-                    , Cmd.none
-                    )
+                    mouseUp mousePosition mouseState model
 
                 ( MiddleButton, _, MouseButtonDown mouseState ) ->
                     ( { model
@@ -434,6 +414,60 @@ updateLoaded msg model =
 
         CutPressed ->
             cutText model
+
+        TouchMove touchPosition ->
+            ( { model
+                | mouseLeft =
+                    case model.mouseLeft of
+                        MouseButtonUp ->
+                            MouseButtonDown
+                                { start = touchPosition
+                                , start_ = screenToWorld model touchPosition
+                                , current = touchPosition
+                                }
+
+                        MouseButtonDown mouseState ->
+                            MouseButtonDown { mouseState | current = touchPosition }
+              }
+            , Process.sleep 200 |> Task.perform (\() -> TouchMoveElapsed touchPosition)
+            )
+
+        TouchMoveElapsed lastPosition ->
+            case model.mouseLeft of
+                MouseButtonUp ->
+                    ( model, Cmd.none )
+
+                MouseButtonDown mouseState ->
+                    if mouseState.current == lastPosition then
+                        mouseUp lastPosition mouseState model
+
+                    else
+                        ( model, Cmd.none )
+
+
+mouseUp mousePosition mouseState model =
+    ( { model
+        | mouseLeft = MouseButtonUp
+        , viewPoint =
+            case ( model.mouseMiddle, model.tool ) of
+                ( MouseButtonUp, DragTool ) ->
+                    offsetViewPoint model mouseState.start mousePosition
+
+                _ ->
+                    model.viewPoint
+        , cursor =
+            if
+                Vector2d.from mouseState.start mousePosition
+                    |> Vector2d.length
+                    |> Quantity.lessThan (Pixels.pixels 15)
+            then
+                screenToWorld model mousePosition |> Units.worldToAscii |> Cursor.setCursor
+
+            else
+                model.cursor
+      }
+    , Cmd.none
+    )
 
 
 copyText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
@@ -829,9 +863,10 @@ view model =
                                  , Html.Attributes.id "textareaId"
 
                                  --, Html.Events.Extra.Touch.onWithOptions "touchstart" { stopPropagation = False, preventDefault = False } (touchEvent (MouseDown MainButton))
-                                 --, Html.Events.Extra.Touch.onWithOptions "touchmove" { stopPropagation = False, preventDefault = False } (touchEvent MouseMove)
-                                 , Html.Events.Extra.Touch.onWithOptions "touchend" { stopPropagation = False, preventDefault = True } (touchEvent (MouseUp MainButton >> Debug.log ""))
-                                 , Html.Events.Extra.Touch.onWithOptions "touchcancel" { stopPropagation = False, preventDefault = True } (touchEvent (MouseUp MainButton >> Debug.log ""))
+                                 , Html.Events.Extra.Touch.onWithOptions "touchmove" { stopPropagation = False, preventDefault = True } (touchEvent TouchMove)
+
+                                 --, Html.Events.Extra.Touch.onWithOptions "touchend" { stopPropagation = False, preventDefault = True } (touchEvent (MouseUp MainButton >> Debug.log ""))
+                                 --, Html.Events.Extra.Touch.onWithOptions "touchcancel" { stopPropagation = False, preventDefault = True } (touchEvent (MouseUp MainButton >> Debug.log ""))
                                  , Html.Events.Extra.Mouse.onDown
                                     (\{ clientPos, button } ->
                                         MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
