@@ -35,7 +35,6 @@ import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
-import Process
 import Quantity exposing (Quantity(..), Rate)
 import Task
 import Time
@@ -313,10 +312,10 @@ updateLoaded msg model =
 
         UserTyped text ->
             if text == "\n" || text == "\n\u{000D}" then
-                ( { model | cursor = Cursor.newLine model.cursor }, Cmd.none )
+                ( mouseUpAttempt model |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
 
             else
-                ( changeText text model, Cmd.none )
+                ( mouseUpAttempt model |> changeText text, Cmd.none )
 
         MouseDown button mousePosition ->
             ( if button == MainButton then
@@ -341,7 +340,7 @@ updateLoaded msg model =
         MouseUp button mousePosition ->
             case ( button, model.mouseLeft, model.mouseMiddle ) of
                 ( MainButton, MouseButtonDown mouseState, _ ) ->
-                    mouseUp mousePosition mouseState model
+                    ( mouseUp mousePosition mouseState model, Cmd.none )
 
                 ( MiddleButton, _, MouseButtonDown mouseState ) ->
                     ( { model
@@ -398,16 +397,16 @@ updateLoaded msg model =
                     ( model_, Cmd.none )
 
         ZoomFactorPressed zoomFactor ->
-            ( { model | zoomFactor = zoomFactor }, Cmd.none )
+            ( mouseUpAttempt model |> (\m -> { m | zoomFactor = zoomFactor }), Cmd.none )
 
         SelectToolPressed toolType ->
-            ( { model | tool = toolType }, Cmd.none )
+            ( mouseUpAttempt model |> (\m -> { m | tool = toolType }), Cmd.none )
 
         UndoPressed ->
-            ( updateLocalModel LocalUndo model, Cmd.none )
+            ( mouseUpAttempt model |> updateLocalModel LocalUndo, Cmd.none )
 
         RedoPressed ->
-            ( updateLocalModel LocalRedo model, Cmd.none )
+            ( mouseUpAttempt model |> updateLocalModel LocalRedo, Cmd.none )
 
         CopyPressed ->
             copyText model
@@ -416,20 +415,41 @@ updateLoaded msg model =
             cutText model
 
         TouchMove touchPosition ->
-            ( { model
-                | mouseLeft =
-                    case model.mouseLeft of
-                        MouseButtonUp ->
+            let
+                mouseDown m =
+                    { m
+                        | mouseLeft =
                             MouseButtonDown
                                 { start = touchPosition
                                 , start_ = screenToWorld model touchPosition
                                 , current = touchPosition
                                 }
+                    }
+            in
+            ( case model.mouseLeft of
+                MouseButtonDown mouseState ->
+                    if Point2d.distanceFrom mouseState.current touchPosition |> Quantity.greaterThan (Pixels.pixels 50) then
+                        mouseUp mouseState.current mouseState model
+                            |> mouseDown
 
-                        MouseButtonDown mouseState ->
-                            MouseButtonDown { mouseState | current = touchPosition }
-              }
-            , Process.sleep 200 |> Task.perform (\() -> TouchMoveElapsed touchPosition)
+                    else
+                        { model
+                            | mouseLeft =
+                                MouseButtonDown { mouseState | current = touchPosition }
+                            , cursor =
+                                case model.tool of
+                                    SelectTool ->
+                                        Cursor.selection
+                                            (mouseState.start_ |> Units.worldToAscii)
+                                            (screenToWorld model touchPosition |> Units.worldToAscii)
+
+                                    _ ->
+                                        model.cursor
+                        }
+
+                MouseButtonUp ->
+                    mouseDown model
+            , Cmd.none
             )
 
         TouchMoveElapsed lastPosition ->
@@ -438,15 +458,17 @@ updateLoaded msg model =
                     ( model, Cmd.none )
 
                 MouseButtonDown mouseState ->
-                    if mouseState.current == lastPosition then
+                    ( if mouseState.current == lastPosition then
                         mouseUp lastPosition mouseState model
 
-                    else
-                        ( model, Cmd.none )
+                      else
+                        model
+                    , Cmd.none
+                    )
 
 
 mouseUp mousePosition mouseState model =
-    ( { model
+    { model
         | mouseLeft = MouseButtonUp
         , viewPoint =
             case ( model.mouseMiddle, model.tool ) of
@@ -465,17 +487,29 @@ mouseUp mousePosition mouseState model =
 
             else
                 model.cursor
-      }
-    , Cmd.none
-    )
+    }
+
+
+mouseUpAttempt : FrontendLoaded -> FrontendLoaded
+mouseUpAttempt model =
+    case model.mouseLeft of
+        MouseButtonUp ->
+            model
+
+        MouseButtonDown mouseState ->
+            mouseUp mouseState.current mouseState model
 
 
 copyText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 copyText model =
-    ( model
-    , LocalModel.localModel model.localModel
+    let
+        model_ =
+            mouseUpAttempt model
+    in
+    ( model_
+    , LocalModel.localModel model_.localModel
         |> .grid
-        |> selectionToString (Cursor.bounds model.cursor)
+        |> selectionToString (Cursor.bounds model_.cursor)
         |> supermario_copy_to_clipboard_to_js
     )
 
@@ -483,11 +517,14 @@ copyText model =
 cutText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 cutText model =
     let
+        model_ =
+            mouseUpAttempt model
+
         bounds =
-            Cursor.bounds model.cursor
+            Cursor.bounds model_.cursor
     in
-    ( clearTextSelection bounds model
-    , LocalModel.localModel model.localModel
+    ( clearTextSelection bounds model_
+    , LocalModel.localModel model_.localModel
         |> .grid
         |> selectionToString bounds
         |> supermario_copy_to_clipboard_to_js
