@@ -78,6 +78,7 @@ type alias FrontendLoaded =
     , tool : ToolType
     , undoAddLast : Time.Posix
     , time : Time.Posix
+    , lastTouchMove : Maybe Time.Posix
     }
 
 
@@ -149,6 +150,7 @@ type FrontendMsg
     | TouchMove (Point2d Pixels ScreenCoordinate)
     | TouchMoveElapsed (Point2d Pixels ScreenCoordinate)
     | ShortIntervalElapsed Time.Posix
+    | VeryShortIntervalElapsed Time.Posix
     | ZoomFactorPressed Int
     | SelectToolPressed ToolType
     | UndoPressed

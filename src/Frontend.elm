@@ -104,6 +104,7 @@ loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
         , tool = DragTool
         , undoAddLast = Time.millisToPosix 0
         , time = Time.millisToPosix 0
+        , lastTouchMove = Nothing
         }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -140,6 +141,11 @@ init _ key =
             Browser.Dom.getViewport
         ]
     )
+
+
+isTouchDevice : FrontendLoaded -> Bool
+isTouchDevice model =
+    model.lastTouchMove /= Nothing
 
 
 update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
@@ -318,22 +324,26 @@ updateLoaded msg model =
                 ( mouseUpAttempt model |> changeText text, Cmd.none )
 
         MouseDown button mousePosition ->
+            let
+                model_ =
+                    mouseUpAttempt model
+            in
             ( if button == MainButton then
-                { model
+                { model_
                     | mouseLeft =
                         MouseButtonDown
-                            { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
+                            { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
                 }
 
               else if button == MiddleButton then
-                { model
+                { model_
                     | mouseMiddle =
                         MouseButtonDown
-                            { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
+                            { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
                 }
 
               else
-                model
+                model_
             , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
             )
 
@@ -354,33 +364,37 @@ updateLoaded msg model =
                     ( model, Cmd.none )
 
         MouseMove mousePosition ->
-            ( { model
-                | mouseLeft =
-                    case model.mouseLeft of
-                        MouseButtonDown mouseState ->
-                            MouseButtonDown { mouseState | current = mousePosition }
+            if isTouchDevice model then
+                ( model, Cmd.none )
 
-                        MouseButtonUp ->
-                            MouseButtonUp
-                , mouseMiddle =
-                    case model.mouseMiddle of
-                        MouseButtonDown mouseState ->
-                            MouseButtonDown { mouseState | current = mousePosition }
+            else
+                ( { model
+                    | mouseLeft =
+                        case model.mouseLeft of
+                            MouseButtonDown mouseState ->
+                                MouseButtonDown { mouseState | current = mousePosition }
 
-                        MouseButtonUp ->
-                            MouseButtonUp
-                , cursor =
-                    case ( model.mouseLeft, model.tool ) of
-                        ( MouseButtonDown mouseState, SelectTool ) ->
-                            Cursor.selection
-                                (mouseState.start_ |> Units.worldToAscii)
-                                (screenToWorld model mousePosition |> Units.worldToAscii)
+                            MouseButtonUp ->
+                                MouseButtonUp
+                    , mouseMiddle =
+                        case model.mouseMiddle of
+                            MouseButtonDown mouseState ->
+                                MouseButtonDown { mouseState | current = mousePosition }
 
-                        _ ->
-                            model.cursor
-              }
-            , Cmd.none
-            )
+                            MouseButtonUp ->
+                                MouseButtonUp
+                    , cursor =
+                        case ( model.mouseLeft, model.tool ) of
+                            ( MouseButtonDown mouseState, SelectTool ) ->
+                                Cursor.selection
+                                    (mouseState.start_ |> Units.worldToAscii)
+                                    (screenToWorld model mousePosition |> Units.worldToAscii)
+
+                            _ ->
+                                model.cursor
+                  }
+                , Cmd.none
+                )
 
         ShortIntervalElapsed time ->
             let
@@ -424,11 +438,28 @@ updateLoaded msg model =
                                 , start_ = screenToWorld model touchPosition
                                 , current = touchPosition
                                 }
+                        , lastTouchMove = Just model.time
                     }
             in
             ( case model.mouseLeft of
                 MouseButtonDown mouseState ->
-                    if Point2d.distanceFrom mouseState.current touchPosition |> Quantity.greaterThan (Pixels.pixels 50) then
+                    let
+                        duration =
+                            case model.lastTouchMove of
+                                Just lastTouchMove ->
+                                    Duration.from lastTouchMove model.time
+
+                                Nothing ->
+                                    Quantity.zero
+
+                        rate : Quantity Float (Rate Pixels Duration.Seconds)
+                        rate =
+                            Quantity.per Duration.second (Pixels.pixels 30)
+
+                        snapDistance =
+                            Pixels.pixels 50 |> Quantity.minus (Quantity.for duration rate) |> Quantity.max (Pixels.pixels 10)
+                    in
+                    if Point2d.distanceFrom mouseState.current touchPosition |> Quantity.greaterThan snapDistance then
                         mouseUp mouseState.current mouseState model
                             |> mouseDown
 
@@ -445,6 +476,7 @@ updateLoaded msg model =
 
                                     _ ->
                                         model.cursor
+                            , lastTouchMove = Just model.time
                         }
 
                 MouseButtonUp ->
@@ -465,6 +497,9 @@ updateLoaded msg model =
                         model
                     , Cmd.none
                     )
+
+        VeryShortIntervalElapsed time ->
+            ( { model | time = time }, Cmd.none )
 
 
 mouseUp mousePosition mouseState model =
@@ -1293,6 +1328,11 @@ subscriptions model =
                       else
                         Browser.Events.onAnimationFrame Step
                     , Time.every 1000 ShortIntervalElapsed
+                    , if loadedModel.mouseLeft /= MouseButtonUp && isTouchDevice loadedModel then
+                        Time.every 100 VeryShortIntervalElapsed
+
+                      else
+                        Sub.none
                     ]
         ]
 
