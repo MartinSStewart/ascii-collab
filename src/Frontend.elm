@@ -41,7 +41,7 @@ import Time
 import Types exposing (..)
 import Units exposing (AsciiUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url
-import User exposing (User, UserId(..))
+import User exposing (UserData, UserId(..))
 import Vector2d exposing (Vector2d)
 import WebGL exposing (Shader)
 import WebGL.Settings
@@ -846,11 +846,35 @@ localModelConfig =
                         , undoHistory = Grid.undoPoint userId model.grid :: model.undoHistory
                     }
 
+                LocalChange (LocalRename name) ->
+                    { model | user = User.withName name model.user |> Maybe.withDefault model.user }
+
                 ServerChange (ServerGridChange gridChange) ->
                     { model | grid = Grid.addChange gridChange model.grid }
 
                 ServerChange (ServerUndoPoint undoPoint) ->
                     { model | grid = Grid.setUndoPoints undoPoint.userId undoPoint.undoPoints model.grid }
+
+                ServerChange (ServerUserNew user) ->
+                    { model | otherUsers = user :: model.otherUsers }
+
+                ServerChange (ServerUserIsOnline userId_ isOnline) ->
+                    { model
+                        | otherUsers =
+                            List.updateIf
+                                (User.id >> (==) userId_)
+                                (User.withIsOnline isOnline)
+                                model.otherUsers
+                    }
+
+                ServerChange (ServerUserRename userId_ name) ->
+                    { model
+                        | otherUsers =
+                            List.updateIf
+                                (User.id >> (==) userId_)
+                                (\user -> User.withName name user |> Maybe.withDefault user)
+                                model.otherUsers
+                    }
     }
 
 
@@ -953,8 +977,7 @@ view model =
                                 )
                                 []
                     , Element.inFront (toolbarView loadedModel)
-
-                    --, Element.inFront (userListView loadedModel)
+                    , Element.inFront (userListView loadedModel)
                     ]
                     (Element.html (canvasView loadedModel))
         ]

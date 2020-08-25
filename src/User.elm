@@ -1,11 +1,11 @@
-module User exposing (RawUserId, User(..), UserId, color, fromIndex, id, name, rawId, withName)
+module User exposing (RawUserId, UserData(..), UserId, color, isOnline, name, newUser, rawId, userId, withIsOnline, withName)
 
 import ColorIndex exposing (ColorIndex(..))
 import List.Extra as List
 
 
-type User
-    = User { name : String, id : UserId, color : ColorIndex }
+type UserData
+    = User { name : String, color : ColorIndex, isOnline : Bool }
 
 
 type UserId
@@ -21,18 +21,20 @@ userId index =
     UserId index
 
 
-fromIndex : Int -> User
-fromIndex index =
-    User
+newUser : Int -> ( UserId, UserData )
+newUser index =
+    ( userId index
+    , User
         { name = "User " ++ String.fromInt index
-        , id = userId index
         , color = List.getAt (modBy (List.length ColorIndex.colors) index) ColorIndex.colors |> Maybe.withDefault Green
+        , isOnline = True
         }
+    )
 
 
-id : User -> UserId
-id (User user) =
-    user.id
+isOnline : UserData -> Bool
+isOnline (User user) =
+    user.isOnline
 
 
 rawId : UserId -> Int
@@ -40,12 +42,12 @@ rawId (UserId userId_) =
     userId_
 
 
-name : User -> String
+name : UserData -> String
 name (User user) =
     user.name
 
 
-withName : String -> User -> Maybe User
+withName : String -> UserData -> Maybe UserData
 withName name_ (User user) =
     let
         santizedName =
@@ -58,6 +60,11 @@ withName name_ (User user) =
         User { user | name = santizedName } |> Just
 
 
-color : User -> ColorIndex
+withIsOnline : Bool -> UserData -> UserData
+withIsOnline isOnline_ (User user) =
+    User { user | isOnline = isOnline_ }
+
+
+color : UserData -> ColorIndex
 color (User user) =
     user.color

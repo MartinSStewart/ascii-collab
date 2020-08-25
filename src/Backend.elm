@@ -6,7 +6,7 @@ import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty
 import Set
 import Types exposing (..)
-import User exposing (User, UserId)
+import User exposing (UserData, UserId)
 
 
 app =
@@ -21,7 +21,7 @@ app =
 init : ( BackendModel, Cmd BackendMsg )
 init =
     ( { grid = Grid.empty
-      , userSessions = Set.empty
+      , userSessions = Dict.empty
       , users = Dict.empty
       , undoPoints = Dict.empty
       }
@@ -41,7 +41,20 @@ update msg model =
             ( model, Cmd.none )
 
         UserDisconnected sessionId clientId ->
-            ( { model | userSessions = Set.remove ( sessionId, clientId ) model.userSessions }, Cmd.none )
+            ( { model
+                | userSessions =
+                    Dict.update sessionId
+                        (Maybe.map
+                            (\session ->
+                                { clientIds = Set.remove clientId session.clientIds
+                                , userId = session.userId
+                                }
+                            )
+                        )
+                        model.userSessions
+              }
+            , Cmd.none
+            )
 
 
 isSameUser : SessionId -> ClientId -> SessionId -> ClientId -> Bool
@@ -54,6 +67,21 @@ isSameClient s0 c0 s1 c1 =
     s0 == s1 && c0 == c1
 
 
+getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, UserData )
+getUserFromSessionId sessionId model =
+    case Dict.get sessionId model.userSessions of
+        Just { userId } ->
+            case Dict.get (User.rawId userId) model.users of
+                Just user ->
+                    Just ( userId, user )
+
+                Nothing ->
+                    Nothing
+
+        Nothing ->
+            Nothing
+
+
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 updateFromFrontend sessionId clientId msg model =
     case msg of
@@ -64,16 +92,13 @@ updateFromFrontend sessionId clientId msg model =
             requestDataUpdate sessionId clientId model
 
         GridChange changes ->
-            case Dict.get sessionId model.users of
-                Just user ->
+            case getUserFromSessionId sessionId model of
+                Just userIdAndUser ->
                     let
-                        userId =
-                            User.id user
-
                         ( newModel, serverChanges ) =
                             List.Nonempty.foldl
                                 (\change ( model_, serverChanges_ ) ->
-                                    updateLocalChange userId change model_
+                                    updateLocalChange userIdAndUser change model_
                                         |> Tuple.mapSecond (\serverChange -> serverChange :: serverChanges_)
                                 )
                                 ( model, [] )
@@ -96,8 +121,8 @@ updateFromFrontend sessionId clientId msg model =
                     ( model, Cmd.none )
 
 
-updateLocalChange : UserId -> LocalChange -> BackendModel -> ( BackendModel, Maybe ServerChange )
-updateLocalChange userId change model =
+updateLocalChange : ( UserId, UserData ) -> LocalChange -> BackendModel -> ( BackendModel, Maybe ServerChange )
+updateLocalChange ( userId, user ) change model =
     case change of
         LocalUndo ->
             case Dict.get (User.rawId userId) model.undoPoints of
@@ -183,31 +208,46 @@ updateLocalChange userId change model =
             )
 
         LocalRename name ->
-            ( { model | users = Dict.map }
+            ( updateUser userId (\user_ -> User.withName name user_ |> Maybe.withDefault user_) model
             , ServerUserRename userId name |> Just
             )
 
 
-isOnline : BackendModel -> SessionId -> Bool
-isOnline model sessionId =
-    Set.toList model.userSessions |> List.any (Tuple.first >> (==) sessionId)
+updateUser : UserId -> (UserData -> UserData) -> BackendModel -> BackendModel
+updateUser userId updateUserFunc model =
+    { model | users = Dict.update (User.rawId userId) (Maybe.map updateUserFunc) model.users }
 
 
 requestDataUpdate : SessionId -> ClientId -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 requestDataUpdate sessionId clientId model =
-    case Dict.get sessionId model.users of
-        Just user ->
+    case getUserFromSessionId sessionId model of
+        Just ( userId, user ) ->
             let
                 undoPoints =
-                    Dict.get (User.id user |> User.rawId) model.undoPoints
+                    Dict.get (User.rawId userId) model.undoPoints
             in
-            ( { model | userSessions = Set.insert ( sessionId, clientId ) model.userSessions }
+            ( { model
+                | userSessions =
+                    Dict.update sessionId
+                        (\maybeSession ->
+                            case maybeSession of
+                                Just session ->
+                                    Just { session | clientIds = Set.insert clientId session.clientIds }
+
+                                Nothing ->
+                                    Nothing
+                        )
+                        model.userSessions
+              }
             , Lamdera.sendToFrontend
                 clientId
                 (LoadingData
                     { user = user
                     , grid = model.grid
-                    , otherUsers = Dict.values model.users
+                    , otherUsers =
+                        Dict.toList model.users
+                            |> List.map (Tuple.mapFirst User.userId)
+                            |> List.filter (Tuple.first >> (/=) userId)
                     , undoHistory = Maybe.map .undoHistory undoPoints |> Maybe.withDefault []
                     , redoHistory = Maybe.map .redoHistory undoPoints |> Maybe.withDefault []
                     }
@@ -216,8 +256,8 @@ requestDataUpdate sessionId clientId model =
 
         Nothing ->
             let
-                user =
-                    Dict.size model.users |> User.fromIndex
+                ( userId, user ) =
+                    Dict.size model.users |> User.newUser
             in
             ( { model
                 | userSessions = Set.insert ( sessionId, clientId ) model.userSessions
@@ -229,10 +269,7 @@ requestDataUpdate sessionId clientId model =
                     (LoadingData
                         { user = user
                         , grid = model.grid
-                        , otherUsers =
-                            Dict.remove sessionId model.users
-                                |> Dict.filter (\k _ -> isOnline model k)
-                                |> Dict.values
+                        , otherUsers = Dict.toList model.users |> List.map (Tuple.mapFirst User.userId)
                         , undoHistory = []
                         , redoHistory = []
                         }
@@ -243,7 +280,7 @@ requestDataUpdate sessionId clientId model =
                             Nothing
 
                         else
-                            List.Nonempty.fromElement (ServerUserConnected user) |> ServerChangeBroadcast |> Just
+                            List.Nonempty.fromElement (ServerUserNew userId user) |> ServerChangeBroadcast |> Just
                     )
                     model
                 ]
@@ -252,7 +289,9 @@ requestDataUpdate sessionId clientId model =
 
 broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Cmd BackendMsg
 broadcast msgFunc model =
-    Set.toList model.userSessions
+    model.userSessions
+        |> Dict.toList
+        |> List.concatMap (\( sessionId, { clientIds } ) -> List.map (Tuple.pair sessionId) clientIds)
         |> List.map
             (\( sessionId, clientId ) ->
                 msgFunc sessionId clientId
