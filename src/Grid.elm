@@ -1,4 +1,4 @@
-module Grid exposing (Change, Grid, LocalChange, addChange, allCells, allCellsDict, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, getCell, localChangeToChange, mesh, setUndoPoints, textToChange, undoPoint)
+module Grid exposing (Change, Grid, LocalChange, addChange, allCells, allCellsDict, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, from, getCell, localChangeToChange, mesh, setUndoPoints, textToChange, undoPoint)
 
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
@@ -21,6 +21,11 @@ type Grid
 empty : Grid
 empty =
     Grid Dict.empty
+
+
+from : Dict ( Int, Int ) Cell -> Grid
+from =
+    Grid
 
 
 asciiToCellAndLocalCoord : Coord Units.AsciiUnit -> ( Coord Units.CellUnit, Int )

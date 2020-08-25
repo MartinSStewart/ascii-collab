@@ -1373,26 +1373,3 @@ fragmentShader =
             gl_FragColor = vec4(color.x * textureColor.x, color.y * textureColor.x, color.z * textureColor.x, textureColor.x);
         }
     |]
-
-
-
---view : FrontendModel -> Browser.Document msg
---view model =
---    { title = ""
---    , body =
---        [ Element.layout
---            [ Element.Font.family [ Element.Font.monospace ], Element.Font.size 16, Element.moveDown 2 ]
---            (Ascii.ascii
---                |> List.Extra.groupsOf 25
---                |> List.map
---                    (List.map
---                        (String.fromChar
---                            >> Element.text
---                            >> Element.el [ Element.width (Element.px 10), Element.height (Element.px 16) ]
---                        )
---                        >> Element.row []
---                    )
---                |> Element.column [ Element.spacing 2, Element.htmlAttribute <| Html.Attributes.style "white-space" "pre" ]
---            )
---        ]
---    }
