@@ -318,15 +318,15 @@ updateLoaded msg model =
 
         UserTyped text ->
             if text == "\n" || text == "\n\u{000D}" then
-                ( mouseUpAttempt model |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
+                ( resetTouchMove model |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
 
             else
-                ( mouseUpAttempt model |> changeText text, Cmd.none )
+                ( resetTouchMove model |> changeText text, Cmd.none )
 
         MouseDown button mousePosition ->
             let
                 model_ =
-                    mouseUpAttempt model
+                    resetTouchMove model
             in
             ( if button == MainButton then
                 { model_
@@ -411,16 +411,16 @@ updateLoaded msg model =
                     ( model_, Cmd.none )
 
         ZoomFactorPressed zoomFactor ->
-            ( mouseUpAttempt model |> (\m -> { m | zoomFactor = zoomFactor }), Cmd.none )
+            ( resetTouchMove model |> (\m -> { m | zoomFactor = zoomFactor }), Cmd.none )
 
         SelectToolPressed toolType ->
-            ( mouseUpAttempt model |> (\m -> { m | tool = toolType }), Cmd.none )
+            ( resetTouchMove model |> (\m -> { m | tool = toolType }), Cmd.none )
 
         UndoPressed ->
-            ( mouseUpAttempt model |> updateLocalModel LocalUndo, Cmd.none )
+            ( resetTouchMove model |> updateLocalModel LocalUndo, Cmd.none )
 
         RedoPressed ->
-            ( mouseUpAttempt model |> updateLocalModel LocalRedo, Cmd.none )
+            ( resetTouchMove model |> updateLocalModel LocalRedo, Cmd.none )
 
         CopyPressed ->
             copyText model
@@ -525,21 +525,25 @@ mouseUp mousePosition mouseState model =
     }
 
 
-mouseUpAttempt : FrontendLoaded -> FrontendLoaded
-mouseUpAttempt model =
+resetTouchMove : FrontendLoaded -> FrontendLoaded
+resetTouchMove model =
     case model.mouseLeft of
         MouseButtonUp ->
             model
 
         MouseButtonDown mouseState ->
-            mouseUp mouseState.current mouseState model
+            if isTouchDevice model then
+                mouseUp mouseState.current mouseState model
+
+            else
+                model
 
 
 copyText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 copyText model =
     let
         model_ =
-            mouseUpAttempt model
+            resetTouchMove model
     in
     ( model_
     , LocalModel.localModel model_.localModel
@@ -553,7 +557,7 @@ cutText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 cutText model =
     let
         model_ =
-            mouseUpAttempt model
+            resetTouchMove model
 
         bounds =
             Cursor.bounds model_.cursor
@@ -894,20 +898,6 @@ updateLoadedFromBackend msg model =
 
 view : FrontendModel -> Browser.Document FrontendMsg
 view model =
-    let
-        touchEvent msg =
-            \event ->
-                case event.touches of
-                    head :: _ ->
-                        let
-                            ( x, y ) =
-                                head.pagePos
-                        in
-                        msg (Point2d.pixels x y)
-
-                    [] ->
-                        NoOpFrontendMsg
-    in
     { title = "Ascii Art"
     , body =
         [ case model of
@@ -933,12 +923,21 @@ view model =
                                  , Html.Attributes.style "resize" "none"
                                  , Html.Attributes.style "opacity" "0"
                                  , Html.Attributes.id "textareaId"
+                                 , Html.Events.Extra.Touch.onWithOptions
+                                    "touchmove"
+                                    { stopPropagation = False, preventDefault = True }
+                                    (\event ->
+                                        case event.touches of
+                                            head :: _ ->
+                                                let
+                                                    ( x, y ) =
+                                                        head.pagePos
+                                                in
+                                                TouchMove (Point2d.pixels x y)
 
-                                 --, Html.Events.Extra.Touch.onWithOptions "touchstart" { stopPropagation = False, preventDefault = False } (touchEvent (MouseDown MainButton))
-                                 , Html.Events.Extra.Touch.onWithOptions "touchmove" { stopPropagation = False, preventDefault = True } (touchEvent TouchMove)
-
-                                 --, Html.Events.Extra.Touch.onWithOptions "touchend" { stopPropagation = False, preventDefault = True } (touchEvent (MouseUp MainButton >> Debug.log ""))
-                                 --, Html.Events.Extra.Touch.onWithOptions "touchcancel" { stopPropagation = False, preventDefault = True } (touchEvent (MouseUp MainButton >> Debug.log ""))
+                                            [] ->
+                                                NoOpFrontendMsg
+                                    )
                                  , Html.Events.Extra.Mouse.onDown
                                     (\{ clientPos, button } ->
                                         MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
