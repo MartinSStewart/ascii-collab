@@ -102,6 +102,7 @@ type alias FrontendLoaded =
     , tool : ToolType
     , undoAddLast : Time.Posix
     , time : Time.Posix
+    , lastTouchMove : (Maybe Time.Posix)
     }
 
 
@@ -135,7 +136,10 @@ type FrontendMsg
     | MouseDown Html.Events.Extra.Mouse.Button (Evergreen.V3.Point2d.Point2d Pixels.Pixels Evergreen.V3.Units.ScreenCoordinate)
     | MouseUp Html.Events.Extra.Mouse.Button (Evergreen.V3.Point2d.Point2d Pixels.Pixels Evergreen.V3.Units.ScreenCoordinate)
     | MouseMove (Evergreen.V3.Point2d.Point2d Pixels.Pixels Evergreen.V3.Units.ScreenCoordinate)
+    | TouchMove (Evergreen.V3.Point2d.Point2d Pixels.Pixels Evergreen.V3.Units.ScreenCoordinate)
+    | TouchMoveElapsed (Evergreen.V3.Point2d.Point2d Pixels.Pixels Evergreen.V3.Units.ScreenCoordinate)
     | ShortIntervalElapsed Time.Posix
+    | VeryShortIntervalElapsed Time.Posix
     | ZoomFactorPressed Int
     | SelectToolPressed ToolType
     | UndoPressed
