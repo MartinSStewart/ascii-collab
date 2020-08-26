@@ -77,6 +77,7 @@ type alias FrontendLoaded =
     , undoAddLast : Time.Posix
     , time : Time.Posix
     , lastTouchMove : Maybe Time.Posix
+    , isRenaming : Maybe String
     }
 
 
@@ -96,7 +97,7 @@ type LocalChange
 type ServerChange
     = ServerGridChange Grid.Change
     | ServerUndoPoint { userId : UserId, undoPoints : Dict ( Int, Int ) Int }
-    | ServerUserNew UserId UserData
+    | ServerUserNew ( UserId, UserData )
     | ServerUserIsOnline UserId Bool
     | ServerUserRename UserId String
 
@@ -105,8 +106,8 @@ type alias LocalGrid =
     { grid : Grid
     , undoHistory : List (Dict ( Int, Int ) Int)
     , redoHistory : List (Dict ( Int, Int ) Int)
-    , user : UserData
-    , otherUsers : List UserData
+    , user : ( UserId, UserData )
+    , otherUsers : List ( UserId, UserData )
     }
 
 
@@ -161,6 +162,9 @@ type FrontendMsg
     | RedoPressed
     | CopyPressed
     | CutPressed
+    | RenamePressed
+    | RenameTyped String
+    | RenameLostFocus
 
 
 type ToBackend
@@ -182,7 +186,7 @@ type ToFrontend
 
 
 type alias LoadingData_ =
-    { user : UserData
+    { user : ( UserId, UserData )
     , grid : Grid
     , otherUsers : List ( UserId, UserData )
     , undoHistory : List (Dict ( Int, Int ) Int)

@@ -14,6 +14,7 @@ import Duration
 import Element exposing (Element)
 import Element.Background
 import Element.Border
+import Element.Events
 import Element.Font
 import Element.Input
 import Grid exposing (Grid)
@@ -110,6 +111,7 @@ loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
         , undoAddLast = Time.millisToPosix 0
         , time = Time.millisToPosix 0
         , lastTouchMove = Nothing
+        , isRenaming = Nothing
         }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -208,109 +210,19 @@ updateLoaded msg model =
             )
 
         KeyDown rawKey ->
-            case Keyboard.anyKeyOriginal rawKey of
-                Just (Keyboard.Character "c") ->
-                    if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                        copyText model
+            case model.isRenaming of
+                Just name ->
+                    ( case Keyboard.anyKeyOriginal rawKey of
+                        Just Keyboard.Enter ->
+                            finishRenaming name model
 
-                    else
-                        ( model, Cmd.none )
-
-                Just (Keyboard.Character "x") ->
-                    if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                        cutText model
-
-                    else
-                        ( model, Cmd.none )
-
-                Just (Keyboard.Character "z") ->
-                    if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                        ( updateLocalModel LocalUndo model, Cmd.none )
-
-                    else
-                        ( model, Cmd.none )
-
-                Just (Keyboard.Character "Z") ->
-                    if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                        ( updateLocalModel LocalRedo model, Cmd.none )
-
-                    else
-                        ( model, Cmd.none )
-
-                Just (Keyboard.Character "y") ->
-                    if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                        ( updateLocalModel LocalRedo model, Cmd.none )
-
-                    else
-                        ( model, Cmd.none )
-
-                Just Keyboard.Delete ->
-                    let
-                        bounds =
-                            Cursor.bounds model.cursor
-                    in
-                    ( clearTextSelection bounds model
+                        _ ->
+                            model
                     , Cmd.none
                     )
 
-                Just Keyboard.ArrowLeft ->
-                    ( { model
-                        | cursor =
-                            Cursor.moveCursor
-                                (keyDown Keyboard.Shift model)
-                                ( Units.asciiUnit -1, Units.asciiUnit 0 )
-                                model.cursor
-                      }
-                    , Cmd.none
-                    )
-
-                Just Keyboard.ArrowRight ->
-                    ( { model
-                        | cursor =
-                            Cursor.moveCursor
-                                (keyDown Keyboard.Shift model)
-                                ( Units.asciiUnit 1, Units.asciiUnit 0 )
-                                model.cursor
-                      }
-                    , Cmd.none
-                    )
-
-                Just Keyboard.ArrowUp ->
-                    ( { model
-                        | cursor =
-                            Cursor.moveCursor
-                                (keyDown Keyboard.Shift model)
-                                ( Units.asciiUnit 0, Units.asciiUnit -1 )
-                                model.cursor
-                      }
-                    , Cmd.none
-                    )
-
-                Just Keyboard.ArrowDown ->
-                    ( { model
-                        | cursor =
-                            Cursor.moveCursor
-                                (keyDown Keyboard.Shift model)
-                                ( Units.asciiUnit 0, Units.asciiUnit 1 )
-                                model.cursor
-                      }
-                    , Cmd.none
-                    )
-
-                Just Keyboard.Backspace ->
-                    let
-                        newCursor =
-                            Cursor.moveCursor
-                                False
-                                ( Units.asciiUnit -1, Units.asciiUnit 0 )
-                                model.cursor
-                    in
-                    ( { model | cursor = newCursor } |> changeText " " |> (\m -> { m | cursor = newCursor })
-                    , Cmd.none
-                    )
-
-                _ ->
-                    ( model, Cmd.none )
+                Nothing ->
+                    keyMsgCanvasUpdate rawKey model
 
         Step _ ->
             ( model, Cmd.none )
@@ -505,6 +417,159 @@ updateLoaded msg model =
 
         VeryShortIntervalElapsed time ->
             ( { model | time = time }, Cmd.none )
+
+        RenamePressed ->
+            ( { model
+                | isRenaming =
+                    LocalModel.localModel model.localModel
+                        |> .user
+                        |> Tuple.second
+                        |> User.name
+                        |> Just
+              }
+            , Browser.Dom.focus renameTextareaId |> Task.attempt (always NoOpFrontendMsg)
+            )
+
+        RenameTyped name ->
+            ( case model.isRenaming of
+                Just _ ->
+                    { model | isRenaming = Just name }
+
+                Nothing ->
+                    model
+            , Cmd.none
+            )
+
+        RenameLostFocus ->
+            ( case model.isRenaming of
+                Just name ->
+                    finishRenaming name model
+
+                Nothing ->
+                    model
+            , Cmd.none
+            )
+
+
+finishRenaming name model =
+    { model | isRenaming = Nothing }
+        |> (if LocalModel.localModel model.localModel |> .user |> Tuple.second |> User.name |> (/=) name then
+                updateLocalModel (LocalRename name)
+
+            else
+                identity
+           )
+
+
+keyMsgCanvasUpdate rawKey model =
+    case Keyboard.anyKeyOriginal rawKey of
+        Just (Keyboard.Character "c") ->
+            if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                copyText model
+
+            else
+                ( model, Cmd.none )
+
+        Just (Keyboard.Character "x") ->
+            if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                cutText model
+
+            else
+                ( model, Cmd.none )
+
+        Just (Keyboard.Character "z") ->
+            if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                ( updateLocalModel LocalUndo model, Cmd.none )
+
+            else
+                ( model, Cmd.none )
+
+        Just (Keyboard.Character "Z") ->
+            if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                ( updateLocalModel LocalRedo model, Cmd.none )
+
+            else
+                ( model, Cmd.none )
+
+        Just (Keyboard.Character "y") ->
+            if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                ( updateLocalModel LocalRedo model, Cmd.none )
+
+            else
+                ( model, Cmd.none )
+
+        Just Keyboard.Delete ->
+            let
+                bounds =
+                    Cursor.bounds model.cursor
+            in
+            ( clearTextSelection bounds model
+            , Cmd.none
+            )
+
+        Just Keyboard.ArrowLeft ->
+            ( { model
+                | cursor =
+                    Cursor.moveCursor
+                        (keyDown Keyboard.Shift model)
+                        ( Units.asciiUnit -1, Units.asciiUnit 0 )
+                        model.cursor
+              }
+            , Cmd.none
+            )
+
+        Just Keyboard.ArrowRight ->
+            ( { model
+                | cursor =
+                    Cursor.moveCursor
+                        (keyDown Keyboard.Shift model)
+                        ( Units.asciiUnit 1, Units.asciiUnit 0 )
+                        model.cursor
+              }
+            , Cmd.none
+            )
+
+        Just Keyboard.ArrowUp ->
+            ( { model
+                | cursor =
+                    Cursor.moveCursor
+                        (keyDown Keyboard.Shift model)
+                        ( Units.asciiUnit 0, Units.asciiUnit -1 )
+                        model.cursor
+              }
+            , Cmd.none
+            )
+
+        Just Keyboard.ArrowDown ->
+            ( { model
+                | cursor =
+                    Cursor.moveCursor
+                        (keyDown Keyboard.Shift model)
+                        ( Units.asciiUnit 0, Units.asciiUnit 1 )
+                        model.cursor
+              }
+            , Cmd.none
+            )
+
+        Just Keyboard.Backspace ->
+            let
+                newCursor =
+                    Cursor.moveCursor
+                        False
+                        ( Units.asciiUnit -1, Units.asciiUnit 0 )
+                        model.cursor
+            in
+            ( { model | cursor = newCursor } |> changeText " " |> (\m -> { m | cursor = newCursor })
+            , Cmd.none
+            )
+
+        _ ->
+            ( model, Cmd.none )
+
+
+renameTextareaId : String
+renameTextareaId =
+    "rename-textarea-id"
 
 
 mouseUp mousePosition mouseState model =
@@ -807,7 +872,7 @@ localModelConfig =
         \msg model ->
             let
                 userId =
-                    User.id model.user
+                    Tuple.first model.user
             in
             case msg of
                 LocalChange (LocalGridChange gridChange) ->
@@ -847,7 +912,12 @@ localModelConfig =
                     }
 
                 LocalChange (LocalRename name) ->
-                    { model | user = User.withName name model.user |> Maybe.withDefault model.user }
+                    { model
+                        | user =
+                            Tuple.mapSecond
+                                (\userData -> User.withName name userData |> Maybe.withDefault userData)
+                                model.user
+                    }
 
                 ServerChange (ServerGridChange gridChange) ->
                     { model | grid = Grid.addChange gridChange model.grid }
@@ -862,8 +932,8 @@ localModelConfig =
                     { model
                         | otherUsers =
                             List.updateIf
-                                (User.id >> (==) userId_)
-                                (User.withIsOnline isOnline)
+                                (Tuple.first >> (==) userId_)
+                                (Tuple.mapSecond (User.withIsOnline isOnline))
                                 model.otherUsers
                     }
 
@@ -871,8 +941,8 @@ localModelConfig =
                     { model
                         | otherUsers =
                             List.updateIf
-                                (User.id >> (==) userId_)
-                                (\user -> User.withName name user |> Maybe.withDefault user)
+                                (Tuple.first >> (==) userId_)
+                                (Tuple.mapSecond (\user -> User.withName name user |> Maybe.withDefault user))
                                 model.otherUsers
                     }
     }
@@ -995,7 +1065,7 @@ mouseMoveAttribute =
 userListView : FrontendLoaded -> Element FrontendMsg
 userListView model =
     let
-        user =
+        ( _, user ) =
             LocalModel.localModel model.localModel |> .user
 
         otherUsers =
@@ -1011,15 +1081,37 @@ userListView model =
                 , Element.Background.color <| ColorIndex.toColor <| User.color user
                 ]
                 Element.none
-            , Element.row
-                [ Element.spacing 8 ]
-                [ Element.text
-                    (User.name user)
-                , Element.el [ Element.Font.bold ] (Element.text "(you)")
-                ]
+            , case model.isRenaming of
+                Just rename ->
+                    Element.Input.text
+                        [ Element.htmlAttribute <| Html.Attributes.id renameTextareaId
+                        , Element.Events.onLoseFocus RenameLostFocus
+                        , Element.padding 0
+                        ]
+                        { onChange = RenameTyped
+                        , text = rename
+                        , placeholder = Nothing
+                        , label = Element.Input.labelHidden "Rename"
+                        }
+
+                Nothing ->
+                    Element.Input.button
+                        []
+                        { onPress = Just RenamePressed
+                        , label =
+                            Element.row
+                                [ Element.spacing 8 ]
+                                [ Element.row
+                                    [ Element.spacing 2 ]
+                                    [ Element.text (User.name user)
+                                    , Element.el [ Element.Font.size 12 ] (Element.text "✏️")
+                                    ]
+                                , Element.el [ Element.Font.bold ] (Element.text "(you)")
+                                ]
+                        }
             ]
             :: List.map
-                (\otherUser ->
+                (\( _, otherUser ) ->
                     Element.row [ Element.spacing 8 ]
                         [ Element.el
                             [ Element.width (Element.px 16)
@@ -1283,7 +1375,7 @@ canvasView model =
                     0
 
         color =
-            LocalModel.localModel model.localModel |> .user |> User.color |> ColorIndex.toColor
+            LocalModel.localModel model.localModel |> .user |> Tuple.second |> User.color |> ColorIndex.toColor
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False, WebGL.antialias ]

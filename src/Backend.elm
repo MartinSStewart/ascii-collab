@@ -122,7 +122,7 @@ updateFromFrontend sessionId clientId msg model =
 
 
 updateLocalChange : ( UserId, UserData ) -> LocalChange -> BackendModel -> ( BackendModel, Maybe ServerChange )
-updateLocalChange ( userId, user ) change model =
+updateLocalChange ( userId, _ ) change model =
     case change of
         LocalUndo ->
             case Dict.get (User.rawId userId) model.undoPoints of
@@ -242,7 +242,7 @@ requestDataUpdate sessionId clientId model =
             , Lamdera.sendToFrontend
                 clientId
                 (LoadingData
-                    { user = user
+                    { user = ( userId, user )
                     , grid = model.grid
                     , otherUsers =
                         Dict.toList model.users
@@ -260,14 +260,18 @@ requestDataUpdate sessionId clientId model =
                     Dict.size model.users |> User.newUser
             in
             ( { model
-                | userSessions = Set.insert ( sessionId, clientId ) model.userSessions
-                , users = Dict.insert sessionId user model.users
+                | userSessions =
+                    Dict.insert
+                        sessionId
+                        { clientIds = Set.singleton clientId, userId = userId }
+                        model.userSessions
+                , users = Dict.insert (User.rawId userId) user model.users
               }
             , Cmd.batch
                 [ Lamdera.sendToFrontend
                     clientId
                     (LoadingData
-                        { user = user
+                        { user = ( userId, user )
                         , grid = model.grid
                         , otherUsers = Dict.toList model.users |> List.map (Tuple.mapFirst User.userId)
                         , undoHistory = []
@@ -280,7 +284,7 @@ requestDataUpdate sessionId clientId model =
                             Nothing
 
                         else
-                            List.Nonempty.fromElement (ServerUserNew userId user) |> ServerChangeBroadcast |> Just
+                            List.Nonempty.fromElement (ServerUserNew ( userId, user )) |> ServerChangeBroadcast |> Just
                     )
                     model
                 ]
@@ -291,7 +295,7 @@ broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Cmd B
 broadcast msgFunc model =
     model.userSessions
         |> Dict.toList
-        |> List.concatMap (\( sessionId, { clientIds } ) -> List.map (Tuple.pair sessionId) clientIds)
+        |> List.concatMap (\( sessionId, { clientIds } ) -> Set.toList clientIds |> List.map (Tuple.pair sessionId))
         |> List.map
             (\( sessionId, clientId ) ->
                 msgFunc sessionId clientId
