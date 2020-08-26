@@ -36,7 +36,7 @@ import Set exposing (Set)
 import Time
 import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
-import User exposing (RawUserId, User, UserId)
+import User exposing (RawUserId, UserData, UserId)
 import WebGL
 import WebGL.Texture exposing (Texture)
 
@@ -72,8 +72,6 @@ type alias FrontendLoaded =
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
     , mouseMiddle : MouseButtonState
-    , user : User
-    , otherUsers : List User
     , pendingChanges : List LocalChange
     , tool : ToolType
     , undoAddLast : Time.Posix
@@ -91,18 +89,24 @@ type LocalChange
     = LocalGridChange Grid.LocalChange
     | LocalUndo
     | LocalRedo
-    | AddUndo
+    | LocalAddUndo
+    | LocalRename String
 
 
 type ServerChange
     = ServerGridChange Grid.Change
     | ServerUndoPoint { userId : UserId, undoPoints : Dict ( Int, Int ) Int }
+    | ServerUserNew UserId UserData
+    | ServerUserIsOnline UserId Bool
+    | ServerUserRename UserId String
 
 
 type alias LocalGrid =
     { grid : Grid
     , undoHistory : List (Dict ( Int, Int ) Int)
     , redoHistory : List (Dict ( Int, Int ) Int)
+    , user : UserData
+    , otherUsers : List UserData
     }
 
 
@@ -128,8 +132,8 @@ type alias BackendModel =
             { undoHistory : List (Dict ( Int, Int ) Int)
             , redoHistory : List (Dict ( Int, Int ) Int)
             }
-    , userSessions : Set ( SessionId, ClientId )
-    , users : Dict SessionId User
+    , userSessions : Dict SessionId { clientIds : Set ClientId, userId : UserId }
+    , users : Dict RawUserId UserData
     }
 
 
@@ -163,7 +167,6 @@ type ToBackend
     = NoOpToBackend
     | RequestData
     | GridChange (Nonempty LocalChange)
-    | UserRename String
 
 
 type BackendMsg
@@ -176,14 +179,12 @@ type ToFrontend
     | LoadingData LoadingData_
     | ServerChangeBroadcast (Nonempty ServerChange)
     | LocalChangeResponse (Nonempty LocalChange)
-    | NewUserBroadcast User
-    | UserModifiedBroadcast User
 
 
 type alias LoadingData_ =
-    { user : User
+    { user : UserData
     , grid : Grid
-    , otherUsers : List User
+    , otherUsers : List ( UserId, UserData )
     , undoHistory : List (Dict ( Int, Int ) Int)
     , redoHistory : List (Dict ( Int, Int ) Int)
     }
