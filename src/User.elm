@@ -1,4 +1,4 @@
-module User exposing (RawUserId, UserData(..), UserId, color, isOnline, name, newUser, rawId, userId, withIsOnline, withName)
+module User exposing (RawUserId, RenameError(..), UserData(..), UserId, color, isOnline, name, newUser, rawId, rename, userId, withIsOnline)
 
 import ColorIndex exposing (ColorIndex(..))
 import List.Extra as List
@@ -47,17 +47,25 @@ name (User user) =
     user.name
 
 
-withName : String -> UserData -> Maybe UserData
-withName name_ (User user) =
+rename : List UserData -> String -> UserData -> Result RenameError UserData
+rename otherUsers name_ (User user) =
     let
         santizedName =
             String.trim name_
     in
     if String.length santizedName < 2 || String.length santizedName > 12 then
-        Nothing
+        Err InvalidName
+
+    else if List.any (\otherUserData -> name otherUserData == name_) otherUsers then
+        Err NameAlreadyInUse
 
     else
-        User { user | name = santizedName } |> Just
+        User { user | name = santizedName } |> Ok
+
+
+type RenameError
+    = NameAlreadyInUse
+    | InvalidName
 
 
 withIsOnline : Bool -> UserData -> UserData

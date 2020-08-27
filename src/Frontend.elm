@@ -86,7 +86,6 @@ loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
                 , redoHistory = redoHistory
                 , user = user
                 , otherUsers = otherUsers
-                , showRenameError = Nothing
                 }
         , meshes =
             Grid.allCells grid
@@ -113,6 +112,7 @@ loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
         , time = Time.millisToPosix 0
         , lastTouchMove = Nothing
         , isRenaming = Nothing
+        , showRenameError = Nothing
         }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -427,6 +427,7 @@ updateLoaded msg model =
                         |> Tuple.second
                         |> User.name
                         |> Just
+                , showRenameError = Nothing
               }
             , Browser.Dom.focus renameTextareaId |> Task.attempt (always NoOpFrontendMsg)
             )
@@ -452,9 +453,23 @@ updateLoaded msg model =
             )
 
 
+finishRenaming : String -> FrontendLoaded -> FrontendLoaded
 finishRenaming name model =
-    { model | isRenaming = Nothing }
-        |> (if LocalModel.localModel model.localModel |> .user |> Tuple.second |> User.name |> (/=) name then
+    let
+        localModel =
+            LocalModel.localModel model.localModel
+    in
+    { model
+        | isRenaming = Nothing
+        , showRenameError =
+            case User.rename (List.map Tuple.second localModel.otherUsers) name (Tuple.second localModel.user) of
+                Ok _ ->
+                    Nothing
+
+                Err error ->
+                    Just ( model.time, error, name )
+    }
+        |> (if localModel.user |> Tuple.second |> User.name |> (/=) name then
                 updateLocalModel (LocalRename name)
 
             else
@@ -462,6 +477,7 @@ finishRenaming name model =
            )
 
 
+keyMsgCanvasUpdate : Keyboard.RawKey -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 keyMsgCanvasUpdate rawKey model =
     case Keyboard.anyKeyOriginal rawKey of
         Just (Keyboard.Character "c") ->
@@ -917,16 +933,12 @@ localModelConfig =
                         ( _, userData ) =
                             model.user
                     in
-                    case User.withName name userData of
-                        Just newUserData ->
-                            if List.any (\( _, otherUserData ) -> User.name otherUserData == name) model.otherUsers then
-                                { model | showRenameError = Just NameAlreadyInUse }
+                    case User.rename (List.map Tuple.second model.otherUsers) name userData of
+                        Ok newUserData ->
+                            { model | user = Tuple.mapSecond (always newUserData) model.user }
 
-                            else
-                                { model | user = Tuple.mapSecond (always newUserData) model.user }
-
-                        Nothing ->
-                            { model | showRenameError = Just InvalidName }
+                        Err _ ->
+                            model
 
                 ServerChange (ServerGridChange gridChange) ->
                     { model | grid = Grid.addChange gridChange model.grid }
@@ -951,7 +963,16 @@ localModelConfig =
                         | otherUsers =
                             List.updateIf
                                 (Tuple.first >> (==) userId_)
-                                (Tuple.mapSecond (\user -> User.withName name user |> Maybe.withDefault user))
+                                (Tuple.mapSecond
+                                    (\user ->
+                                        User.rename
+                                            (List.filter (Tuple.first >> (==) userId_) model.otherUsers |> List.map Tuple.second)
+                                            name
+                                            user
+                                            |> Result.toMaybe
+                                            |> Maybe.withDefault user
+                                    )
+                                )
                                 model.otherUsers
                     }
     }
@@ -1004,20 +1025,20 @@ view model =
 
             Loaded loadedModel ->
                 Element.layout
-                    [ Element.width Element.fill
-                    , Element.height Element.fill
-                    , Element.clip
-                    , Element.inFront <|
+                    ([ Element.width Element.fill
+                     , Element.height Element.fill
+                     , Element.clip
+                     , Element.inFront <|
                         Element.html <|
                             Html.textarea
-                                ([ Html.Events.onInput UserTyped
-                                 , Html.Attributes.value ""
-                                 , Html.Attributes.style "width" "100%"
-                                 , Html.Attributes.style "height" "100%"
-                                 , Html.Attributes.style "resize" "none"
-                                 , Html.Attributes.style "opacity" "0"
-                                 , Html.Attributes.id "textareaId"
-                                 , Html.Events.Extra.Touch.onWithOptions
+                                [ Html.Events.onInput UserTyped
+                                , Html.Attributes.value ""
+                                , Html.Attributes.style "width" "100%"
+                                , Html.Attributes.style "height" "100%"
+                                , Html.Attributes.style "resize" "none"
+                                , Html.Attributes.style "opacity" "0"
+                                , Html.Attributes.id "textareaId"
+                                , Html.Events.Extra.Touch.onWithOptions
                                     "touchmove"
                                     { stopPropagation = False, preventDefault = True }
                                     (\event ->
@@ -1032,43 +1053,44 @@ view model =
                                             [] ->
                                                 NoOpFrontendMsg
                                     )
-                                 , Html.Events.Extra.Mouse.onDown
+                                , Html.Events.Extra.Mouse.onDown
                                     (\{ clientPos, button } ->
                                         MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
                                     )
-                                 , Html.Events.Extra.Mouse.onUp
-                                    (\{ clientPos, button } ->
-                                        MouseUp button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                                    )
-                                 ]
-                                    ++ (case ( loadedModel.mouseLeft, loadedModel.mouseMiddle ) of
-                                            ( MouseButtonDown _, _ ) ->
-                                                [ mouseMoveAttribute
-                                                ]
-
-                                            ( _, MouseButtonDown _ ) ->
-                                                [ mouseMoveAttribute
-                                                ]
-
-                                            _ ->
-                                                []
-                                       )
-                                )
+                                ]
                                 []
-                    , Element.inFront (toolbarView loadedModel)
-                    , Element.inFront (userListView loadedModel)
-                    ]
+                     , Element.inFront (toolbarView loadedModel)
+                     , Element.inFront (userListView loadedModel)
+                     ]
+                        ++ (case ( loadedModel.mouseLeft, loadedModel.mouseMiddle ) of
+                                ( MouseButtonDown _, _ ) ->
+                                    mouseAttributes
+
+                                ( _, MouseButtonDown _ ) ->
+                                    mouseAttributes
+
+                                _ ->
+                                    []
+                           )
+                    )
                     (Element.html (canvasView loadedModel))
         ]
     }
 
 
-mouseMoveAttribute : Html.Attribute FrontendMsg
-mouseMoveAttribute =
-    Html.Events.Extra.Mouse.onMove
+mouseAttributes : List (Element.Attribute FrontendMsg)
+mouseAttributes =
+    [ Html.Events.Extra.Mouse.onMove
         (\{ clientPos } ->
             MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
         )
+        |> Element.htmlAttribute
+    , Html.Events.Extra.Mouse.onUp
+        (\{ clientPos, button } ->
+            MouseUp button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+        )
+        |> Element.htmlAttribute
+    ]
 
 
 userListView : FrontendLoaded -> Element FrontendMsg
@@ -1091,17 +1113,51 @@ userListView model =
         userTag =
             Element.row
                 [ Element.spacing 8
+                , Element.width <| Element.px 200
+                , Element.height <| Element.px 22
                 , Element.onLeft <|
-                    case LocalModel.localModel model.localModel |> .showRenameError of
-                        Just error ->
-                            (case error of
-                                InvalidName ->
-                                    "Name must be between 2 and 12 characters"
+                    case model.showRenameError of
+                        Just ( errorStart, error, name ) ->
+                            let
+                                { red, green, blue } =
+                                    Element.toRgb warningColor
+                            in
+                            if Duration.from errorStart model.time |> Quantity.lessThan (Duration.seconds 5) then
+                                Element.row
+                                    [ Element.moveUp 4 ]
+                                    [ (case error of
+                                        User.InvalidName ->
+                                            "Name must be between 2 and 12 characters"
 
-                                NameAlreadyInUse ->
-                                    "This name is already in use"
-                            )
-                                |> Element.text
+                                        User.NameAlreadyInUse ->
+                                            "\"" ++ name ++ "\" is taken"
+                                      )
+                                        |> Element.text
+                                        |> Element.el
+                                            [ Element.Background.color warningColor
+                                            , Element.paddingXY 8 4
+                                            , Element.Border.rounded 4
+                                            ]
+                                    , Element.el
+                                        [ Element.htmlAttribute <|
+                                            Html.Attributes.style
+                                                "border-color"
+                                                ("transparent rgb("
+                                                    ++ String.fromFloat (255 * red)
+                                                    ++ ","
+                                                    ++ String.fromFloat (255 * green)
+                                                    ++ ","
+                                                    ++ String.fromFloat (255 * blue)
+                                                    ++ ")"
+                                                )
+                                        , Element.Border.widthEach { left = 13, right = 0, top = 13, bottom = 13 }
+                                        , Element.moveLeft 1.2
+                                        ]
+                                        Element.none
+                                    ]
+
+                            else
+                                Element.none
 
                         Nothing ->
                             Element.none
@@ -1113,6 +1169,9 @@ userListView model =
                             [ Element.htmlAttribute <| Html.Attributes.id renameTextareaId
                             , Element.Events.onLoseFocus RenameLostFocus
                             , Element.padding 0
+                            , Element.width Element.fill
+                            , Element.height Element.fill
+                            , Element.moveLeft 1
                             ]
                             { onChange = RenameTyped
                             , text = rename
@@ -1307,6 +1366,11 @@ textColor =
     Element.rgb255 19 7 12
 
 
+warningColor : Element.Color
+warningColor =
+    Element.rgb255 255 210 212
+
+
 verticalSeparator : Element msg
 verticalSeparator =
     Element.el
@@ -1318,7 +1382,7 @@ verticalSeparator =
 
 
 toolbarButton : List (Element.Attribute msg) -> msg -> Element msg -> Element msg
-toolbarButton attrubtes onPress label =
+toolbarButton attributes onPress label =
     Element.Input.button
         ([ Element.padding 8
          , Element.Background.color buttonDefault
@@ -1326,7 +1390,7 @@ toolbarButton attrubtes onPress label =
          , Element.Border.width 2
          , Element.Border.color backgroundColor
          ]
-            ++ attrubtes
+            ++ attributes
         )
         { onPress = Just onPress, label = label }
 

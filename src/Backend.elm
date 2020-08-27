@@ -208,7 +208,16 @@ updateLocalChange ( userId, _ ) change model =
             )
 
         LocalRename name ->
-            ( updateUser userId (\user_ -> User.withName name user_ |> Maybe.withDefault user_) model
+            ( updateUser userId
+                (\user_ ->
+                    User.rename
+                        (model.users |> Dict.remove (User.rawId userId) |> Dict.values)
+                        name
+                        user_
+                        |> Result.toMaybe
+                        |> Maybe.withDefault user_
+                )
+                model
             , ServerUserRename userId name |> Just
             )
 
