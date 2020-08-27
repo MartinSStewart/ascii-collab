@@ -86,6 +86,7 @@ loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
                 , redoHistory = redoHistory
                 , user = user
                 , otherUsers = otherUsers
+                , showRenameError = Nothing
                 }
         , meshes =
             Grid.allCells grid
@@ -866,7 +867,7 @@ updateFromBackend msg model =
 
 
 localModelConfig : LocalModel.Config Change LocalGrid
-localModelConfig =
+localModelConfig  =
     { msgEqual = \msg0 msg1 -> msg0 == msg1
     , update =
         \msg model ->
@@ -912,12 +913,19 @@ localModelConfig =
                     }
 
                 LocalChange (LocalRename name) ->
-                    { model
-                        | user =
-                            Tuple.mapSecond
-                                (\userData -> User.withName name userData |> Maybe.withDefault userData)
-                                model.user
-                    }
+                    let
+                        (_, userData) = model.user
+                    in
+                    case User.withName name userData of
+                        Just newUserData ->
+                            if List.any (\(_, otherUserData) -> User.name otherUserData == name ) model.otherUsers then
+                                { model | showRenameError = Just (N )}
+                            { model
+                                | user =
+                                    Tuple.mapSecond
+                                        (\userData ->  |> Maybe.withDefault userData)
+                                        model.user
+                            }
 
                 ServerChange (ServerGridChange gridChange) ->
                     { model | grid = Grid.addChange gridChange model.grid }

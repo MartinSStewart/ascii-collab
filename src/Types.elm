@@ -10,6 +10,7 @@ module Types exposing
     , LocalChange(..)
     , LocalGrid
     , MouseButtonState(..)
+    , RenameError(..)
     , ServerChange(..)
     , ToBackend(..)
     , ToFrontend(..)
@@ -108,7 +109,13 @@ type alias LocalGrid =
     , redoHistory : List (Dict ( Int, Int ) Int)
     , user : ( UserId, UserData )
     , otherUsers : List ( UserId, UserData )
+    , showRenameError : Maybe RenameError
     }
+
+
+type RenameError
+    = NameAlreadyInUse
+    | InvalidName
 
 
 type ToolType
