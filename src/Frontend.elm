@@ -14,9 +14,9 @@ import Duration
 import Element exposing (Element)
 import Element.Background
 import Element.Border
-import Element.Events
 import Element.Font
 import Element.Input
+import EverySet
 import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord)
@@ -72,7 +72,7 @@ app =
 
 
 loadedInit : FrontendLoading -> LoadingData_ -> ( FrontendModel, Cmd FrontendMsg )
-loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
+loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHistory } =
     let
         cursor =
             Cursor.setCursor ( Units.asciiUnit 0, Units.asciiUnit 0 )
@@ -85,6 +85,7 @@ loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
                 , undoHistory = undoHistory
                 , redoHistory = redoHistory
                 , user = user
+                , hiddenUsers = hiddenUsers
                 , otherUsers = otherUsers
                 }
         , meshes =
@@ -111,8 +112,6 @@ loadedInit loading { grid, user, otherUsers, undoHistory, redoHistory } =
         , undoAddLast = Time.millisToPosix 0
         , time = Time.millisToPosix 0
         , lastTouchMove = Nothing
-        , isRenaming = Nothing
-        , showRenameError = Nothing
         }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -211,19 +210,7 @@ updateLoaded msg model =
             )
 
         KeyDown rawKey ->
-            case model.isRenaming of
-                Just name ->
-                    ( case Keyboard.anyKeyOriginal rawKey of
-                        Just Keyboard.Enter ->
-                            finishRenaming name model
-
-                        _ ->
-                            model
-                    , Cmd.none
-                    )
-
-                Nothing ->
-                    keyMsgCanvasUpdate rawKey model
+            keyMsgCanvasUpdate rawKey model
 
         Step _ ->
             ( model, Cmd.none )
@@ -419,62 +406,8 @@ updateLoaded msg model =
         VeryShortIntervalElapsed time ->
             ( { model | time = time }, Cmd.none )
 
-        RenamePressed ->
-            ( { model
-                | isRenaming =
-                    LocalModel.localModel model.localModel
-                        |> .user
-                        |> Tuple.second
-                        |> User.name
-                        |> Just
-                , showRenameError = Nothing
-              }
-            , Browser.Dom.focus renameTextareaId |> Task.attempt (always NoOpFrontendMsg)
-            )
-
-        RenameTyped name ->
-            ( case model.isRenaming of
-                Just _ ->
-                    { model | isRenaming = Just name }
-
-                Nothing ->
-                    model
-            , Cmd.none
-            )
-
-        RenameLostFocus ->
-            ( case model.isRenaming of
-                Just name ->
-                    finishRenaming name model
-
-                Nothing ->
-                    model
-            , Cmd.none
-            )
-
-
-finishRenaming : String -> FrontendLoaded -> FrontendLoaded
-finishRenaming name model =
-    let
-        localModel =
-            LocalModel.localModel model.localModel
-    in
-    { model
-        | isRenaming = Nothing
-        , showRenameError =
-            case User.rename (List.map Tuple.second localModel.otherUsers) name (Tuple.second localModel.user) of
-                Ok _ ->
-                    Nothing
-
-                Err error ->
-                    Just ( model.time, error, name )
-    }
-        |> (if localModel.user |> Tuple.second |> User.name |> (/=) name then
-                updateLocalModel (LocalRename name)
-
-            else
-                identity
-           )
+        ToggleUserVisibilityPressed userId ->
+            ( updateLocalModel (LocalToggleUserVisibility userId) model, Cmd.none )
 
 
 keyMsgCanvasUpdate : Keyboard.RawKey -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
@@ -928,17 +861,15 @@ localModelConfig =
                         , undoHistory = Grid.undoPoint userId model.grid :: model.undoHistory
                     }
 
-                LocalChange (LocalRename name) ->
-                    let
-                        ( _, userData ) =
-                            model.user
-                    in
-                    case User.rename (List.map Tuple.second model.otherUsers) name userData of
-                        Ok newUserData ->
-                            { model | user = Tuple.mapSecond (always newUserData) model.user }
+                LocalChange (LocalToggleUserVisibility userId_) ->
+                    { model
+                        | hiddenUsers =
+                            if EverySet.member userId_ model.hiddenUsers then
+                                EverySet.remove userId_ model.hiddenUsers
 
-                        Err _ ->
-                            model
+                            else
+                                EverySet.insert userId_ model.hiddenUsers
+                    }
 
                 ServerChange (ServerGridChange gridChange) ->
                     { model | grid = Grid.addChange gridChange model.grid }
@@ -955,24 +886,6 @@ localModelConfig =
                             List.updateIf
                                 (Tuple.first >> (==) userId_)
                                 (Tuple.mapSecond (User.withIsOnline isOnline))
-                                model.otherUsers
-                    }
-
-                ServerChange (ServerUserRename userId_ name) ->
-                    { model
-                        | otherUsers =
-                            List.updateIf
-                                (Tuple.first >> (==) userId_)
-                                (Tuple.mapSecond
-                                    (\user ->
-                                        User.rename
-                                            (List.filter (Tuple.first >> (==) userId_) model.otherUsers |> List.map Tuple.second)
-                                            name
-                                            user
-                                            |> Result.toMaybe
-                                            |> Maybe.withDefault user
-                                    )
-                                )
                                 model.otherUsers
                     }
     }
@@ -1096,11 +1009,11 @@ mouseAttributes =
 userListView : FrontendLoaded -> Element FrontendMsg
 userListView model =
     let
-        ( _, user ) =
-            LocalModel.localModel model.localModel |> .user
+        localModel =
+            LocalModel.localModel model.localModel
 
-        otherUsers =
-            LocalModel.localModel model.localModel |> .otherUsers
+        ( _, user ) =
+            localModel.user
 
         colorSquare user_ =
             Element.el
@@ -1112,103 +1025,32 @@ userListView model =
 
         userTag =
             Element.row
-                [ Element.spacing 8
-                , Element.width <| Element.px 200
-                , Element.height <| Element.px 22
-                , Element.onLeft <|
-                    case model.showRenameError of
-                        Just ( errorStart, error, name ) ->
-                            let
-                                { red, green, blue } =
-                                    Element.toRgb warningColor
-                            in
-                            if Duration.from errorStart model.time |> Quantity.lessThan (Duration.seconds 5) then
-                                Element.row
-                                    [ Element.moveUp 4 ]
-                                    [ (case error of
-                                        User.InvalidName ->
-                                            "Name must be between 2 and 12 characters"
-
-                                        User.NameAlreadyInUse ->
-                                            "\"" ++ name ++ "\" is taken"
-                                      )
-                                        |> Element.text
-                                        |> Element.el
-                                            [ Element.Background.color warningColor
-                                            , Element.paddingXY 8 4
-                                            , Element.Border.rounded 4
-                                            ]
-                                    , Element.el
-                                        [ Element.htmlAttribute <|
-                                            Html.Attributes.style
-                                                "border-color"
-                                                ("transparent rgb("
-                                                    ++ String.fromFloat (255 * red)
-                                                    ++ ","
-                                                    ++ String.fromFloat (255 * green)
-                                                    ++ ","
-                                                    ++ String.fromFloat (255 * blue)
-                                                    ++ ")"
-                                                )
-                                        , Element.Border.widthEach { left = 13, right = 0, top = 13, bottom = 13 }
-                                        , Element.moveLeft 1.2
-                                        ]
-                                        Element.none
-                                    ]
-
-                            else
-                                Element.none
-
-                        Nothing ->
-                            Element.none
-                ]
+                [ Element.spacing 8 ]
                 [ colorSquare user
-                , case model.isRenaming of
-                    Just rename ->
-                        Element.Input.text
-                            [ Element.htmlAttribute <| Html.Attributes.id renameTextareaId
-                            , Element.Events.onLoseFocus RenameLostFocus
-                            , Element.padding 0
-                            , Element.width Element.fill
-                            , Element.height Element.fill
-                            , Element.moveLeft 1
-                            ]
-                            { onChange = RenameTyped
-                            , text = rename
-                            , placeholder = Nothing
-                            , label = Element.Input.labelHidden "Rename"
-                            }
-
-                    Nothing ->
-                        Element.Input.button
-                            []
-                            { onPress = Just RenamePressed
-                            , label =
-                                Element.row
-                                    [ Element.spacing 8 ]
-                                    [ Element.row
-                                        [ Element.spacing 2 ]
-                                        [ Element.text (User.name user)
-                                        , Element.el [ Element.Font.size 12 ] (Element.text "✏️")
-                                        ]
-                                    , Element.el [ Element.Font.bold ] (Element.text "(you)")
-                                    ]
-                            }
+                , Element.el [ Element.Font.bold ] (Element.text "(you)")
                 ]
     in
     Element.column
         [ Element.Background.color lightColor, Element.alignRight, Element.spacing 8, Element.padding 8 ]
         (userTag
             :: List.map
-                (\( _, otherUser ) ->
-                    Element.row [ Element.spacing 8 ]
-                        [ colorSquare otherUser
-                        , Element.row
-                            [ Element.spacing 8 ]
-                            [ Element.text (User.name otherUser) ]
-                        ]
+                (\( otherUserId, otherUser ) ->
+                    Element.Input.button
+                        []
+                        { onPress = Just (ToggleUserVisibilityPressed otherUserId)
+                        , label =
+                            Element.row
+                                [ Element.spacing 8 ]
+                                [ colorSquare otherUser
+                                , if EverySet.member otherUserId localModel.hiddenUsers then
+                                    Element.text "🙈"
+
+                                  else
+                                    Element.text "🐵"
+                                ]
+                        }
                 )
-                otherUsers
+                localModel.otherUsers
         )
 
 

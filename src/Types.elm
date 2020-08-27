@@ -21,6 +21,7 @@ import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
+import EverySet exposing (EverySet)
 import Grid exposing (Grid, LocalChange)
 import Helper exposing (Coord)
 import Html.Events.Extra.Mouse exposing (Button)
@@ -77,8 +78,6 @@ type alias FrontendLoaded =
     , undoAddLast : Time.Posix
     , time : Time.Posix
     , lastTouchMove : Maybe Time.Posix
-    , isRenaming : Maybe String
-    , showRenameError : Maybe ( Time.Posix, User.RenameError, String )
     }
 
 
@@ -92,7 +91,7 @@ type LocalChange
     | LocalUndo
     | LocalRedo
     | LocalAddUndo
-    | LocalRename String
+    | LocalToggleUserVisibility UserId
 
 
 type ServerChange
@@ -100,7 +99,6 @@ type ServerChange
     | ServerUndoPoint { userId : UserId, undoPoints : Dict ( Int, Int ) Int }
     | ServerUserNew ( UserId, UserData )
     | ServerUserIsOnline UserId Bool
-    | ServerUserRename UserId String
 
 
 type alias LocalGrid =
@@ -109,6 +107,7 @@ type alias LocalGrid =
     , redoHistory : List (Dict ( Int, Int ) Int)
     , user : ( UserId, UserData )
     , otherUsers : List ( UserId, UserData )
+    , hiddenUsers : EverySet UserId
     }
 
 
@@ -135,7 +134,7 @@ type alias BackendModel =
             , redoHistory : List (Dict ( Int, Int ) Int)
             }
     , userSessions : Dict SessionId { clientIds : Set ClientId, userId : UserId }
-    , users : Dict RawUserId UserData
+    , users : Dict RawUserId { userData : UserData, hiddenUsers : EverySet UserId }
     }
 
 
@@ -163,9 +162,7 @@ type FrontendMsg
     | RedoPressed
     | CopyPressed
     | CutPressed
-    | RenamePressed
-    | RenameTyped String
-    | RenameLostFocus
+    | ToggleUserVisibilityPressed UserId
 
 
 type ToBackend
@@ -190,6 +187,7 @@ type alias LoadingData_ =
     { user : ( UserId, UserData )
     , grid : Grid
     , otherUsers : List ( UserId, UserData )
+    , hiddenUsers : EverySet UserId
     , undoHistory : List (Dict ( Int, Int ) Int)
     , redoHistory : List (Dict ( Int, Int ) Int)
     }

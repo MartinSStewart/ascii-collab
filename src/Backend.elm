@@ -1,6 +1,7 @@
 module Backend exposing (app, init, update, updateFromFrontend)
 
 import Dict
+import EverySet exposing (EverySet)
 import Grid
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty
@@ -67,7 +68,7 @@ isSameClient s0 c0 s1 c1 =
     s0 == s1 && c0 == c1
 
 
-getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, UserData )
+getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, { userData : UserData, hiddenUsers : EverySet UserId } )
 getUserFromSessionId sessionId model =
     case Dict.get sessionId model.userSessions of
         Just { userId } ->
@@ -121,7 +122,11 @@ updateFromFrontend sessionId clientId msg model =
                     ( model, Cmd.none )
 
 
-updateLocalChange : ( UserId, UserData ) -> LocalChange -> BackendModel -> ( BackendModel, Maybe ServerChange )
+updateLocalChange :
+    ( UserId, { userData : UserData, hiddenUsers : EverySet UserId } )
+    -> LocalChange
+    -> BackendModel
+    -> ( BackendModel, Maybe ServerChange )
 updateLocalChange ( userId, _ ) change model =
     case change of
         LocalUndo ->
@@ -207,22 +212,34 @@ updateLocalChange ( userId, _ ) change model =
             , Nothing
             )
 
-        LocalRename name ->
-            ( updateUser userId
-                (\user_ ->
-                    User.rename
-                        (model.users |> Dict.remove (User.rawId userId) |> Dict.values)
-                        name
-                        user_
-                        |> Result.toMaybe
-                        |> Maybe.withDefault user_
-                )
-                model
-            , ServerUserRename userId name |> Just
+        LocalToggleUserVisibility userId_ ->
+            ( { model
+                | users =
+                    Dict.update
+                        (User.rawId userId)
+                        (Maybe.map
+                            (\user ->
+                                { user
+                                    | hiddenUsers =
+                                        if EverySet.member userId_ user.hiddenUsers then
+                                            EverySet.remove userId_ user.hiddenUsers
+
+                                        else
+                                            EverySet.insert userId_ user.hiddenUsers
+                                }
+                            )
+                        )
+                        model.users
+              }
+            , Nothing
             )
 
 
-updateUser : UserId -> (UserData -> UserData) -> BackendModel -> BackendModel
+updateUser :
+    UserId
+    -> ({ userData : UserData, hiddenUsers : EverySet UserId } -> { userData : UserData, hiddenUsers : EverySet UserId })
+    -> BackendModel
+    -> BackendModel
 updateUser userId updateUserFunc model =
     { model | users = Dict.update (User.rawId userId) (Maybe.map updateUserFunc) model.users }
 
@@ -251,11 +268,12 @@ requestDataUpdate sessionId clientId model =
             , Lamdera.sendToFrontend
                 clientId
                 (LoadingData
-                    { user = ( userId, user )
+                    { user = ( userId, user.userData )
                     , grid = model.grid
+                    , hiddenUsers = user.hiddenUsers
                     , otherUsers =
                         Dict.toList model.users
-                            |> List.map (Tuple.mapFirst User.userId)
+                            |> List.map (Tuple.mapBoth User.userId .userData)
                             |> List.filter (Tuple.first >> (/=) userId)
                     , undoHistory = Maybe.map .undoHistory undoPoints |> Maybe.withDefault []
                     , redoHistory = Maybe.map .redoHistory undoPoints |> Maybe.withDefault []
@@ -274,7 +292,7 @@ requestDataUpdate sessionId clientId model =
                         sessionId
                         { clientIds = Set.singleton clientId, userId = userId }
                         model.userSessions
-                , users = Dict.insert (User.rawId userId) user model.users
+                , users = Dict.insert (User.rawId userId) { userData = user, hiddenUsers = EverySet.empty } model.users
               }
             , Cmd.batch
                 [ Lamdera.sendToFrontend
@@ -282,7 +300,8 @@ requestDataUpdate sessionId clientId model =
                     (LoadingData
                         { user = ( userId, user )
                         , grid = model.grid
-                        , otherUsers = Dict.toList model.users |> List.map (Tuple.mapFirst User.userId)
+                        , hiddenUsers = EverySet.empty
+                        , otherUsers = Dict.toList model.users |> List.map (Tuple.mapBoth User.userId .userData)
                         , undoHistory = []
                         , redoHistory = []
                         }
