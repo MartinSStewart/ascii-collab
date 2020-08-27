@@ -867,7 +867,7 @@ updateFromBackend msg model =
 
 
 localModelConfig : LocalModel.Config Change LocalGrid
-localModelConfig  =
+localModelConfig =
     { msgEqual = \msg0 msg1 -> msg0 == msg1
     , update =
         \msg model ->
@@ -914,18 +914,19 @@ localModelConfig  =
 
                 LocalChange (LocalRename name) ->
                     let
-                        (_, userData) = model.user
+                        ( _, userData ) =
+                            model.user
                     in
                     case User.withName name userData of
                         Just newUserData ->
-                            if List.any (\(_, otherUserData) -> User.name otherUserData == name ) model.otherUsers then
-                                { model | showRenameError = Just (N )}
-                            { model
-                                | user =
-                                    Tuple.mapSecond
-                                        (\userData ->  |> Maybe.withDefault userData)
-                                        model.user
-                            }
+                            if List.any (\( _, otherUserData ) -> User.name otherUserData == name) model.otherUsers then
+                                { model | showRenameError = Just NameAlreadyInUse }
+
+                            else
+                                { model | user = Tuple.mapSecond (always newUserData) model.user }
+
+                        Nothing ->
+                            { model | showRenameError = Just InvalidName }
 
                 ServerChange (ServerGridChange gridChange) ->
                     { model | grid = Grid.addChange gridChange model.grid }
@@ -1078,55 +1079,71 @@ userListView model =
 
         otherUsers =
             LocalModel.localModel model.localModel |> .otherUsers
+
+        colorSquare user_ =
+            Element.el
+                [ Element.width (Element.px 16)
+                , Element.height (Element.px 16)
+                , Element.Background.color <| ColorIndex.toColor <| User.color user_
+                ]
+                Element.none
+
+        userTag =
+            Element.row
+                [ Element.spacing 8
+                , Element.onLeft <|
+                    case LocalModel.localModel model.localModel |> .showRenameError of
+                        Just error ->
+                            (case error of
+                                InvalidName ->
+                                    "Name must be between 2 and 12 characters"
+
+                                NameAlreadyInUse ->
+                                    "This name is already in use"
+                            )
+                                |> Element.text
+
+                        Nothing ->
+                            Element.none
+                ]
+                [ colorSquare user
+                , case model.isRenaming of
+                    Just rename ->
+                        Element.Input.text
+                            [ Element.htmlAttribute <| Html.Attributes.id renameTextareaId
+                            , Element.Events.onLoseFocus RenameLostFocus
+                            , Element.padding 0
+                            ]
+                            { onChange = RenameTyped
+                            , text = rename
+                            , placeholder = Nothing
+                            , label = Element.Input.labelHidden "Rename"
+                            }
+
+                    Nothing ->
+                        Element.Input.button
+                            []
+                            { onPress = Just RenamePressed
+                            , label =
+                                Element.row
+                                    [ Element.spacing 8 ]
+                                    [ Element.row
+                                        [ Element.spacing 2 ]
+                                        [ Element.text (User.name user)
+                                        , Element.el [ Element.Font.size 12 ] (Element.text "✏️")
+                                        ]
+                                    , Element.el [ Element.Font.bold ] (Element.text "(you)")
+                                    ]
+                            }
+                ]
     in
     Element.column
         [ Element.Background.color lightColor, Element.alignRight, Element.spacing 8, Element.padding 8 ]
-        (Element.row
-            [ Element.spacing 8 ]
-            [ Element.el
-                [ Element.width (Element.px 16)
-                , Element.height (Element.px 16)
-                , Element.Background.color <| ColorIndex.toColor <| User.color user
-                ]
-                Element.none
-            , case model.isRenaming of
-                Just rename ->
-                    Element.Input.text
-                        [ Element.htmlAttribute <| Html.Attributes.id renameTextareaId
-                        , Element.Events.onLoseFocus RenameLostFocus
-                        , Element.padding 0
-                        ]
-                        { onChange = RenameTyped
-                        , text = rename
-                        , placeholder = Nothing
-                        , label = Element.Input.labelHidden "Rename"
-                        }
-
-                Nothing ->
-                    Element.Input.button
-                        []
-                        { onPress = Just RenamePressed
-                        , label =
-                            Element.row
-                                [ Element.spacing 8 ]
-                                [ Element.row
-                                    [ Element.spacing 2 ]
-                                    [ Element.text (User.name user)
-                                    , Element.el [ Element.Font.size 12 ] (Element.text "✏️")
-                                    ]
-                                , Element.el [ Element.Font.bold ] (Element.text "(you)")
-                                ]
-                        }
-            ]
+        (userTag
             :: List.map
                 (\( _, otherUser ) ->
                     Element.row [ Element.spacing 8 ]
-                        [ Element.el
-                            [ Element.width (Element.px 16)
-                            , Element.height (Element.px 16)
-                            , Element.Background.color <| ColorIndex.toColor <| User.color otherUser
-                            ]
-                            Element.none
+                        [ colorSquare otherUser
                         , Element.row
                             [ Element.spacing 8 ]
                             [ Element.text (User.name otherUser) ]

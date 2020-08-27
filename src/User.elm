@@ -53,7 +53,7 @@ withName name_ (User user) =
         santizedName =
             String.trim name_
     in
-    if String.length santizedName < 1 || String.length santizedName > 12 then
+    if String.length santizedName < 2 || String.length santizedName > 12 then
         Nothing
 
     else
