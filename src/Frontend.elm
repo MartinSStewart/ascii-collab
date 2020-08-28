@@ -305,9 +305,9 @@ updateLoaded msg model =
 
                             _ ->
                                 model.cursor
-                    , userHoverHighlighted =
+                    , tool =
                         case model.tool of
-                            HideUserTool ->
+                            HideUserTool _ ->
                                 let
                                     localModel =
                                         LocalModel.localModel model.localModel
@@ -317,9 +317,10 @@ updateLoaded msg model =
                                     localModel.hiddenUsers
                                     localModel.grid
                                     |> Tuple.first
+                                    |> HideUserTool
 
                             _ ->
-                                model.userHoverHighlighted
+                                model.tool
                   }
                 , Cmd.none
                 )
@@ -416,7 +417,24 @@ updateLoaded msg model =
             ( { model | time = time }, Cmd.none )
 
         ToggleUserVisibilityPressed userId ->
-            ( updateLocalModel (LocalToggleUserVisibility userId) model, Cmd.none )
+            ( updateLocalModel
+                (LocalToggleUserVisibility userId)
+                { model
+                    | userPressHighlighted =
+                        if Just userId == model.userPressHighlighted then
+                            Nothing
+
+                        else
+                            model.userPressHighlighted
+                    , userHoverHighlighted =
+                        if Just userId == model.userHoverHighlighted then
+                            Nothing
+
+                        else
+                            model.userHoverHighlighted
+                }
+            , Cmd.none
+            )
 
         UserColorSquarePressed userId ->
             ( { model
@@ -445,7 +463,7 @@ updateLoaded msg model =
 cursorEnabled : FrontendLoaded -> Bool
 cursorEnabled model =
     case model.tool of
-        HideUserTool ->
+        HideUserTool _ ->
             False
 
         _ ->
@@ -575,7 +593,7 @@ mouseUp mousePosition mouseState model =
                         ( MouseButtonUp, DragTool ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
-                        ( MouseButtonUp, HideUserTool ) ->
+                        ( MouseButtonUp, HideUserTool _ ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
                         _ ->
@@ -591,9 +609,13 @@ mouseUp mousePosition mouseState model =
                         model.cursor
             }
     in
-    case ( model_.tool, model_.userHoverHighlighted ) of
-        ( HideUserTool, Just userId ) ->
-            updateLocalModel (LocalToggleUserVisibility userId) model_
+    case model_.tool of
+        HideUserTool (Just userId) ->
+            if isSmallDistance then
+                updateLocalModel (LocalToggleUserVisibility userId) model_
+
+            else
+                model_
 
         _ ->
             model_
@@ -867,14 +889,15 @@ actualViewPoint model =
             offsetViewPoint model start current
 
         ( MouseButtonDown { start, current }, _ ) ->
-            if model.tool == DragTool then
-                offsetViewPoint model start current
+            case model.tool of
+                DragTool ->
+                    offsetViewPoint model start current
 
-            else if model.tool == HideUserTool then
-                offsetViewPoint model start current
+                HideUserTool _ ->
+                    offsetViewPoint model start current
 
-            else
-                model.viewPoint
+                SelectTool ->
+                    model.viewPoint
 
         _ ->
             model.viewPoint
@@ -1071,14 +1094,14 @@ view model =
                                 ( _, MouseButtonDown _, _ ) ->
                                     mouseAttributes
 
-                                ( _, _, HideUserTool ) ->
+                                ( _, _, HideUserTool _ ) ->
                                     mouseAttributes
 
                                 _ ->
                                     []
                            )
-                        ++ (case ( loadedModel.tool, loadedModel.userHoverHighlighted ) of
-                                ( HideUserTool, Just userId ) ->
+                        ++ (case loadedModel.tool of
+                                HideUserTool (Just userId) ->
                                     if LocalModel.localModel loadedModel.localModel |> .user |> Tuple.first |> (==) userId then
                                         []
 
@@ -1115,22 +1138,45 @@ userListView model =
         localModel =
             LocalModel.localModel model.localModel
 
-        colorSquare user_ =
-            Element.el
-                [ Element.width (Element.px 16)
-                , Element.height (Element.px 16)
-                , Element.Background.color <| ColorIndex.toColor <| User.color user_
-                ]
-                Element.none
+        colorSquare isFirst isLast ( userId, userData ) =
+            Element.Input.button
+                (Element.padding 8
+                    :: Element.Border.widthEach
+                        { left = 0
+                        , right = 2
+                        , top =
+                            if isFirst then
+                                0
 
+                            else
+                                2
+                        , bottom =
+                            if isLast then
+                                0
+
+                            else
+                                2
+                        }
+                    :: buttonAttributes (isActive userId)
+                )
+                { onPress = Just (UserColorSquarePressed userId)
+                , label =
+                    Element.el
+                        [ Element.width (Element.px 16)
+                        , Element.height (Element.px 16)
+                        , Element.Background.color <| ColorIndex.toColor <| User.color userData
+                        ]
+                        Element.none
+                }
+
+        userTag : Element FrontendMsg
         userTag =
-            baseTag (Element.el [ Element.Font.bold ] (Element.text "you")) localModel.user
+            baseTag True (List.isEmpty hiddenUsers) (Element.el [ Element.Font.bold, Element.centerX ] (Element.text "🠔 You")) localModel.user
 
-        baseTag content ( userId, userData ) =
+        baseTag : Bool -> Bool -> Element FrontendMsg -> ( UserId, UserData ) -> Element FrontendMsg
+        baseTag isFirst isLast content ( userId, userData ) =
             Element.row
-                [ Element.spacing 16
-                , Element.paddingXY 8 4
-                , Element.Events.onMouseEnter (UserTagMouseEntered userId)
+                [ Element.Events.onMouseEnter (UserTagMouseEntered userId)
                 , Element.Events.onMouseLeave (UserTagMouseExited userId)
                 , Element.width Element.fill
                 , Element.Background.color <|
@@ -1140,35 +1186,90 @@ userListView model =
                     else
                         Element.rgba 0 0 0 0
                 ]
-                [ Element.Input.button
-                    []
-                    { onPress = Just (UserColorSquarePressed userId)
-                    , label = colorSquare userData
-                    }
+                [ colorSquare isFirst isLast ( userId, userData )
                 , content
                 ]
+
+        buttonAttributes isActive_ =
+            [ Element.Border.color backgroundColor
+            , Element.Background.color
+                (if isActive_ then
+                    buttonHighlight
+
+                 else
+                    buttonDefault
+                )
+            , Element.mouseOver [ Element.Background.color buttonHighlight ]
+            ]
+
+        hiddenUserList =
+            EverySet.toList localModel.hiddenUsers |> List.filterMap (\userId -> List.find (Tuple.first >> (==) userId) localModel.otherUsers)
+
+        isActive userId =
+            (model.userPressHighlighted == Just userId)
+                || (model.userHoverHighlighted == Just userId)
+                || (model.tool == HideUserTool (Just userId))
+
+        hiddenUsers : List (Element FrontendMsg)
+        hiddenUsers =
+            hiddenUserList
+                |> List.indexedMap
+                    (\index otherUser ->
+                        let
+                            isLast =
+                                List.length hiddenUserList - 1 == index
+
+                            userId =
+                                Tuple.first otherUser
+                        in
+                        baseTag
+                            False
+                            isLast
+                            (Element.Input.button
+                                (Element.Border.widthEach
+                                    { left = 0
+                                    , right = 0
+                                    , top = 2
+                                    , bottom =
+                                        if isLast then
+                                            0
+
+                                        else
+                                            2
+                                    }
+                                    :: Element.height Element.fill
+                                    :: Element.width Element.fill
+                                    :: buttonAttributes False
+                                )
+                                { onPress = ToggleUserVisibilityPressed userId |> Just
+                                , label = Element.el [ Element.centerX ] (Element.text "Unhide")
+                                }
+                            )
+                            otherUser
+                    )
     in
     Element.column
-        [ Element.Background.color backgroundColor, Element.alignRight ]
-        (userTag
-            :: List.map
-                (\(( otherUserId, _ ) as otherUser) ->
-                    baseTag
-                        (Element.Input.button
-                            []
-                            { onPress = Just (ToggleUserVisibilityPressed otherUserId)
-                            , label =
-                                if EverySet.member otherUserId localModel.hiddenUsers then
-                                    Element.text "🙈"
+        [ Element.Background.color lightColor
+        , Element.alignRight
+        , Element.spacing 8
+        , Element.Border.width 2
+        , Element.Border.color backgroundColor
+        , Element.Font.color textColor
+        , Element.width (Element.px 130)
+        ]
+        [ userTag
+        , if List.isEmpty hiddenUsers then
+            Element.none
 
-                                else
-                                    Element.text "🐵"
-                            }
-                        )
-                        otherUser
-                )
-                localModel.otherUsers
-        )
+          else
+            Element.column
+                [ Element.width Element.fill, Element.spacing 4 ]
+                [ Element.el [ Element.paddingXY 8 0 ] (Element.text "Hidden")
+                , Element.column
+                    [ Element.width Element.fill, Element.spacing 2 ]
+                    hiddenUsers
+                ]
+        ]
 
 
 toolbarView : FrontendLoaded -> Element FrontendMsg
@@ -1191,15 +1292,15 @@ toolbarView model =
 
         toolView =
             List.map
-                (\( tool, icon ) ->
+                (\( toolDefault, isTool, icon ) ->
                     toolbarButton
-                        [ if model.tool == tool then
+                        [ if isTool model.tool then
                             Element.Background.color buttonHighlight
 
                           else
                             Element.Background.color buttonDefault
                         ]
-                        (SelectToolPressed tool)
+                        (SelectToolPressed toolDefault)
                         icon
                 )
                 tools
@@ -1275,14 +1376,16 @@ toolbarView model =
             ]
 
 
-tools : List ( ToolType, Element msg )
+tools : List ( ToolType, ToolType -> Bool, Element msg )
 tools =
     [ ( DragTool
+      , (==) DragTool
       , Element.image
             [ Element.width (Element.px 20) ]
             { src = "4-direction-arrows.svg", description = "Drag tool" }
       )
     , ( SelectTool
+      , (==) SelectTool
       , Element.el
             [ Element.Border.width 2
             , Element.Border.dashed
@@ -1291,7 +1394,14 @@ tools =
             ]
             Element.none
       )
-    , ( HideUserTool
+    , ( HideUserTool Nothing
+      , \tool ->
+            case tool of
+                HideUserTool _ ->
+                    True
+
+                _ ->
+                    False
       , Element.el
             [ Element.width (Element.px 20)
             , Element.height (Element.px 20)
@@ -1449,7 +1559,16 @@ canvasView model =
                             model.meshes
                         )
                         (Maybe.andThen (\userId -> List.find (Tuple.first >> (==) userId) allUsers) model.userPressHighlighted)
-                        (Maybe.andThen (\userId -> List.find (Tuple.first >> (==) userId) allUsers) model.userHoverHighlighted)
+                        (case ( model.tool, model.userHoverHighlighted ) of
+                            ( HideUserTool (Just userId), _ ) ->
+                                List.find (Tuple.first >> (==) userId) allUsers
+
+                            ( _, Just userId ) ->
+                                List.find (Tuple.first >> (==) userId) allUsers
+
+                            _ ->
+                                Nothing
+                        )
                         viewMatrix
                     )
                     model.texture

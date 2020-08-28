@@ -111,7 +111,7 @@ type alias LocalGrid =
 type ToolType
     = DragTool
     | SelectTool
-    | HideUserTool
+    | HideUserTool (Maybe UserId)
 
 
 type MouseButtonState
