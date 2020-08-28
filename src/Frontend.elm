@@ -751,10 +751,7 @@ updateMeshes oldModel newModel =
             LocalModel.localModel newModel.localModel |> .grid |> Grid.allCellsDict
 
         newHidden =
-            LocalModel.localModel oldModel.localModel |> .hiddenUsers
-
-        hiddenEqual =
-            oldHidden == newHidden
+            LocalModel.localModel newModel.localModel |> .hiddenUsers
     in
     { newModel
         | meshes =
@@ -762,7 +759,7 @@ updateMeshes oldModel newModel =
                 (\coord newCell ->
                     case Dict.get coord oldCells of
                         Just oldCell ->
-                            if not hiddenEqual || oldCell == newCell then
+                            if oldHidden == newHidden && oldCell == newCell then
                                 case Dict.get coord newModel.meshes of
                                     Just mesh ->
                                         mesh
@@ -773,7 +770,7 @@ updateMeshes oldModel newModel =
                                             (GridCell.flatten newHidden newCell |> Array.toList)
 
                             else
-                                Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten oldHidden newCell |> Array.toList)
+                                Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten newHidden newCell |> Array.toList)
 
                         Nothing ->
                             Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten newHidden newCell |> Array.toList)
