@@ -1,6 +1,7 @@
-module ColorIndex exposing (ColorIndex(..), colors, toColor)
+module ColorIndex exposing (ColorIndex(..), colorToVec3, colors, toColor)
 
 import Element
+import Math.Vector3
 
 
 type ColorIndex
@@ -58,3 +59,12 @@ toColor colorIndex =
 
         Gray ->
             Element.rgb255 179 179 179
+
+
+colorToVec3 : Element.Color -> Math.Vector3.Vec3
+colorToVec3 color =
+    let
+        { red, green, blue } =
+            Element.toRgb color
+    in
+    Math.Vector3.vec3 red green blue

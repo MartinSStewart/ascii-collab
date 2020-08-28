@@ -63,7 +63,7 @@ changeCount (Cell { history }) =
     List.length history
 
 
-flatten : EverySet UserId -> Cell -> Array Ascii
+flatten : EverySet UserId -> Cell -> Array ( Maybe UserId, Ascii )
 flatten hiddenUsers (Cell cell) =
     List.foldr
         (\{ userId, position, line } state ->
@@ -77,7 +77,7 @@ flatten hiddenUsers (Cell cell) =
                             { array =
                                 List.Nonempty.foldl
                                     (\ascii ( position_, state_ ) ->
-                                        ( position_ + 1, Array.set position_ ascii state_ )
+                                        ( position_ + 1, Array.set position_ ( Just userId, ascii ) state_ )
                                     )
                                     ( position, state.array )
                                     line
@@ -91,7 +91,7 @@ flatten hiddenUsers (Cell cell) =
                     Nothing ->
                         state
         )
-        { array = Array.initialize (cellSize * cellSize) (\_ -> Ascii.default), undoPoint = cell.undoPoint }
+        { array = Array.initialize (cellSize * cellSize) (\_ -> ( Nothing, Ascii.default )), undoPoint = cell.undoPoint }
         cell.history
         |> .array
 

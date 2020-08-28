@@ -1,4 +1,4 @@
-module Grid exposing (Change, Grid, LocalChange, addChange, allCells, allCellsDict, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, from, getCell, localChangeToChange, mesh, setUndoPoints, textToChange, undoPoint)
+module Grid exposing (Change, Grid, LocalChange, Vertex, addChange, allCells, allCellsDict, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, from, getCell, localChangeToChange, mesh, setUndoPoints, textToChange, undoPoint)
 
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
@@ -237,10 +237,14 @@ asciiBox offsetX offsetY indexOffset =
     }
 
 
-mesh : Coord Units.CellUnit -> List Ascii -> WebGL.Mesh { position : Vec2, texturePosition : Vec2 }
+type alias Vertex =
+    { position : Vec2, texturePosition : Vec2, userId : Float }
+
+
+mesh : Coord Units.CellUnit -> List ( Maybe UserId, Ascii ) -> WebGL.Mesh Vertex
 mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
     List.map2
-        (\ascii box ->
+        (\( userId, ascii ) box ->
             let
                 { topLeft, bottomRight } =
                     Ascii.texturePosition ascii
@@ -258,6 +262,7 @@ mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
                             )
                             v
                     , texturePosition = uv
+                    , userId = userId |> Maybe.map User.rawId |> Maybe.withDefault -1 |> toFloat
                     }
                 )
                 box

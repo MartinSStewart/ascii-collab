@@ -14,7 +14,7 @@ module Types exposing
     , ToBackend(..)
     , ToFrontend(..)
     , ToolType(..)
-    , Vertex
+    , UserHighlight(..)
     )
 
 import Browser exposing (UrlRequest)
@@ -47,10 +47,6 @@ type FrontendModel
     | Loaded FrontendLoaded
 
 
-type alias Vertex =
-    { position : Vec2, texturePosition : Vec2 }
-
-
 type alias FrontendLoading =
     { key : Browser.Navigation.Key
     , windowSize : Coord Pixels
@@ -62,7 +58,7 @@ type alias FrontendLoading =
 type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
-    , meshes : Dict ( Int, Int ) (WebGL.Mesh Vertex)
+    , meshes : Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex)
     , cursorMesh : WebGL.Mesh { position : Vec2 }
     , viewPoint : Point2d WorldPixel WorldCoordinate
     , cursor : Cursor
@@ -78,7 +74,14 @@ type alias FrontendLoaded =
     , undoAddLast : Time.Posix
     , time : Time.Posix
     , lastTouchMove : Maybe Time.Posix
+    , userHighlighted : UserHighlight
     }
+
+
+type UserHighlight
+    = NoHighlight
+    | TempHighlight UserId
+    | FixedHighlight UserId
 
 
 type Change
@@ -153,7 +156,6 @@ type FrontendMsg
     | MouseUp Button (Point2d Pixels ScreenCoordinate)
     | MouseMove (Point2d Pixels ScreenCoordinate)
     | TouchMove (Point2d Pixels ScreenCoordinate)
-    | TouchMoveElapsed (Point2d Pixels ScreenCoordinate)
     | ShortIntervalElapsed Time.Posix
     | VeryShortIntervalElapsed Time.Posix
     | ZoomFactorPressed Int
@@ -163,6 +165,9 @@ type FrontendMsg
     | CopyPressed
     | CutPressed
     | ToggleUserVisibilityPressed UserId
+    | UserColorSquarePressed UserId
+    | UserTagMouseEntered UserId
+    | UserTagMouseExited UserId
 
 
 type ToBackend

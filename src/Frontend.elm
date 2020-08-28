@@ -14,6 +14,7 @@ import Duration
 import Element exposing (Element)
 import Element.Background
 import Element.Border
+import Element.Events
 import Element.Font
 import Element.Input
 import EverySet exposing (EverySet)
@@ -112,6 +113,7 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
         , undoAddLast = Time.millisToPosix 0
         , time = Time.millisToPosix 0
         , lastTouchMove = Nothing
+        , userHighlighted = NoHighlight
         }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -389,25 +391,61 @@ updateLoaded msg model =
             , Cmd.none
             )
 
-        TouchMoveElapsed lastPosition ->
-            case model.mouseLeft of
-                MouseButtonUp ->
-                    ( model, Cmd.none )
-
-                MouseButtonDown mouseState ->
-                    ( if mouseState.current == lastPosition then
-                        mouseUp lastPosition mouseState model
-
-                      else
-                        model
-                    , Cmd.none
-                    )
-
         VeryShortIntervalElapsed time ->
             ( { model | time = time }, Cmd.none )
 
         ToggleUserVisibilityPressed userId ->
             ( updateLocalModel (LocalToggleUserVisibility userId) model, Cmd.none )
+
+        UserColorSquarePressed userId ->
+            ( { model
+                | userHighlighted =
+                    case model.userHighlighted of
+                        FixedHighlight userId_ ->
+                            if userId_ == userId then
+                                NoHighlight
+
+                            else
+                                FixedHighlight userId
+
+                        _ ->
+                            FixedHighlight userId
+              }
+            , Cmd.none
+            )
+
+        UserTagMouseEntered userId ->
+            ( { model
+                | userHighlighted =
+                    case model.userHighlighted of
+                        FixedHighlight _ ->
+                            model.userHighlighted
+
+                        _ ->
+                            TempHighlight userId
+              }
+            , Cmd.none
+            )
+
+        UserTagMouseExited userId ->
+            ( { model
+                | userHighlighted =
+                    case model.userHighlighted of
+                        FixedHighlight _ ->
+                            model.userHighlighted
+
+                        TempHighlight userId_ ->
+                            if userId_ == userId then
+                                NoHighlight
+
+                            else
+                                model.userHighlighted
+
+                        NoHighlight ->
+                            model.userHighlighted
+              }
+            , Cmd.none
+            )
 
 
 keyMsgCanvasUpdate : Keyboard.RawKey -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
@@ -669,7 +707,7 @@ selectionToString bounds hiddenUsers grid =
                     Grid.asciiToCellAndLocalCoord coord
             in
             (Dict.get (Helper.toRawCoord cellCoord) flattenedCells
-                |> Maybe.andThen (Array.get localCoord)
+                |> Maybe.andThen (Array.get localCoord >> Maybe.map Tuple.second)
                 |> Maybe.withDefault Ascii.default
                 |> Ascii.toChar
             )
@@ -1022,9 +1060,6 @@ userListView model =
         localModel =
             LocalModel.localModel model.localModel
 
-        ( _, user ) =
-            localModel.user
-
         colorSquare user_ =
             Element.el
                 [ Element.width (Element.px 16)
@@ -1034,31 +1069,60 @@ userListView model =
                 Element.none
 
         userTag =
+            baseTag (Element.el [ Element.Font.bold ] (Element.text "you")) localModel.user
+
+        baseTag content ( userId, userData ) =
             Element.row
-                [ Element.spacing 8 ]
-                [ colorSquare user
-                , Element.el [ Element.Font.bold ] (Element.text "(you)")
+                [ Element.spacing 16
+                , Element.paddingXY 8 4
+                , Element.Events.onMouseEnter (UserTagMouseEntered userId)
+                , Element.Events.onMouseLeave (UserTagMouseExited userId)
+                , Element.width Element.fill
+                , Element.Background.color <|
+                    case model.userHighlighted of
+                        NoHighlight ->
+                            Element.rgba 0 0 0 0
+
+                        TempHighlight highlightId ->
+                            if highlightId == userId then
+                                Element.rgba 1 1 1 0.3
+
+                            else
+                                Element.rgba 0 0 0 0
+
+                        FixedHighlight highlightId ->
+                            if highlightId == userId then
+                                Element.rgba 1 1 1 0.6
+
+                            else
+                                Element.rgba 0 0 0 0
+                ]
+                [ Element.Input.button
+                    []
+                    { onPress = Just (UserColorSquarePressed userId)
+                    , label = colorSquare userData
+                    }
+                , content
                 ]
     in
     Element.column
-        [ Element.Background.color lightColor, Element.alignRight, Element.spacing 8, Element.padding 8 ]
+        [ Element.Background.color backgroundColor, Element.alignRight ]
         (userTag
             :: List.map
-                (\( otherUserId, otherUser ) ->
-                    Element.Input.button
-                        []
-                        { onPress = Just (ToggleUserVisibilityPressed otherUserId)
-                        , label =
-                            Element.row
-                                [ Element.spacing 8 ]
-                                [ colorSquare otherUser
-                                , if EverySet.member otherUserId localModel.hiddenUsers then
+                (\(( otherUserId, _ ) as otherUser) ->
+                    baseTag
+                        (Element.Input.button
+                            []
+                            { onPress = Just (ToggleUserVisibilityPressed otherUserId)
+                            , label =
+                                if EverySet.member otherUserId localModel.hiddenUsers then
                                     Element.text "🙈"
 
-                                  else
+                                else
                                     Element.text "🐵"
-                                ]
-                        }
+                            }
+                        )
+                        otherUser
                 )
                 localModel.otherUsers
         )
@@ -1223,16 +1287,6 @@ warningColor =
     Element.rgb255 255 210 212
 
 
-verticalSeparator : Element msg
-verticalSeparator =
-    Element.el
-        [ Element.width (Element.px 2)
-        , Element.height Element.fill
-        , Element.Background.color backgroundColor
-        ]
-        Element.none
-
-
 toolbarButton : List (Element.Attribute msg) -> msg -> Element msg -> Element msg
 toolbarButton attributes onPress label =
     Element.Input.button
@@ -1317,6 +1371,9 @@ canvasView model =
 
         color =
             LocalModel.localModel model.localModel |> .user |> Tuple.second |> User.color |> ColorIndex.toColor
+
+        localModel =
+            LocalModel.localModel model.localModel
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False, WebGL.antialias ]
@@ -1324,8 +1381,6 @@ canvasView model =
         , Html.Attributes.height windowHeight
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
-        , Html.Attributes.style "image-rendering" "crisp-edges"
-        , Html.Attributes.style "image-rendering" "pixelated"
         ]
         (Cursor.draw viewMatrix color model
             :: (Maybe.map
@@ -1340,6 +1395,20 @@ canvasView model =
                             )
                             model.meshes
                         )
+                        (case model.userHighlighted of
+                            NoHighlight ->
+                                Nothing
+
+                            FixedHighlight userId ->
+                                localModel.user
+                                    :: localModel.otherUsers
+                                    |> List.find (Tuple.first >> (==) userId)
+
+                            TempHighlight userId ->
+                                localModel.user
+                                    :: localModel.otherUsers
+                                    |> List.find (Tuple.first >> (==) userId)
+                        )
                         viewMatrix
                     )
                     model.texture
@@ -1348,8 +1417,8 @@ canvasView model =
         )
 
 
-drawText : Dict ( Int, Int ) (WebGL.Mesh Vertex) -> Mat4 -> Texture -> List WebGL.Entity
-drawText meshes viewMatrix texture =
+drawText : Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex) -> Maybe ( UserId, UserData ) -> Mat4 -> Texture -> List WebGL.Entity
+drawText meshes highlightedUser viewMatrix texture =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -1362,7 +1431,14 @@ drawText meshes viewMatrix texture =
                     mesh
                     { view = viewMatrix
                     , texture = texture
-                    , color = Math.Vector3.vec3 0 0 0
+                    , highlightColor =
+                        highlightedUser
+                            |> Maybe.map (Tuple.second >> User.color >> ColorIndex.toColor >> ColorIndex.colorToVec3)
+                            |> Maybe.withDefault (Math.Vector3.vec3 0 0 0)
+                    , highlightedUser =
+                        highlightedUser
+                            |> Maybe.map (Tuple.first >> User.rawId >> toFloat)
+                            |> Maybe.withDefault -2
                     }
             )
 
@@ -1396,39 +1472,43 @@ subscriptions model =
         ]
 
 
-type alias Uniforms =
-    { view : Mat4
-    , texture : Texture
-    , color : Vec3
-    }
-
-
-vertexShader : Shader { position : Vec2, texturePosition : Vec2 } { u | view : Mat4 } { vcoord : Vec2 }
+vertexShader : Shader Grid.Vertex { u | view : Mat4, highlightedUser : Float } { vcoord : Vec2, highlight : Float }
 vertexShader =
     [glsl|
 
 attribute vec2 position;
 attribute vec2 texturePosition;
+attribute float userId;
 uniform mat4 view;
+uniform float highlightedUser;
 varying vec2 vcoord;
+varying float highlight;
 
 void main () {
-  gl_Position = view * vec4(position, 0.0, 1.0);
-  vcoord = texturePosition;
+    gl_Position = view * vec4(position, 0.0, 1.0);
+    vcoord = texturePosition;
+    highlight = float(userId == highlightedUser);
 }
 
 |]
 
 
-fragmentShader : Shader {} { u | texture : Texture, color : Vec3 } { vcoord : Vec2 }
+fragmentShader : Shader {} { u | texture : Texture, highlightColor : Vec3 } { vcoord : Vec2, highlight : Float }
 fragmentShader =
     [glsl|
         precision mediump float;
         uniform sampler2D texture;
-        uniform vec3 color;
+        uniform vec3 highlightColor;
         varying vec2 vcoord;
+        varying float highlight;
         void main () {
             vec4 textureColor = texture2D(texture, vcoord);
-            gl_FragColor = vec4(color.x * textureColor.x, color.y * textureColor.x, color.z * textureColor.x, textureColor.x);
+
+            vec4 textColor = float(highlight == 0.0) * vec4(0.0,0.0,0.0,1.0) + float(highlight == 1.0) * vec4(highlightColor / 2.0,1.0);
+            vec4 backColor = float(highlight == 0.0) * vec4(0.0,0.0,0.0,0.0) + float(highlight == 1.0) * vec4(highlightColor,1.0);
+
+            gl_FragColor =
+                float(textureColor.x == 1.0) * textColor
+                    + float(textureColor.x == 0.0) * backColor;
         }
     |]
