@@ -16,7 +16,7 @@ import Element.Background
 import Element.Border
 import Element.Font
 import Element.Input
-import EverySet
+import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord)
@@ -93,7 +93,7 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
                 |> List.map
                     (\( cellCoord, cell ) ->
                         ( Helper.toRawCoord cellCoord
-                        , Grid.mesh cellCoord (GridCell.flatten cell |> Array.toList)
+                        , Grid.mesh cellCoord (GridCell.flatten hiddenUsers cell |> Array.toList)
                         )
                     )
                 |> Dict.fromList
@@ -564,11 +564,13 @@ copyText model =
     let
         model_ =
             resetTouchMove model
+
+        localModel =
+            LocalModel.localModel model_.localModel
     in
     ( model_
-    , LocalModel.localModel model_.localModel
-        |> .grid
-        |> selectionToString (Cursor.bounds model_.cursor)
+    , localModel.grid
+        |> selectionToString (Cursor.bounds model_.cursor) localModel.hiddenUsers
         |> supermario_copy_to_clipboard_to_js
     )
 
@@ -581,11 +583,13 @@ cutText model =
 
         bounds =
             Cursor.bounds model_.cursor
+
+        localModel =
+            LocalModel.localModel model_.localModel
     in
     ( clearTextSelection bounds model_
-    , LocalModel.localModel model_.localModel
-        |> .grid
-        |> selectionToString bounds
+    , localModel.grid
+        |> selectionToString bounds localModel.hiddenUsers
         |> supermario_copy_to_clipboard_to_js
     )
 
@@ -634,8 +638,8 @@ screenToWorld model =
         >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
 
 
-selectionToString : { min : Coord AsciiUnit, max : Coord AsciiUnit } -> Grid -> String
-selectionToString bounds grid =
+selectionToString : { min : Coord AsciiUnit, max : Coord AsciiUnit } -> EverySet UserId -> Grid -> String
+selectionToString bounds hiddenUsers grid =
     let
         minCell =
             Grid.asciiToCellAndLocalCoord bounds.min |> Tuple.first
@@ -648,7 +652,7 @@ selectionToString bounds grid =
                 (\coord dict ->
                     case Grid.getCell coord grid of
                         Just cell ->
-                            Dict.insert (Helper.toRawCoord coord) (GridCell.flatten cell) dict
+                            Dict.insert (Helper.toRawCoord coord) (GridCell.flatten hiddenUsers cell) dict
 
                         Nothing ->
                             dict
@@ -740,8 +744,17 @@ updateMeshes oldModel newModel =
         oldCells =
             LocalModel.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
 
+        oldHidden =
+            LocalModel.localModel oldModel.localModel |> .hiddenUsers
+
         newCells =
             LocalModel.localModel newModel.localModel |> .grid |> Grid.allCellsDict
+
+        newHidden =
+            LocalModel.localModel oldModel.localModel |> .hiddenUsers
+
+        hiddenEqual =
+            oldHidden == newHidden
     in
     { newModel
         | meshes =
@@ -749,7 +762,7 @@ updateMeshes oldModel newModel =
                 (\coord newCell ->
                     case Dict.get coord oldCells of
                         Just oldCell ->
-                            if oldCell == newCell then
+                            if not hiddenEqual || oldCell == newCell then
                                 case Dict.get coord newModel.meshes of
                                     Just mesh ->
                                         mesh
@@ -757,13 +770,13 @@ updateMeshes oldModel newModel =
                                     Nothing ->
                                         Grid.mesh
                                             (Helper.fromRawCoord coord)
-                                            (GridCell.flatten newCell |> Array.toList)
+                                            (GridCell.flatten newHidden newCell |> Array.toList)
 
                             else
-                                Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten newCell |> Array.toList)
+                                Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten oldHidden newCell |> Array.toList)
 
                         Nothing ->
-                            Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten newCell |> Array.toList)
+                            Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten newHidden newCell |> Array.toList)
                 )
                 newCells
     }

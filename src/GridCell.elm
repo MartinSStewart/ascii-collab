@@ -3,6 +3,7 @@ module GridCell exposing (Cell, addLine, cellSize, changeCount, empty, flatten, 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
+import EverySet exposing (EverySet)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty)
 import User exposing (RawUserId, UserId)
@@ -35,7 +36,6 @@ addLine userId position line (Cell cell) =
                 ( [], userUndoPoint )
                 cell.history
                 |> Tuple.first
-                --|> List.reverse
                 |> (::) { userId = userId, position = position, line = line }
         , undoPoint =
             Dict.insert
@@ -63,29 +63,33 @@ changeCount (Cell { history }) =
     List.length history
 
 
-flatten : Cell -> Array Ascii
-flatten (Cell cell) =
+flatten : EverySet UserId -> Cell -> Array Ascii
+flatten hiddenUsers (Cell cell) =
     List.foldr
         (\{ userId, position, line } state ->
-            case Dict.get (User.rawId userId) state.undoPoint of
-                Just stepsLeft ->
-                    if stepsLeft > 0 then
-                        { array =
-                            List.Nonempty.foldl
-                                (\ascii ( position_, state_ ) ->
-                                    ( position_ + 1, Array.set position_ ascii state_ )
-                                )
-                                ( position, state.array )
-                                line
-                                |> Tuple.second
-                        , undoPoint = Dict.insert (User.rawId userId) (stepsLeft - 1) state.undoPoint
-                        }
+            if EverySet.member userId hiddenUsers then
+                state
 
-                    else
+            else
+                case Dict.get (User.rawId userId) state.undoPoint of
+                    Just stepsLeft ->
+                        if stepsLeft > 0 then
+                            { array =
+                                List.Nonempty.foldl
+                                    (\ascii ( position_, state_ ) ->
+                                        ( position_ + 1, Array.set position_ ascii state_ )
+                                    )
+                                    ( position, state.array )
+                                    line
+                                    |> Tuple.second
+                            , undoPoint = Dict.insert (User.rawId userId) (stepsLeft - 1) state.undoPoint
+                            }
+
+                        else
+                            state
+
+                    Nothing ->
                         state
-
-                Nothing ->
-                    state
         )
         { array = Array.initialize (cellSize * cellSize) (\_ -> Ascii.default), undoPoint = cell.undoPoint }
         cell.history
