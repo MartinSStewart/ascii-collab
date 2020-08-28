@@ -215,21 +215,25 @@ updateLocalChange ( userId, _ ) change model =
         LocalToggleUserVisibility userId_ ->
             ( { model
                 | users =
-                    Dict.update
-                        (User.rawId userId)
-                        (Maybe.map
-                            (\user ->
-                                { user
-                                    | hiddenUsers =
-                                        if EverySet.member userId_ user.hiddenUsers then
-                                            EverySet.remove userId_ user.hiddenUsers
-
-                                        else
-                                            EverySet.insert userId_ user.hiddenUsers
-                                }
-                            )
-                        )
+                    if userId == userId_ then
                         model.users
+
+                    else
+                        Dict.update
+                            (User.rawId userId)
+                            (Maybe.map
+                                (\user ->
+                                    { user
+                                        | hiddenUsers =
+                                            if EverySet.member userId_ user.hiddenUsers then
+                                                EverySet.remove userId_ user.hiddenUsers
+
+                                            else
+                                                EverySet.insert userId_ user.hiddenUsers
+                                    }
+                                )
+                            )
+                            model.users
               }
             , Nothing
             )

@@ -163,26 +163,6 @@ splitUpLine asciiCoord offsetY line =
         |> List.filterMap (\( position, value ) -> List.Nonempty.fromList value |> Maybe.map (Tuple.pair position))
 
 
-
---addLines :
---    UserId
---    -> Nonempty ( Coord Units.AsciiUnit, Nonempty Ascii )
---    -> Grid
---    -> Grid
---addLines userId lines state =
---    let
---        cellCoord =
---            List.Nonempty.head lines |> Tuple.first |> asciiToCellAndLocalCoord
---    in
---    List.Nonempty.foldl
---        (\( position_, cellLine ) cell ->
---            GridCell.addLine userId (asciiToLocalCoord position_) cellLine cell
---        )
---        (getCell cellCoord state |> Maybe.withDefault GridCell.empty)
---        lines
---        |> (\cell -> setCell cellCoord cell state)
-
-
 allCells : Grid -> List ( Coord CellUnit, Cell )
 allCells (Grid grid) =
     Dict.toList grid |> List.map (Tuple.mapFirst (\( x, y ) -> ( Units.cellUnit x, Units.cellUnit y )))

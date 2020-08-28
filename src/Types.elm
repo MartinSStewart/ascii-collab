@@ -14,7 +14,6 @@ module Types exposing
     , ToBackend(..)
     , ToFrontend(..)
     , ToolType(..)
-    , UserHighlight(..)
     )
 
 import Browser exposing (UrlRequest)
@@ -74,14 +73,9 @@ type alias FrontendLoaded =
     , undoAddLast : Time.Posix
     , time : Time.Posix
     , lastTouchMove : Maybe Time.Posix
-    , userHighlighted : UserHighlight
+    , userPressHighlighted : Maybe UserId
+    , userHoverHighlighted : Maybe UserId
     }
-
-
-type UserHighlight
-    = NoHighlight
-    | TempHighlight UserId
-    | FixedHighlight UserId
 
 
 type Change
@@ -116,8 +110,8 @@ type alias LocalGrid =
 
 type ToolType
     = DragTool
-    | RectangleTool
     | SelectTool
+    | HideUserTool
 
 
 type MouseButtonState
@@ -148,7 +142,6 @@ type FrontendMsg
     | TextureLoaded (Result WebGL.Texture.Error Texture)
     | KeyMsg Keyboard.Msg
     | KeyDown Keyboard.RawKey
-    | Step Time.Posix
     | WindowResized (Coord Pixels)
     | GotDevicePixelRatio (Quantity Float (Rate WorldPixel Pixels))
     | UserTyped String

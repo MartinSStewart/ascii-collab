@@ -1,7 +1,7 @@
 port module Frontend exposing (app, init, update, updateFromBackend, view)
 
 import Array
-import Ascii
+import Ascii exposing (Ascii)
 import BoundingBox2d exposing (BoundingBox2d)
 import Browser exposing (UrlRequest(..))
 import Browser.Dom
@@ -113,7 +113,8 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
         , undoAddLast = Time.millisToPosix 0
         , time = Time.millisToPosix 0
         , lastTouchMove = Nothing
-        , userHighlighted = NoHighlight
+        , userPressHighlighted = Nothing
+        , userHoverHighlighted = Nothing
         }
     , Cmd.batch
         [ WebGL.Texture.loadWith
@@ -212,10 +213,11 @@ updateLoaded msg model =
             )
 
         KeyDown rawKey ->
-            keyMsgCanvasUpdate rawKey model
+            if cursorEnabled model then
+                keyMsgCanvasUpdate rawKey model
 
-        Step _ ->
-            ( model, Cmd.none )
+            else
+                ( model, Cmd.none )
 
         WindowResized windowSize ->
             windowResizedUpdate windowSize model
@@ -224,11 +226,15 @@ updateLoaded msg model =
             devicePixelRatioUpdate devicePixelRatio model
 
         UserTyped text ->
-            if text == "\n" || text == "\n\u{000D}" then
-                ( resetTouchMove model |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
+            if cursorEnabled model then
+                if text == "\n" || text == "\n\u{000D}" then
+                    ( resetTouchMove model |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
+
+                else
+                    ( resetTouchMove model |> changeText text, Cmd.none )
 
             else
-                ( resetTouchMove model |> changeText text, Cmd.none )
+                ( model, Cmd.none )
 
         MouseDown button mousePosition ->
             let
@@ -299,6 +305,21 @@ updateLoaded msg model =
 
                             _ ->
                                 model.cursor
+                    , userHoverHighlighted =
+                        case model.tool of
+                            HideUserTool ->
+                                let
+                                    localModel =
+                                        LocalModel.localModel model.localModel
+                                in
+                                selectionPoint
+                                    (screenToWorld model mousePosition |> Units.worldToAscii)
+                                    localModel.hiddenUsers
+                                    localModel.grid
+                                    |> Tuple.first
+
+                            _ ->
+                                model.userHoverHighlighted
                   }
                 , Cmd.none
                 )
@@ -399,53 +420,36 @@ updateLoaded msg model =
 
         UserColorSquarePressed userId ->
             ( { model
-                | userHighlighted =
-                    case model.userHighlighted of
-                        FixedHighlight userId_ ->
+                | userPressHighlighted =
+                    case model.userPressHighlighted of
+                        Just userId_ ->
                             if userId_ == userId then
-                                NoHighlight
+                                Nothing
 
                             else
-                                FixedHighlight userId
+                                Just userId
 
-                        _ ->
-                            FixedHighlight userId
+                        Nothing ->
+                            Just userId
               }
             , Cmd.none
             )
 
         UserTagMouseEntered userId ->
-            ( { model
-                | userHighlighted =
-                    case model.userHighlighted of
-                        FixedHighlight _ ->
-                            model.userHighlighted
+            ( { model | userHoverHighlighted = Just userId }, Cmd.none )
 
-                        _ ->
-                            TempHighlight userId
-              }
-            , Cmd.none
-            )
+        UserTagMouseExited _ ->
+            ( { model | userHoverHighlighted = Nothing }, Cmd.none )
 
-        UserTagMouseExited userId ->
-            ( { model
-                | userHighlighted =
-                    case model.userHighlighted of
-                        FixedHighlight _ ->
-                            model.userHighlighted
 
-                        TempHighlight userId_ ->
-                            if userId_ == userId then
-                                NoHighlight
+cursorEnabled : FrontendLoaded -> Bool
+cursorEnabled model =
+    case model.tool of
+        HideUserTool ->
+            False
 
-                            else
-                                model.userHighlighted
-
-                        NoHighlight ->
-                            model.userHighlighted
-              }
-            , Cmd.none
-            )
+        _ ->
+            True
 
 
 keyMsgCanvasUpdate : Keyboard.RawKey -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
@@ -555,32 +559,44 @@ keyMsgCanvasUpdate rawKey model =
             ( model, Cmd.none )
 
 
-renameTextareaId : String
-renameTextareaId =
-    "rename-textarea-id"
-
-
+mouseUp : Point2d Pixels ScreenCoordinate -> { a | start : Point2d Pixels ScreenCoordinate } -> FrontendLoaded -> FrontendLoaded
 mouseUp mousePosition mouseState model =
-    { model
-        | mouseLeft = MouseButtonUp
-        , viewPoint =
-            case ( model.mouseMiddle, model.tool ) of
-                ( MouseButtonUp, DragTool ) ->
-                    offsetViewPoint model mouseState.start mousePosition
+    let
+        isSmallDistance =
+            Vector2d.from mouseState.start mousePosition
+                |> Vector2d.length
+                |> Quantity.lessThan (Pixels.pixels 15)
 
-                _ ->
-                    model.viewPoint
-        , cursor =
-            if
-                Vector2d.from mouseState.start mousePosition
-                    |> Vector2d.length
-                    |> Quantity.lessThan (Pixels.pixels 15)
-            then
-                screenToWorld model mousePosition |> Units.worldToAscii |> Cursor.setCursor
+        model_ =
+            { model
+                | mouseLeft = MouseButtonUp
+                , viewPoint =
+                    case ( model.mouseMiddle, model.tool ) of
+                        ( MouseButtonUp, DragTool ) ->
+                            offsetViewPoint model mouseState.start mousePosition
 
-            else
-                model.cursor
-    }
+                        ( MouseButtonUp, HideUserTool ) ->
+                            offsetViewPoint model mouseState.start mousePosition
+
+                        _ ->
+                            model.viewPoint
+                , cursor =
+                    if not (cursorEnabled model) then
+                        model.cursor
+
+                    else if isSmallDistance then
+                        screenToWorld model mousePosition |> Units.worldToAscii |> Cursor.setCursor
+
+                    else
+                        model.cursor
+            }
+    in
+    case ( model_.tool, model_.userHoverHighlighted ) of
+        ( HideUserTool, Just userId ) ->
+            updateLocalModel (LocalToggleUserVisibility userId) model_
+
+        _ ->
+            model_
 
 
 resetTouchMove : FrontendLoaded -> FrontendLoaded
@@ -720,6 +736,17 @@ selectionToString bounds hiddenUsers grid =
         |> String.fromList
 
 
+selectionPoint : Coord AsciiUnit -> EverySet UserId -> Grid -> ( Maybe UserId, Ascii )
+selectionPoint position hiddenUsers grid =
+    let
+        ( cellPosition, localPosition ) =
+            Grid.asciiToCellAndLocalCoord position
+    in
+    Grid.getCell cellPosition grid
+        |> Maybe.andThen (GridCell.flatten hiddenUsers >> Array.get localPosition)
+        |> Maybe.withDefault ( Nothing, Ascii.default )
+
+
 windowResizedUpdate : Coord Pixels -> { b | windowSize : Coord Pixels } -> ( { b | windowSize : Coord Pixels }, Cmd msg )
 windowResizedUpdate windowSize model =
     ( { model | windowSize = windowSize }, martinsstewart_elm_device_pixel_ratio_to_js () )
@@ -843,6 +870,9 @@ actualViewPoint model =
             if model.tool == DragTool then
                 offsetViewPoint model start current
 
+            else if model.tool == HideUserTool then
+                offsetViewPoint model start current
+
             else
                 model.viewPoint
 
@@ -912,7 +942,10 @@ localModelConfig =
                 LocalChange (LocalToggleUserVisibility userId_) ->
                     { model
                         | hiddenUsers =
-                            if EverySet.member userId_ model.hiddenUsers then
+                            if userId_ == userId then
+                                model.hiddenUsers
+
+                            else if EverySet.member userId_ model.hiddenUsers then
                                 EverySet.remove userId_ model.hiddenUsers
 
                             else
@@ -989,46 +1022,68 @@ view model =
                     ([ Element.width Element.fill
                      , Element.height Element.fill
                      , Element.clip
-                     , Element.inFront <|
-                        Element.html <|
-                            Html.textarea
-                                [ Html.Events.onInput UserTyped
-                                , Html.Attributes.value ""
-                                , Html.Attributes.style "width" "100%"
-                                , Html.Attributes.style "height" "100%"
-                                , Html.Attributes.style "resize" "none"
-                                , Html.Attributes.style "opacity" "0"
-                                , Html.Attributes.id "textareaId"
-                                , Html.Events.Extra.Touch.onWithOptions
-                                    "touchmove"
-                                    { stopPropagation = False, preventDefault = True }
-                                    (\event ->
-                                        case event.touches of
-                                            head :: _ ->
-                                                let
-                                                    ( x, y ) =
-                                                        head.pagePos
-                                                in
-                                                TouchMove (Point2d.pixels x y)
+                     , if cursorEnabled loadedModel then
+                        Element.inFront <|
+                            Element.html <|
+                                Html.textarea
+                                    [ Html.Events.onInput UserTyped
+                                    , Html.Attributes.value ""
+                                    , Html.Attributes.style "width" "100%"
+                                    , Html.Attributes.style "height" "100%"
+                                    , Html.Attributes.style "resize" "none"
+                                    , Html.Attributes.style "opacity" "0"
+                                    , Html.Attributes.id "textareaId"
+                                    , Html.Events.Extra.Touch.onWithOptions
+                                        "touchmove"
+                                        { stopPropagation = False, preventDefault = True }
+                                        (\event ->
+                                            case event.touches of
+                                                head :: _ ->
+                                                    let
+                                                        ( x, y ) =
+                                                            head.pagePos
+                                                    in
+                                                    TouchMove (Point2d.pixels x y)
 
-                                            [] ->
-                                                NoOpFrontendMsg
-                                    )
-                                , Html.Events.Extra.Mouse.onDown
-                                    (\{ clientPos, button } ->
-                                        MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                                    )
-                                ]
-                                []
+                                                [] ->
+                                                    NoOpFrontendMsg
+                                        )
+                                    , Html.Events.Extra.Mouse.onDown
+                                        (\{ clientPos, button } ->
+                                            MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+                                        )
+                                    ]
+                                    []
+
+                       else
+                        Element.htmlAttribute <|
+                            Html.Events.Extra.Mouse.onDown
+                                (\{ clientPos, button } ->
+                                    MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+                                )
                      , Element.inFront (toolbarView loadedModel)
                      , Element.inFront (userListView loadedModel)
                      ]
-                        ++ (case ( loadedModel.mouseLeft, loadedModel.mouseMiddle ) of
-                                ( MouseButtonDown _, _ ) ->
+                        ++ (case ( loadedModel.mouseLeft, loadedModel.mouseMiddle, loadedModel.tool ) of
+                                ( MouseButtonDown _, _, _ ) ->
                                     mouseAttributes
 
-                                ( _, MouseButtonDown _ ) ->
+                                ( _, MouseButtonDown _, _ ) ->
                                     mouseAttributes
+
+                                ( _, _, HideUserTool ) ->
+                                    mouseAttributes
+
+                                _ ->
+                                    []
+                           )
+                        ++ (case ( loadedModel.tool, loadedModel.userHoverHighlighted ) of
+                                ( HideUserTool, Just userId ) ->
+                                    if LocalModel.localModel loadedModel.localModel |> .user |> Tuple.first |> (==) userId then
+                                        []
+
+                                    else
+                                        [ Element.pointer ]
 
                                 _ ->
                                     []
@@ -1079,23 +1134,11 @@ userListView model =
                 , Element.Events.onMouseLeave (UserTagMouseExited userId)
                 , Element.width Element.fill
                 , Element.Background.color <|
-                    case model.userHighlighted of
-                        NoHighlight ->
-                            Element.rgba 0 0 0 0
+                    if Just userId == model.userPressHighlighted || Just userId == model.userHoverHighlighted then
+                        Element.rgba 1 1 1 0.3
 
-                        TempHighlight highlightId ->
-                            if highlightId == userId then
-                                Element.rgba 1 1 1 0.3
-
-                            else
-                                Element.rgba 0 0 0 0
-
-                        FixedHighlight highlightId ->
-                            if highlightId == userId then
-                                Element.rgba 1 1 1 0.6
-
-                            else
-                                Element.rgba 0 0 0 0
+                    else
+                        Element.rgba 0 0 0 0
                 ]
                 [ Element.Input.button
                     []
@@ -1248,12 +1291,14 @@ tools =
             ]
             Element.none
       )
-
-    --, ( RectangleTool
-    --  , Element.el
-    --        [ Element.Border.width 2, Element.width (Element.px 20), Element.height (Element.px 20) ]
-    --        Element.none
-    --  )
+    , ( HideUserTool
+      , Element.el
+            [ Element.width (Element.px 20)
+            , Element.height (Element.px 20)
+            , Element.moveLeft 3
+            ]
+            (Element.text "🙈")
+      )
     ]
 
 
@@ -1374,6 +1419,9 @@ canvasView model =
 
         localModel =
             LocalModel.localModel model.localModel
+
+        allUsers =
+            localModel.user :: localModel.otherUsers
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False, WebGL.antialias ]
@@ -1382,8 +1430,13 @@ canvasView model =
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
         ]
-        (Cursor.draw viewMatrix color model
-            :: (Maybe.map
+        ((if cursorEnabled model then
+            [ Cursor.draw viewMatrix color model ]
+
+          else
+            []
+         )
+            ++ (Maybe.map
                     (drawText
                         (Dict.filter
                             (\key _ ->
@@ -1395,20 +1448,8 @@ canvasView model =
                             )
                             model.meshes
                         )
-                        (case model.userHighlighted of
-                            NoHighlight ->
-                                Nothing
-
-                            FixedHighlight userId ->
-                                localModel.user
-                                    :: localModel.otherUsers
-                                    |> List.find (Tuple.first >> (==) userId)
-
-                            TempHighlight userId ->
-                                localModel.user
-                                    :: localModel.otherUsers
-                                    |> List.find (Tuple.first >> (==) userId)
-                        )
+                        (Maybe.andThen (\userId -> List.find (Tuple.first >> (==) userId) allUsers) model.userPressHighlighted)
+                        (Maybe.andThen (\userId -> List.find (Tuple.first >> (==) userId) allUsers) model.userHoverHighlighted)
                         viewMatrix
                     )
                     model.texture
@@ -1417,8 +1458,16 @@ canvasView model =
         )
 
 
-drawText : Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex) -> Maybe ( UserId, UserData ) -> Mat4 -> Texture -> List WebGL.Entity
-drawText meshes highlightedUser viewMatrix texture =
+drawText : Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex) -> Maybe ( UserId, UserData ) -> Maybe ( UserId, UserData ) -> Mat4 -> Texture -> List WebGL.Entity
+drawText meshes userPressHighlighted userHoverHighlighted viewMatrix texture =
+    let
+        hover =
+            if userPressHighlighted == userHoverHighlighted then
+                Nothing
+
+            else
+                userHoverHighlighted
+    in
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -1431,12 +1480,20 @@ drawText meshes highlightedUser viewMatrix texture =
                     mesh
                     { view = viewMatrix
                     , texture = texture
-                    , highlightColor =
-                        highlightedUser
+                    , highlightColor0 =
+                        userPressHighlighted
                             |> Maybe.map (Tuple.second >> User.color >> ColorIndex.toColor >> ColorIndex.colorToVec3)
                             |> Maybe.withDefault (Math.Vector3.vec3 0 0 0)
-                    , highlightedUser =
-                        highlightedUser
+                    , highlightedUser0 =
+                        userPressHighlighted
+                            |> Maybe.map (Tuple.first >> User.rawId >> toFloat)
+                            |> Maybe.withDefault -2
+                    , highlightColor1 =
+                        hover
+                            |> Maybe.map (Tuple.second >> User.color >> ColorIndex.toColor >> ColorIndex.colorToVec3)
+                            |> Maybe.withDefault (Math.Vector3.vec3 0 0 0)
+                    , highlightedUser1 =
+                        hover
                             |> Maybe.map (Tuple.first >> User.rawId >> toFloat)
                             |> Maybe.withDefault -2
                     }
@@ -1457,11 +1514,6 @@ subscriptions model =
                 Sub.batch
                     [ Sub.map KeyMsg Keyboard.subscriptions
                     , Keyboard.downs KeyDown
-                    , if Keyboard.Arrows.arrowsDirection loadedModel.pressedKeys == Keyboard.Arrows.NoDirection then
-                        Sub.none
-
-                      else
-                        Browser.Events.onAnimationFrame Step
                     , Time.every 1000 ShortIntervalElapsed
                     , if loadedModel.mouseLeft /= MouseButtonUp && isTouchDevice loadedModel then
                         Time.every 100 VeryShortIntervalElapsed
@@ -1472,7 +1524,7 @@ subscriptions model =
         ]
 
 
-vertexShader : Shader Grid.Vertex { u | view : Mat4, highlightedUser : Float } { vcoord : Vec2, highlight : Float }
+vertexShader : Shader Grid.Vertex { u | view : Mat4, highlightedUser0 : Float, highlightedUser1 : Float } { vcoord : Vec2, highlight : Float }
 vertexShader =
     [glsl|
 
@@ -1480,32 +1532,40 @@ attribute vec2 position;
 attribute vec2 texturePosition;
 attribute float userId;
 uniform mat4 view;
-uniform float highlightedUser;
+uniform float highlightedUser0;
+uniform float highlightedUser1;
 varying vec2 vcoord;
 varying float highlight;
 
 void main () {
     gl_Position = view * vec4(position, 0.0, 1.0);
     vcoord = texturePosition;
-    highlight = float(userId == highlightedUser);
+    highlight = float(userId == highlightedUser0) + float(userId == highlightedUser1) * 2.0;
 }
 
 |]
 
 
-fragmentShader : Shader {} { u | texture : Texture, highlightColor : Vec3 } { vcoord : Vec2, highlight : Float }
+fragmentShader : Shader {} { u | texture : Texture, highlightColor0 : Vec3, highlightColor1 : Vec3 } { vcoord : Vec2, highlight : Float }
 fragmentShader =
     [glsl|
         precision mediump float;
         uniform sampler2D texture;
-        uniform vec3 highlightColor;
+        uniform vec3 highlightColor0;
+        uniform vec3 highlightColor1;
         varying vec2 vcoord;
         varying float highlight;
         void main () {
             vec4 textureColor = texture2D(texture, vcoord);
 
-            vec4 textColor = float(highlight == 0.0) * vec4(0.0,0.0,0.0,1.0) + float(highlight == 1.0) * vec4(highlightColor / 2.0,1.0);
-            vec4 backColor = float(highlight == 0.0) * vec4(0.0,0.0,0.0,0.0) + float(highlight == 1.0) * vec4(highlightColor,1.0);
+            vec4 textColor =
+                float(highlight == 0.0) * vec4(0.0,0.0,0.0,1.0)
+                    + float(highlight == 1.0) * vec4(highlightColor0 / 2.0,1.0)
+                    + float(highlight == 2.0) * vec4(highlightColor1 / 2.0,1.0);
+            vec4 backColor =
+                float(highlight == 0.0) * vec4(0.0,0.0,0.0,0.0)
+                    + float(highlight == 1.0) * vec4(highlightColor0,1.0)
+                    + float(highlight == 2.0) * vec4(highlightColor1,1.0);
 
             gl_FragColor =
                 float(textureColor.x == 1.0) * textColor
