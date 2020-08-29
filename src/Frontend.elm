@@ -27,7 +27,6 @@ import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Touch
 import Keyboard
-import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty)
@@ -416,7 +415,7 @@ updateLoaded msg model =
         VeryShortIntervalElapsed time ->
             ( { model | time = time }, Cmd.none )
 
-        ToggleUserVisibilityPressed userId ->
+        UnhideUserPressed userId ->
             ( updateLocalModel
                 (LocalToggleUserVisibility userId)
                 { model
@@ -449,6 +448,12 @@ updateLoaded msg model =
 
                         Nothing ->
                             Just userId
+                , userHoverHighlighted =
+                    if Just userId == model.userHoverHighlighted then
+                        Nothing
+
+                    else
+                        model.userHoverHighlighted
               }
             , Cmd.none
             )
@@ -831,14 +836,22 @@ updateMeshes oldModel newModel =
         oldCells =
             LocalModel.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
 
+        showHighlighted model hidden =
+            EverySet.diff
+                hidden
+                ([ model.userHoverHighlighted, model.userPressHighlighted ]
+                    |> List.filterMap identity
+                    |> EverySet.fromList
+                )
+
         oldHidden =
-            LocalModel.localModel oldModel.localModel |> .hiddenUsers
+            LocalModel.localModel oldModel.localModel |> .hiddenUsers |> showHighlighted oldModel
 
         newCells =
             LocalModel.localModel newModel.localModel |> .grid |> Grid.allCellsDict
 
         newHidden =
-            LocalModel.localModel newModel.localModel |> .hiddenUsers
+            LocalModel.localModel newModel.localModel |> .hiddenUsers |> showHighlighted newModel
     in
     { newModel
         | meshes =
@@ -1140,7 +1153,7 @@ userListView model =
 
         colorSquare isFirst isLast ( userId, userData ) =
             Element.Input.button
-                (Element.padding 8
+                (Element.padding 4
                     :: Element.Border.widthEach
                         { left = 0
                         , right = 2
@@ -1162,8 +1175,8 @@ userListView model =
                 { onPress = Just (UserColorSquarePressed userId)
                 , label =
                     Element.el
-                        [ Element.width (Element.px 16)
-                        , Element.height (Element.px 16)
+                        [ Element.width (Element.px 20)
+                        , Element.height (Element.px 20)
                         , Element.Background.color <| ColorIndex.toColor <| User.color userData
                         ]
                         Element.none
@@ -1171,7 +1184,11 @@ userListView model =
 
         userTag : Element FrontendMsg
         userTag =
-            baseTag True (List.isEmpty hiddenUsers) (Element.el [ Element.Font.bold, Element.centerX ] (Element.text "🠔 You")) localModel.user
+            baseTag
+                True
+                (List.isEmpty hiddenUsers)
+                (Element.el [ Element.Font.bold, Element.centerX ] (Element.text "🠔 You"))
+                localModel.user
 
         baseTag : Bool -> Bool -> Element FrontendMsg -> ( UserId, UserData ) -> Element FrontendMsg
         baseTag isFirst isLast content ( userId, userData ) =
@@ -1190,6 +1207,51 @@ userListView model =
                 , content
                 ]
 
+        baseTag2 : Bool -> Bool -> ( UserId, UserData ) -> Element FrontendMsg
+        baseTag2 isFirst isLast ( userId, userData ) =
+            Element.Input.button
+                (Element.Events.onMouseEnter (UserTagMouseEntered userId)
+                    :: Element.Events.onMouseLeave (UserTagMouseExited userId)
+                    :: Element.width Element.fill
+                    :: Element.padding 4
+                    :: (Element.Background.color <|
+                            if Just userId == model.userPressHighlighted || Just userId == model.userHoverHighlighted then
+                                Element.rgba 1 1 1 0.3
+
+                            else
+                                Element.rgba 0 0 0 0
+                       )
+                    :: Element.Border.widthEach
+                        { left = 0
+                        , right = 0
+                        , top =
+                            if isFirst then
+                                0
+
+                            else
+                                2
+                        , bottom =
+                            if isLast then
+                                0
+
+                            else
+                                2
+                        }
+                    :: buttonAttributes (isActive userId)
+                )
+                { onPress = Just (UnhideUserPressed userId)
+                , label =
+                    Element.row [ Element.width Element.fill ]
+                        [ Element.el
+                            [ Element.width (Element.px 20)
+                            , Element.height (Element.px 20)
+                            , Element.Background.color <| ColorIndex.toColor <| User.color userData
+                            ]
+                            Element.none
+                        , Element.el [ Element.centerX ] (Element.text "Unhide")
+                        ]
+                }
+
         buttonAttributes isActive_ =
             [ Element.Border.color backgroundColor
             , Element.Background.color
@@ -1199,11 +1261,11 @@ userListView model =
                  else
                     buttonDefault
                 )
-            , Element.mouseOver [ Element.Background.color buttonHighlight ]
             ]
 
         hiddenUserList =
-            EverySet.toList localModel.hiddenUsers |> List.filterMap (\userId -> List.find (Tuple.first >> (==) userId) localModel.otherUsers)
+            EverySet.toList localModel.hiddenUsers
+                |> List.filterMap (\userId -> List.find (Tuple.first >> (==) userId) localModel.otherUsers)
 
         isActive userId =
             (model.userPressHighlighted == Just userId)
@@ -1222,29 +1284,9 @@ userListView model =
                             userId =
                                 Tuple.first otherUser
                         in
-                        baseTag
+                        baseTag2
                             False
                             isLast
-                            (Element.Input.button
-                                (Element.Border.widthEach
-                                    { left = 0
-                                    , right = 0
-                                    , top = 2
-                                    , bottom =
-                                        if isLast then
-                                            0
-
-                                        else
-                                            2
-                                    }
-                                    :: Element.height Element.fill
-                                    :: Element.width Element.fill
-                                    :: buttonAttributes False
-                                )
-                                { onPress = ToggleUserVisibilityPressed userId |> Just
-                                , label = Element.el [ Element.centerX ] (Element.text "Unhide")
-                                }
-                            )
                             otherUser
                     )
     in
@@ -1445,13 +1487,12 @@ warningColor =
 toolbarButton : List (Element.Attribute msg) -> msg -> Element msg -> Element msg
 toolbarButton attributes onPress label =
     Element.Input.button
-        ([ Element.padding 8
-         , Element.Background.color buttonDefault
-         , Element.mouseOver [ Element.Background.color buttonHighlight ]
-         , Element.Border.width 2
-         , Element.Border.color backgroundColor
-         ]
-            ++ attributes
+        (Element.padding 8
+            :: Element.Background.color buttonDefault
+            :: Element.mouseOver [ Element.Background.color buttonHighlight ]
+            :: Element.Border.width 2
+            :: Element.Border.color backgroundColor
+            :: attributes
         )
         { onPress = Just onPress, label = label }
 

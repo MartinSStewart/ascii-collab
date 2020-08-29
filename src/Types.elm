@@ -157,7 +157,7 @@ type FrontendMsg
     | RedoPressed
     | CopyPressed
     | CutPressed
-    | ToggleUserVisibilityPressed UserId
+    | UnhideUserPressed UserId
     | UserColorSquarePressed UserId
     | UserTagMouseEntered UserId
     | UserTagMouseExited UserId
