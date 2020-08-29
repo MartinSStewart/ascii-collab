@@ -996,15 +996,6 @@ localModelConfig =
 
                 ServerChange (ServerUserNew user) ->
                     { model | otherUsers = user :: model.otherUsers }
-
-                ServerChange (ServerUserIsOnline userId_ isOnline) ->
-                    { model
-                        | otherUsers =
-                            List.updateIf
-                                (Tuple.first >> (==) userId_)
-                                (Tuple.mapSecond (User.withIsOnline isOnline))
-                                model.otherUsers
-                    }
     }
 
 

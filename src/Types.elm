@@ -95,7 +95,6 @@ type ServerChange
     = ServerGridChange Grid.Change
     | ServerUndoPoint { userId : UserId, undoPoints : Dict ( Int, Int ) Int }
     | ServerUserNew ( UserId, UserData )
-    | ServerUserIsOnline UserId Bool
 
 
 type alias LocalGrid =
