@@ -1170,6 +1170,8 @@ userListView model =
                             else
                                 2
                         }
+                    :: Element.Events.onMouseEnter (UserTagMouseEntered userId)
+                    :: Element.Events.onMouseLeave (UserTagMouseExited userId)
                     :: buttonAttributes (isActive userId)
                 )
                 { onPress = Just (UserColorSquarePressed userId)
@@ -1193,9 +1195,7 @@ userListView model =
         baseTag : Bool -> Bool -> Element FrontendMsg -> ( UserId, UserData ) -> Element FrontendMsg
         baseTag isFirst isLast content ( userId, userData ) =
             Element.row
-                [ Element.Events.onMouseEnter (UserTagMouseEntered userId)
-                , Element.Events.onMouseLeave (UserTagMouseExited userId)
-                , Element.width Element.fill
+                [ Element.width Element.fill
                 , Element.Background.color <|
                     if Just userId == model.userPressHighlighted || Just userId == model.userHoverHighlighted then
                         Element.rgba 1 1 1 0.3
@@ -1207,20 +1207,13 @@ userListView model =
                 , content
                 ]
 
-        baseTag2 : Bool -> Bool -> ( UserId, UserData ) -> Element FrontendMsg
-        baseTag2 isFirst isLast ( userId, userData ) =
+        hiddenUserTag : Bool -> Bool -> ( UserId, UserData ) -> Element FrontendMsg
+        hiddenUserTag isFirst isLast ( userId, userData ) =
             Element.Input.button
                 (Element.Events.onMouseEnter (UserTagMouseEntered userId)
                     :: Element.Events.onMouseLeave (UserTagMouseExited userId)
                     :: Element.width Element.fill
                     :: Element.padding 4
-                    :: (Element.Background.color <|
-                            if Just userId == model.userPressHighlighted || Just userId == model.userHoverHighlighted then
-                                Element.rgba 1 1 1 0.3
-
-                            else
-                                Element.rgba 0 0 0 0
-                       )
                     :: Element.Border.widthEach
                         { left = 0
                         , right = 0
@@ -1277,16 +1270,9 @@ userListView model =
             hiddenUserList
                 |> List.indexedMap
                     (\index otherUser ->
-                        let
-                            isLast =
-                                List.length hiddenUserList - 1 == index
-
-                            userId =
-                                Tuple.first otherUser
-                        in
-                        baseTag2
+                        hiddenUserTag
                             False
-                            isLast
+                            (List.length hiddenUserList - 1 == index)
                             otherUser
                     )
     in
