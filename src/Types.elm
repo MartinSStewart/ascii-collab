@@ -1,16 +1,12 @@
 module Types exposing
     ( BackendModel
     , BackendMsg(..)
-    , Change(..)
     , FrontendLoaded
     , FrontendLoading
     , FrontendModel(..)
     , FrontendMsg(..)
     , LoadingData_
-    , LocalChange(..)
-    , LocalGrid
     , MouseButtonState(..)
-    , ServerChange(..)
     , ToBackend(..)
     , ToFrontend(..)
     , ToolType(..)
@@ -18,15 +14,17 @@ module Types exposing
 
 import Browser exposing (UrlRequest)
 import Browser.Navigation
+import Change exposing (Change, ServerChange)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
-import Grid exposing (Grid, LocalChange)
+import Grid exposing (Grid)
 import Helper exposing (Coord)
 import Html.Events.Extra.Mouse exposing (Button)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
+import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
@@ -68,42 +66,13 @@ type alias FrontendLoaded =
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
     , mouseMiddle : MouseButtonState
-    , pendingChanges : List LocalChange
+    , pendingChanges : List Change.LocalChange
     , tool : ToolType
     , undoAddLast : Time.Posix
     , time : Time.Posix
     , lastTouchMove : Maybe Time.Posix
     , userPressHighlighted : Maybe UserId
     , userHoverHighlighted : Maybe UserId
-    }
-
-
-type Change
-    = LocalChange LocalChange
-    | ServerChange ServerChange
-
-
-type LocalChange
-    = LocalGridChange Grid.LocalChange
-    | LocalUndo
-    | LocalRedo
-    | LocalAddUndo
-    | LocalToggleUserVisibility UserId
-
-
-type ServerChange
-    = ServerGridChange Grid.Change
-    | ServerUndoPoint { userId : UserId, undoPoints : Dict ( Int, Int ) Int }
-    | ServerUserNew ( UserId, UserData )
-
-
-type alias LocalGrid =
-    { grid : Grid
-    , undoHistory : List (Dict ( Int, Int ) Int)
-    , redoHistory : List (Dict ( Int, Int ) Int)
-    , user : ( UserId, UserData )
-    , otherUsers : List ( UserId, UserData )
-    , hiddenUsers : EverySet UserId
     }
 
 
@@ -165,7 +134,7 @@ type FrontendMsg
 type ToBackend
     = NoOpToBackend
     | RequestData
-    | GridChange (Nonempty LocalChange)
+    | GridChange (Nonempty Change.LocalChange)
 
 
 type BackendMsg
@@ -177,7 +146,7 @@ type ToFrontend
     = NoOpToFrontend
     | LoadingData LoadingData_
     | ServerChangeBroadcast (Nonempty ServerChange)
-    | LocalChangeResponse (Nonempty LocalChange)
+    | LocalChangeResponse (Nonempty Change.LocalChange)
 
 
 type alias LoadingData_ =

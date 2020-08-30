@@ -1,5 +1,6 @@
 module Backend exposing (app, init, update, updateFromFrontend)
 
+import Change exposing (ServerChange(..))
 import Dict
 import EverySet exposing (EverySet)
 import Grid
@@ -124,12 +125,12 @@ updateFromFrontend sessionId clientId msg model =
 
 updateLocalChange :
     ( UserId, { userData : UserData, hiddenUsers : EverySet UserId } )
-    -> LocalChange
+    -> Change.LocalChange
     -> BackendModel
     -> ( BackendModel, Maybe ServerChange )
 updateLocalChange ( userId, _ ) change model =
     case change of
-        LocalUndo ->
+        Change.LocalUndo ->
             case Dict.get (User.rawId userId) model.undoPoints of
                 Just undoPoint ->
                     case undoPoint.undoHistory of
@@ -153,7 +154,7 @@ updateLocalChange ( userId, _ ) change model =
                 Nothing ->
                     ( model, Nothing )
 
-        LocalGridChange localChange ->
+        Change.LocalGridChange localChange ->
             ( { model
                 | grid =
                     Grid.addChange
@@ -163,7 +164,7 @@ updateLocalChange ( userId, _ ) change model =
             , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
             )
 
-        LocalRedo ->
+        Change.LocalRedo ->
             case Dict.get (User.rawId userId) model.undoPoints of
                 Just undoPoint ->
                     case undoPoint.redoHistory of
@@ -187,7 +188,7 @@ updateLocalChange ( userId, _ ) change model =
                 Nothing ->
                     ( model, Nothing )
 
-        LocalAddUndo ->
+        Change.LocalAddUndo ->
             ( { model
                 | undoPoints =
                     Dict.update
@@ -212,7 +213,7 @@ updateLocalChange ( userId, _ ) change model =
             , Nothing
             )
 
-        LocalToggleUserVisibility userId_ ->
+        Change.LocalToggleUserVisibility userId_ ->
             ( { model
                 | users =
                     if userId == userId_ then

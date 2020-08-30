@@ -7,6 +7,7 @@ import Browser exposing (UrlRequest(..))
 import Browser.Dom
 import Browser.Events
 import Browser.Navigation
+import Change exposing (Change(..))
 import ColorIndex
 import Cursor
 import Dict exposing (Dict)
@@ -17,6 +18,7 @@ import Element.Border
 import Element.Events
 import Element.Font
 import Element.Input
+import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
@@ -30,6 +32,7 @@ import Keyboard
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty)
+import LocalGrid
 import LocalModel exposing (LocalModel)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
@@ -40,7 +43,7 @@ import Quantity exposing (Quantity(..), Rate)
 import Task
 import Time
 import Types exposing (..)
-import Units exposing (AsciiUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
+import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url
 import User exposing (UserData, UserId(..))
 import Vector2d exposing (Vector2d)
@@ -80,14 +83,7 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
     ( Loaded
         { key = loading.key
         , localModel =
-            LocalModel.init
-                { grid = grid
-                , undoHistory = undoHistory
-                , redoHistory = redoHistory
-                , user = user
-                , hiddenUsers = hiddenUsers
-                , otherUsers = otherUsers
-                }
+            LocalGrid.init grid undoHistory redoHistory user hiddenUsers otherUsers |> LocalModel.init
         , meshes =
             Grid.allCells grid
                 |> List.map
@@ -309,7 +305,7 @@ updateLoaded msg model =
                             HideUserTool _ ->
                                 let
                                     localModel =
-                                        LocalModel.localModel model.localModel
+                                        LocalGrid.localModel model.localModel
                                 in
                                 selectionPoint
                                     (screenToWorld model mousePosition |> Units.worldToAscii)
@@ -345,10 +341,10 @@ updateLoaded msg model =
             ( resetTouchMove model |> (\m -> { m | tool = toolType }), Cmd.none )
 
         UndoPressed ->
-            ( resetTouchMove model |> updateLocalModel LocalUndo, Cmd.none )
+            ( resetTouchMove model |> updateLocalModel Change.LocalUndo, Cmd.none )
 
         RedoPressed ->
-            ( resetTouchMove model |> updateLocalModel LocalRedo, Cmd.none )
+            ( resetTouchMove model |> updateLocalModel Change.LocalRedo, Cmd.none )
 
         CopyPressed ->
             copyText model
@@ -417,7 +413,7 @@ updateLoaded msg model =
 
         UnhideUserPressed userId ->
             ( updateLocalModel
-                (LocalToggleUserVisibility userId)
+                (Change.LocalToggleUserVisibility userId)
                 { model
                     | userPressHighlighted =
                         if Just userId == model.userPressHighlighted then
@@ -494,21 +490,21 @@ keyMsgCanvasUpdate rawKey model =
 
         Just (Keyboard.Character "z") ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                ( updateLocalModel LocalUndo model, Cmd.none )
+                ( updateLocalModel Change.LocalUndo model, Cmd.none )
 
             else
                 ( model, Cmd.none )
 
         Just (Keyboard.Character "Z") ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                ( updateLocalModel LocalRedo model, Cmd.none )
+                ( updateLocalModel Change.LocalRedo model, Cmd.none )
 
             else
                 ( model, Cmd.none )
 
         Just (Keyboard.Character "y") ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                ( updateLocalModel LocalRedo model, Cmd.none )
+                ( updateLocalModel Change.LocalRedo model, Cmd.none )
 
             else
                 ( model, Cmd.none )
@@ -617,7 +613,7 @@ mouseUp mousePosition mouseState model =
     case model_.tool of
         HideUserTool (Just userId) ->
             if isSmallDistance then
-                updateLocalModel (LocalToggleUserVisibility userId) model_
+                updateLocalModel (Change.LocalToggleUserVisibility userId) model_
 
             else
                 model_
@@ -647,7 +643,7 @@ copyText model =
             resetTouchMove model
 
         localModel =
-            LocalModel.localModel model_.localModel
+            LocalGrid.localModel model_.localModel
     in
     ( model_
     , localModel.grid
@@ -666,7 +662,7 @@ cutText model =
             Cursor.bounds model_.cursor
 
         localModel =
-            LocalModel.localModel model_.localModel
+            LocalGrid.localModel model_.localModel
     in
     ( clearTextSelection bounds model_
     , localModel.grid
@@ -675,22 +671,22 @@ cutText model =
     )
 
 
-updateLocalModel : LocalChange -> FrontendLoaded -> FrontendLoaded
+updateLocalModel : Change.LocalChange -> FrontendLoaded -> FrontendLoaded
 updateLocalModel msg model =
     { model
         | pendingChanges = model.pendingChanges ++ [ msg ]
         , localModel =
             LocalModel.update
-                localModelConfig
+                LocalGrid.localModelConfig
                 (LocalChange msg)
                 model.localModel
     }
 
 
-isGridChange : LocalChange -> Bool
+isGridChange : Change.LocalChange -> Bool
 isGridChange localChange =
     case localChange of
-        LocalGridChange _ ->
+        Change.LocalGridChange _ ->
             True
 
         _ ->
@@ -792,9 +788,19 @@ devicePixelRatioUpdate devicePixelRatio model =
     )
 
 
+maxStringLength : number
+maxStringLength =
+    case Env.mode of
+        Env.Production ->
+            5000
+
+        Env.Development ->
+            100000
+
+
 changeText : String -> FrontendLoaded -> FrontendLoaded
 changeText text model =
-    String.left 5000 text
+    String.left maxStringLength text
         |> String.filter ((/=) '\u{000D}')
         |> String.split "\n"
         |> List.Nonempty.fromList
@@ -804,13 +810,13 @@ changeText text model =
                 let
                     model_ =
                         if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 2) then
-                            updateLocalModel LocalAddUndo { model | undoAddLast = model.time }
+                            updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
 
                         else
                             model
                 in
                 Grid.textToChange (Cursor.position model_.cursor) lines
-                    |> List.Nonempty.map LocalGridChange
+                    |> List.Nonempty.map Change.LocalGridChange
                     |> List.Nonempty.foldl updateLocalModel
                         { model_
                             | cursor =
@@ -834,8 +840,9 @@ updateMeshes : FrontendLoaded -> FrontendLoaded -> FrontendLoaded
 updateMeshes oldModel newModel =
     let
         oldCells =
-            LocalModel.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
+            LocalGrid.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
 
+        showHighlighted : { a | userHoverHighlighted : Maybe b, userPressHighlighted : Maybe b } -> EverySet b -> EverySet b
         showHighlighted model hidden =
             EverySet.diff
                 hidden
@@ -845,13 +852,24 @@ updateMeshes oldModel newModel =
                 )
 
         oldHidden =
-            LocalModel.localModel oldModel.localModel |> .hiddenUsers |> showHighlighted oldModel
+            LocalGrid.localModel oldModel.localModel |> .hiddenUsers |> showHighlighted oldModel
 
         newCells =
-            LocalModel.localModel newModel.localModel |> .grid |> Grid.allCellsDict
+            LocalGrid.localModel newModel.localModel |> .grid |> Grid.allCellsDict
 
         newHidden =
-            LocalModel.localModel newModel.localModel |> .hiddenUsers |> showHighlighted newModel
+            LocalGrid.localModel newModel.localModel |> .hiddenUsers |> showHighlighted newModel
+
+        newMesh newCell coord =
+            Grid.mesh
+                (Helper.fromRawCoord coord)
+                (GridCell.flatten newHidden newCell |> Array.toList)
+
+        hiddenUnchanged =
+            oldHidden == newHidden
+
+        hiddenChanges =
+            EverySet.union (EverySet.diff newHidden oldHidden) (EverySet.diff oldHidden newHidden) |> EverySet.toList
     in
     { newModel
         | meshes =
@@ -859,21 +877,26 @@ updateMeshes oldModel newModel =
                 (\coord newCell ->
                     case Dict.get coord oldCells of
                         Just oldCell ->
-                            if oldHidden == newHidden && oldCell == newCell then
+                            if oldCell == newCell then
                                 case Dict.get coord newModel.meshes of
                                     Just mesh ->
-                                        mesh
+                                        if hiddenUnchanged then
+                                            mesh
+
+                                        else if List.any (\userId -> GridCell.hasChangesBy userId newCell) hiddenChanges then
+                                            newMesh newCell coord
+
+                                        else
+                                            mesh
 
                                     Nothing ->
-                                        Grid.mesh
-                                            (Helper.fromRawCoord coord)
-                                            (GridCell.flatten newHidden newCell |> Array.toList)
+                                        newMesh newCell coord
 
                             else
-                                Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten newHidden newCell |> Array.toList)
+                                newMesh newCell coord
 
                         Nothing ->
-                            Grid.mesh (Helper.fromRawCoord coord) (GridCell.flatten newHidden newCell |> Array.toList)
+                            newMesh newCell coord
                 )
                 newCells
     }
@@ -929,76 +952,6 @@ updateFromBackend msg model =
             ( model, Cmd.none )
 
 
-localModelConfig : LocalModel.Config Change LocalGrid
-localModelConfig =
-    { msgEqual = \msg0 msg1 -> msg0 == msg1
-    , update =
-        \msg model ->
-            let
-                userId =
-                    Tuple.first model.user
-            in
-            case msg of
-                LocalChange (LocalGridChange gridChange) ->
-                    { model
-                        | redoHistory = []
-                        , grid = Grid.addChange (Grid.localChangeToChange userId gridChange) model.grid
-                    }
-
-                LocalChange LocalRedo ->
-                    case model.redoHistory of
-                        head :: rest ->
-                            { model
-                                | undoHistory = Grid.undoPoint userId model.grid :: model.undoHistory
-                                , redoHistory = rest
-                                , grid = Grid.setUndoPoints userId head model.grid
-                            }
-
-                        [] ->
-                            model
-
-                LocalChange LocalUndo ->
-                    case model.undoHistory of
-                        head :: rest ->
-                            { model
-                                | undoHistory = rest
-                                , redoHistory = Grid.undoPoint userId model.grid :: model.redoHistory
-                                , grid = Grid.setUndoPoints userId head model.grid
-                            }
-
-                        [] ->
-                            model
-
-                LocalChange LocalAddUndo ->
-                    { model
-                        | redoHistory = []
-                        , undoHistory = Grid.undoPoint userId model.grid :: model.undoHistory
-                    }
-
-                LocalChange (LocalToggleUserVisibility userId_) ->
-                    { model
-                        | hiddenUsers =
-                            if userId_ == userId then
-                                model.hiddenUsers
-
-                            else if EverySet.member userId_ model.hiddenUsers then
-                                EverySet.remove userId_ model.hiddenUsers
-
-                            else
-                                EverySet.insert userId_ model.hiddenUsers
-                    }
-
-                ServerChange (ServerGridChange gridChange) ->
-                    { model | grid = Grid.addChange gridChange model.grid }
-
-                ServerChange (ServerUndoPoint undoPoint) ->
-                    { model | grid = Grid.setUndoPoints undoPoint.userId undoPoint.undoPoints model.grid }
-
-                ServerChange (ServerUserNew user) ->
-                    { model | otherUsers = user :: model.otherUsers }
-    }
-
-
 updateLoadedFromBackend : ToFrontend -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 updateLoadedFromBackend msg model =
     case msg of
@@ -1012,7 +965,7 @@ updateLoadedFromBackend msg model =
             let
                 newLocalModel =
                     LocalModel.updateFromBackend
-                        localModelConfig
+                        LocalGrid.localModelConfig
                         (List.Nonempty.map ServerChange changeBroadcast)
                         model.localModel
             in
@@ -1024,7 +977,7 @@ updateLoadedFromBackend msg model =
             ( { model
                 | localModel =
                     LocalModel.updateFromBackend
-                        localModelConfig
+                        LocalGrid.localModelConfig
                         (List.Nonempty.map LocalChange changes)
                         model.localModel
               }
@@ -1034,7 +987,7 @@ updateLoadedFromBackend msg model =
 
 view : FrontendModel -> Browser.Document FrontendMsg
 view model =
-    { title = "Ascii Art"
+    { title = "Ascii Collab"
     , body =
         [ case model of
             Loading _ ->
@@ -1106,7 +1059,7 @@ view model =
                            )
                         ++ (case loadedModel.tool of
                                 HideUserTool (Just userId) ->
-                                    if LocalModel.localModel loadedModel.localModel |> .user |> Tuple.first |> (==) userId then
+                                    if LocalGrid.localModel loadedModel.localModel |> .user |> Tuple.first |> (==) userId then
                                         []
 
                                     else
@@ -1140,7 +1093,7 @@ userListView : FrontendLoaded -> Element FrontendMsg
 userListView model =
     let
         localModel =
-            LocalModel.localModel model.localModel
+            LocalGrid.localModel model.localModel
 
         colorSquare isFirst isLast ( userId, userData ) =
             Element.Input.button
@@ -1330,7 +1283,7 @@ toolbarView model =
                 UndoPressed
                 (Element.image
                     [ Element.width (Element.px 20)
-                    , if LocalModel.localModel model.localModel |> .undoHistory |> List.isEmpty then
+                    , if LocalGrid.localModel model.localModel |> .undoHistory |> List.isEmpty then
                         Element.alpha 0.5
 
                       else
@@ -1343,7 +1296,7 @@ toolbarView model =
                 RedoPressed
                 (Element.image
                     [ Element.width (Element.px 20)
-                    , if LocalModel.localModel model.localModel |> .redoHistory |> List.isEmpty then
+                    , if LocalGrid.localModel model.localModel |> .redoHistory |> List.isEmpty then
                         Element.alpha 0.5
 
                       else
@@ -1543,10 +1496,10 @@ canvasView model =
                     0
 
         color =
-            LocalModel.localModel model.localModel |> .user |> Tuple.second |> User.color |> ColorIndex.toColor
+            LocalGrid.localModel model.localModel |> .user |> Tuple.second |> User.color |> ColorIndex.toColor
 
         localModel =
-            LocalModel.localModel model.localModel
+            LocalGrid.localModel model.localModel
 
         allUsers =
             localModel.user :: localModel.otherUsers

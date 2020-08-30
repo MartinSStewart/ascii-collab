@@ -1,4 +1,4 @@
-module GridCell exposing (Cell, addLine, cellSize, changeCount, empty, flatten, setUndoPoint, undoPoint)
+module GridCell exposing (Cell, addLine, cellSize, changeCount, empty, flatten, hasChangesBy, setUndoPoint, undoPoint)
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
@@ -43,6 +43,11 @@ addLine userId position line (Cell cell) =
                 (userUndoPoint + 1)
                 cell.undoPoint
         }
+
+
+hasChangesBy : UserId -> Cell -> Bool
+hasChangesBy userId (Cell cell) =
+    Dict.member (User.rawId userId) cell.undoPoint
 
 
 setUndoPoint : UserId -> Int -> Cell -> Cell
