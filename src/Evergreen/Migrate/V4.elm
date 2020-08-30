@@ -87,39 +87,10 @@ migrateColorIndex colorIndex =
             Evergreen.V4.ColorIndex.Gray
 
 
-
---= Cell
---{ history : (List
---{ userId : Evergreen.V3.User.UserId
---, position : Int
---, line : (List.Nonempty.Nonempty Evergreen.V3.Ascii.Ascii)
---})
---, undoPoint : (Dict.Dict Evergreen.V3.User.RawUserId Int)
---}
-
-
-
---= Cell
---{ history : (List
---{ userId : Evergreen.V4.User.UserId
---, position : Int
---, line : (List.Nonempty.Nonempty Evergreen.V4.Ascii.Ascii)
---})
---, undoPoint : (Dict.Dict Evergreen.V4.User.RawUserId Int)
---}
-
-
 backendModel : Old.BackendModel -> ModelMigration New.BackendModel New.BackendMsg
 backendModel old =
     ( { grid = migrateGrid old.grid
-
-      --Evergreen.V4.Grid.Grid
       , undoPoints = old.undoPoints
-
-      --Dict.Dict Evergreen.V4.User.RawUserId
-      --    { undoHistory = List (Dict.Dict ( Int, Int ) Int)
-      --    , redoHistory = List (Dict.Dict ( Int, Int ) Int)
-      --    }
       , userSessions =
             old.userSessions
                 |> Set.toList

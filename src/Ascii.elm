@@ -1,4 +1,4 @@
-module Ascii exposing (Ascii, ascii, asciiChars, charsPerRow, default, fromChar, size, textureData, texturePosition, toChar)
+module Ascii exposing (Ascii(..), ascii, asciiChars, charsPerRow, default, fromChar, size, textureData, texturePosition, toChar)
 
 import Dict exposing (Dict)
 import List.Extra as List

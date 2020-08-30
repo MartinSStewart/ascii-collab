@@ -1,4 +1,4 @@
-module GridCell exposing (Cell, addLine, cellSize, changeCount, empty, flatten, hasChangesBy, setUndoPoint, undoPoint)
+module GridCell exposing (Cell(..), addLine, cellSize, changeCount, empty, flatten, hasChangesBy, setUndoPoint, undoPoint)
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)

@@ -1,4 +1,4 @@
-module User exposing (RawUserId, UserData(..), UserId, color, newUser, rawId, userId)
+module User exposing (RawUserId, UserData(..), UserId(..), color, newUser, rawId, userId)
 
 import ColorIndex exposing (ColorIndex(..))
 import List.Extra as List

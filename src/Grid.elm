@@ -1,4 +1,4 @@
-module Grid exposing (Change, Grid, LocalChange, Vertex, addChange, allCells, allCellsDict, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, from, getCell, localChangeToChange, mesh, setUndoPoints, textToChange, undoPoint)
+module Grid exposing (Change, Grid(..), LocalChange, Vertex, addChange, allCells, allCellsDict, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, from, getCell, localChangeToChange, mesh, setUndoPoints, textToChange, undoPoint)
 
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)

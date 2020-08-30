@@ -2,6 +2,7 @@ module Evergreen.V4.Types exposing (..)
 
 import Browser
 import Browser.Navigation
+import Evergreen.V4.Change
 import Evergreen.V4.Cursor
 import Dict
 import EverySet
@@ -11,6 +12,7 @@ import Html.Events.Extra.Mouse
 import Keyboard
 import Lamdera
 import List.Nonempty
+import Evergreen.V4.LocalGrid
 import Evergreen.V4.LocalModel
 import Math.Vector2
 import Pixels
@@ -33,38 +35,6 @@ type alias FrontendLoading =
     }
 
 
-type LocalChange
-    = LocalGridChange Evergreen.V4.Grid.LocalChange
-    | LocalUndo
-    | LocalRedo
-    | LocalAddUndo
-    | LocalToggleUserVisibility Evergreen.V4.User.UserId
-
-
-type ServerChange
-    = ServerGridChange Evergreen.V4.Grid.Change
-    | ServerUndoPoint 
-    { userId : Evergreen.V4.User.UserId
-    , undoPoints : (Dict.Dict (Int, Int) Int)
-    }
-    | ServerUserNew (Evergreen.V4.User.UserId, Evergreen.V4.User.UserData)
-
-
-type Change
-    = LocalChange LocalChange
-    | ServerChange ServerChange
-
-
-type alias LocalGrid = 
-    { grid : Evergreen.V4.Grid.Grid
-    , undoHistory : (List (Dict.Dict (Int, Int) Int))
-    , redoHistory : (List (Dict.Dict (Int, Int) Int))
-    , user : (Evergreen.V4.User.UserId, Evergreen.V4.User.UserData)
-    , otherUsers : (List (Evergreen.V4.User.UserId, Evergreen.V4.User.UserData))
-    , hiddenUsers : (EverySet.EverySet Evergreen.V4.User.UserId)
-    }
-
-
 type MouseButtonState
     = MouseButtonUp
     | MouseButtonDown 
@@ -82,7 +52,7 @@ type ToolType
 
 type alias FrontendLoaded = 
     { key : Browser.Navigation.Key
-    , localModel : (Evergreen.V4.LocalModel.LocalModel Change LocalGrid)
+    , localModel : (Evergreen.V4.LocalModel.LocalModel Evergreen.V4.Change.Change Evergreen.V4.LocalGrid.LocalGrid)
     , meshes : (Dict.Dict (Int, Int) (WebGL.Mesh Evergreen.V4.Grid.Vertex))
     , cursorMesh : (WebGL.Mesh 
     { position : Math.Vector2.Vec2
@@ -96,7 +66,7 @@ type alias FrontendLoaded =
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
     , mouseMiddle : MouseButtonState
-    , pendingChanges : (List LocalChange)
+    , pendingChanges : (List Evergreen.V4.Change.LocalChange)
     , tool : ToolType
     , undoAddLast : Time.Posix
     , time : Time.Posix
@@ -159,7 +129,7 @@ type FrontendMsg
 type ToBackend
     = NoOpToBackend
     | RequestData
-    | GridChange (List.Nonempty.Nonempty LocalChange)
+    | GridChange (List.Nonempty.Nonempty Evergreen.V4.Change.LocalChange)
 
 
 type BackendMsg
@@ -180,5 +150,5 @@ type alias LoadingData_ =
 type ToFrontend
     = NoOpToFrontend
     | LoadingData LoadingData_
-    | ServerChangeBroadcast (List.Nonempty.Nonempty ServerChange)
-    | LocalChangeResponse (List.Nonempty.Nonempty LocalChange)
+    | ServerChangeBroadcast (List.Nonempty.Nonempty Evergreen.V4.Change.ServerChange)
+    | LocalChangeResponse (List.Nonempty.Nonempty Evergreen.V4.Change.LocalChange)
