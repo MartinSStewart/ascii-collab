@@ -1133,7 +1133,14 @@ userListView model =
             baseTag
                 True
                 (List.isEmpty hiddenUsers)
-                (Element.el [ Element.Font.bold, Element.centerX ] (Element.text "🠔 You"))
+                (if Just (Tuple.first localModel.user) == Env.adminUserId then
+                    Element.el
+                        [ Element.Font.bold, Element.centerX, Element.Font.color (Element.rgb255 255 0 0) ]
+                        (Element.text "🠔 Admin")
+
+                 else
+                    Element.el [ Element.Font.bold, Element.centerX ] (Element.text "🠔 You")
+                )
                 localModel.user
 
         baseTag : Bool -> Bool -> Element FrontendMsg -> ( UserId, UserData ) -> Element FrontendMsg
