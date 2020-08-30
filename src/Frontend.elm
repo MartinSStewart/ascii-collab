@@ -790,12 +790,11 @@ devicePixelRatioUpdate devicePixelRatio model =
 
 maxStringLength : number
 maxStringLength =
-    case Env.mode of
-        Env.Production ->
-            5000
+    if Env.isProduction then
+        5000
 
-        Env.Development ->
-            100000
+    else
+        100000
 
 
 changeText : String -> FrontendLoaded -> FrontendLoaded
