@@ -1146,6 +1146,11 @@ userListView model =
 
                     else
                         Element.rgba 0 0 0 0
+                , "User Id: "
+                    ++ String.fromInt (User.rawId userId)
+                    |> Element.text
+                    |> Element.el [ Element.htmlAttribute <| Html.Attributes.style "visibility" "collapse" ]
+                    |> Element.behindContent
                 ]
                 [ colorSquare isFirst isLast ( userId, userData )
                 , content

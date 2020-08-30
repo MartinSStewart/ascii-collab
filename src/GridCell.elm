@@ -4,7 +4,6 @@ import Array exposing (Array)
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
-import List.Extra as List
 import List.Nonempty exposing (Nonempty)
 import User exposing (RawUserId, UserId)
 
