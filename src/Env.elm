@@ -4,11 +4,5 @@ module Env exposing (..)
 -- See https://dashboard.lamdera.app/docs/environment for more info.
 
 
-isProduction : Bool
-isProduction =
-    case mode of
-        Production ->
-            True
-
-        Development ->
-            False
+dummyConfigItem =
+    ""
