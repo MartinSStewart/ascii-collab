@@ -1553,10 +1553,10 @@ canvasView model =
                         )
                         (Maybe.andThen (\userId -> List.find (Tuple.first >> (==) userId) allUsers) model.userPressHighlighted)
                         (case ( model.tool, model.userHoverHighlighted ) of
-                            ( HideUserTool (Just userId), _ ) ->
+                            ( _, Just userId ) ->
                                 List.find (Tuple.first >> (==) userId) allUsers
 
-                            ( _, Just userId ) ->
+                            ( HideUserTool (Just userId), _ ) ->
                                 List.find (Tuple.first >> (==) userId) allUsers
 
                             _ ->
