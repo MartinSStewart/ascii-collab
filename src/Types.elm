@@ -56,9 +56,10 @@ type alias FrontendLoading =
 type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
-    , meshes : Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex)
+    , meshes : Dict RawCellCoord (WebGL.Mesh Grid.Vertex)
     , cursorMesh : WebGL.Mesh { position : Vec2 }
     , viewPoint : Point2d WorldPixel WorldCoordinate
+    , viewPointLastInterval : Point2d WorldPixel WorldCoordinate
     , cursor : Cursor
     , texture : Maybe Texture
     , pressedKeys : List Keyboard.Key
@@ -75,6 +76,10 @@ type alias FrontendLoaded =
     , userPressHighlighted : Maybe UserId
     , userHoverHighlighted : Maybe UserId
     }
+
+
+type alias RawCellCoord =
+    ( Int, Int )
 
 
 type ToolType
@@ -102,8 +107,8 @@ type alias BackendModel =
 type alias BackendUserData =
     { userData : UserData
     , hiddenUsers : EverySet UserId
-    , undoHistory : List (Dict ( Int, Int ) Int)
-    , redoHistory : List (Dict ( Int, Int ) Int)
+    , undoHistory : List (Dict RawCellCoord Int)
+    , redoHistory : List (Dict RawCellCoord Int)
     }
 
 
@@ -137,7 +142,7 @@ type FrontendMsg
 
 type ToBackend
     = NoOpToBackend
-    | RequestData
+    | RequestData { viewPoint : Coord Units.AsciiUnit, viewSize : Coord Units.AsciiUnit }
     | GridChange (Nonempty Change.LocalChange)
 
 
@@ -158,6 +163,8 @@ type alias LoadingData_ =
     , grid : Grid
     , otherUsers : List ( UserId, UserData )
     , hiddenUsers : EverySet UserId
-    , undoHistory : List (Dict ( Int, Int ) Int)
-    , redoHistory : List (Dict ( Int, Int ) Int)
+    , undoHistory : List (Dict RawCellCoord Int)
+    , redoHistory : List (Dict RawCellCoord Int)
+    , viewPoint : Coord Units.AsciiUnit
+    , viewSize : Coord Units.AsciiUnit
     }

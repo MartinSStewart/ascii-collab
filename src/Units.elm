@@ -1,7 +1,6 @@
 module Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, asciiToWorld, asciiUnit, cellToAscii, cellUnit, inWorldUnits, pixelToWorldPixel, screenFrame, worldToAscii, worldUnit)
 
 import Ascii
-import Axis2d
 import Frame2d exposing (Frame2d)
 import GridCell
 import Helper exposing (Coord)

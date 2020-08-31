@@ -4,10 +4,12 @@ import Change exposing (ServerChange(..))
 import Dict
 import EverySet exposing (EverySet)
 import Grid
+import Helper exposing (Coord)
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty
 import Set
 import Types exposing (..)
+import Units
 import User exposing (UserData, UserId)
 
 
@@ -89,8 +91,8 @@ updateFromFrontend sessionId clientId msg model =
         NoOpToBackend ->
             ( model, Cmd.none )
 
-        RequestData ->
-            requestDataUpdate sessionId clientId model
+        RequestData requestData ->
+            requestDataUpdate sessionId clientId requestData model
 
         GridChange changes ->
             case getUserFromSessionId sessionId model of
@@ -241,8 +243,28 @@ updateUser userId updateUserFunc model =
     { model | users = Dict.update (User.rawId userId) (Maybe.map updateUserFunc) model.users }
 
 
-requestDataUpdate : SessionId -> ClientId -> BackendModel -> ( BackendModel, Cmd BackendMsg )
-requestDataUpdate sessionId clientId model =
+requestDataUpdate :
+    SessionId
+    -> ClientId
+    -> { viewPoint : Coord Units.AsciiUnit, viewSize : Coord Units.AsciiUnit }
+    -> BackendModel
+    -> ( BackendModel, Cmd BackendMsg )
+requestDataUpdate sessionId clientId view model =
+    let
+        loadingData ( userId, user ) =
+            { user = ( userId, user.userData )
+            , grid = model.grid
+            , hiddenUsers = user.hiddenUsers
+            , otherUsers =
+                Dict.toList model.users
+                    |> List.map (Tuple.mapBoth User.userId .userData)
+                    |> List.filter (Tuple.first >> (/=) userId)
+            , undoHistory = user.undoHistory
+            , redoHistory = user.redoHistory
+            , viewPoint = view.viewPoint
+            , viewSize = view.viewSize
+            }
+    in
     case getUserFromSessionId sessionId model of
         Just ( userId, user ) ->
             let
@@ -262,26 +284,20 @@ requestDataUpdate sessionId clientId model =
                         )
                         model.userSessions
               }
-            , Lamdera.sendToFrontend
-                clientId
-                (LoadingData
-                    { user = ( userId, user.userData )
-                    , grid = model.grid
-                    , hiddenUsers = user.hiddenUsers
-                    , otherUsers =
-                        Dict.toList model.users
-                            |> List.map (Tuple.mapBoth User.userId .userData)
-                            |> List.filter (Tuple.first >> (/=) userId)
-                    , undoHistory = Maybe.map .undoHistory users |> Maybe.withDefault []
-                    , redoHistory = Maybe.map .redoHistory users |> Maybe.withDefault []
-                    }
-                )
+            , Lamdera.sendToFrontend clientId (LoadingData (loadingData ( userId, user )))
             )
 
         Nothing ->
             let
                 ( userId, user ) =
                     Dict.size model.users |> User.newUser
+
+                userBackendData =
+                    { userData = user
+                    , hiddenUsers = EverySet.empty
+                    , undoHistory = []
+                    , redoHistory = []
+                    }
             in
             ( { model
                 | userSessions =
@@ -289,27 +305,12 @@ requestDataUpdate sessionId clientId model =
                         sessionId
                         { clientIds = Set.singleton clientId, userId = userId }
                         model.userSessions
-                , users =
-                    Dict.insert (User.rawId userId)
-                        { userData = user
-                        , hiddenUsers = EverySet.empty
-                        , undoHistory = []
-                        , redoHistory = []
-                        }
-                        model.users
+                , users = Dict.insert (User.rawId userId) userBackendData model.users
               }
             , Cmd.batch
                 [ Lamdera.sendToFrontend
                     clientId
-                    (LoadingData
-                        { user = ( userId, user )
-                        , grid = model.grid
-                        , hiddenUsers = EverySet.empty
-                        , otherUsers = Dict.toList model.users |> List.map (Tuple.mapBoth User.userId .userData)
-                        , undoHistory = []
-                        , redoHistory = []
-                        }
-                    )
+                    (LoadingData (loadingData ( userId, userBackendData )))
                 , broadcast
                     (\sessionId_ clientId_ ->
                         if isSameUser sessionId clientId sessionId_ clientId_ then

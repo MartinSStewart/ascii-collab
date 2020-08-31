@@ -44,7 +44,10 @@ import Task
 import Time
 import Types exposing (..)
 import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
-import Url
+import Url exposing (Url)
+import Url.Builder
+import Url.Parser exposing ((<?>))
+import Url.Parser.Query
 import User exposing (UserData, UserId(..))
 import Vector2d exposing (Vector2d)
 import WebGL exposing (Shader)
@@ -75,10 +78,10 @@ app =
 
 
 loadedInit : FrontendLoading -> LoadingData_ -> ( FrontendModel, Cmd FrontendMsg )
-loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHistory } =
+loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHistory, viewPoint, viewSize } =
     let
         cursor =
-            Cursor.setCursor ( Units.asciiUnit 0, Units.asciiUnit 0 )
+            Cursor.setCursor viewPoint
     in
     ( Loaded
         { key = loading.key
@@ -94,7 +97,8 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
                     )
                 |> Dict.fromList
         , cursorMesh = Cursor.toMesh cursor
-        , viewPoint = Point2d.origin
+        , viewPoint = Units.asciiToWorld viewPoint |> Helper.coordToPoint
+        , viewPointLastInterval = Point2d.origin
         , cursor = cursor
         , texture = Nothing
         , pressedKeys = []
@@ -126,8 +130,8 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
     )
 
 
-init : Url.Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
-init _ key =
+init : Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
+init url key =
     ( Loading
         { key = key
         , windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 )
@@ -135,7 +139,8 @@ init _ key =
         , zoomFactor = 1
         }
     , Cmd.batch
-        [ Lamdera.sendToBackend RequestData
+        [ Lamdera.sendToBackend
+            (RequestData { viewPoint = parseUrl url, viewSize = ( Units.asciiUnit 20, Units.asciiUnit 20 ) })
         , Task.perform
             (\{ viewport } ->
                 WindowResized
@@ -146,6 +151,26 @@ init _ key =
             Browser.Dom.getViewport
         ]
     )
+
+
+coordQueryParser : Url.Parser.Query.Parser (Coord AsciiUnit)
+coordQueryParser =
+    Url.Parser.Query.map2
+        (\maybeX maybeY ->
+            ( Maybe.withDefault 0 maybeX, Maybe.withDefault 0 maybeY ) |> Helper.fromRawCoord
+        )
+        (Url.Parser.Query.int "x")
+        (Url.Parser.Query.int "y")
+
+
+urlParser : Url.Parser.Parser (Coord AsciiUnit -> b) b
+urlParser =
+    Url.Parser.top <?> coordQueryParser
+
+
+parseUrl : Url -> Coord AsciiUnit
+parseUrl =
+    Url.Parser.parse urlParser >> Maybe.withDefault ( Units.asciiUnit 0, Units.asciiUnit 0 )
 
 
 isTouchDevice : FrontendLoaded -> Bool
@@ -322,17 +347,35 @@ updateLoaded msg model =
 
         ShortIntervalElapsed time ->
             let
+                actualViewPoint_ =
+                    actualViewPoint model
+
                 model_ =
-                    { model | time = time }
+                    { model | time = time, viewPointLastInterval = actualViewPoint_ }
+
+                ( x, y ) =
+                    Units.worldToAscii actualViewPoint_ |> Helper.toRawCoord
+
+                urlChange =
+                    if Units.worldToAscii actualViewPoint_ /= Units.worldToAscii model.viewPointLastInterval then
+                        Browser.Navigation.replaceUrl
+                            model.key
+                            (Url.Builder.relative [] [ Url.Builder.int "x" x, Url.Builder.int "y" y ])
+
+                    else
+                        Cmd.none
             in
             case List.Nonempty.fromList model_.pendingChanges of
                 Just nonempty ->
                     ( { model_ | pendingChanges = [] }
-                    , GridChange nonempty |> Lamdera.sendToBackend
+                    , Cmd.batch
+                        [ GridChange nonempty |> Lamdera.sendToBackend
+                        , urlChange
+                        ]
                     )
 
                 Nothing ->
-                    ( model_, Cmd.none )
+                    ( model_, urlChange )
 
         ZoomFactorPressed zoomFactor ->
             ( resetTouchMove model |> (\m -> { m | zoomFactor = zoomFactor }), Cmd.none )
