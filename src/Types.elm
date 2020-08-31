@@ -1,6 +1,7 @@
 module Types exposing
     ( BackendModel
     , BackendMsg(..)
+    , BackendUserData
     , FrontendLoaded
     , FrontendLoading
     , FrontendModel(..)
@@ -93,13 +94,16 @@ type MouseButtonState
 
 type alias BackendModel =
     { grid : Grid
-    , undoPoints :
-        Dict RawUserId
-            { undoHistory : List (Dict ( Int, Int ) Int)
-            , redoHistory : List (Dict ( Int, Int ) Int)
-            }
     , userSessions : Dict SessionId { clientIds : Set ClientId, userId : UserId }
-    , users : Dict RawUserId { userData : UserData, hiddenUsers : EverySet UserId }
+    , users : Dict RawUserId BackendUserData
+    }
+
+
+type alias BackendUserData =
+    { userData : UserData
+    , hiddenUsers : EverySet UserId
+    , undoHistory : List (Dict ( Int, Int ) Int)
+    , redoHistory : List (Dict ( Int, Int ) Int)
     }
 
 

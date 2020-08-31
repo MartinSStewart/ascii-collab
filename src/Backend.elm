@@ -25,7 +25,6 @@ init =
     ( { grid = Grid.empty
       , userSessions = Dict.empty
       , users = Dict.empty
-      , undoPoints = Dict.empty
       }
     , Cmd.none
     )
@@ -69,7 +68,7 @@ isSameClient s0 c0 s1 c1 =
     s0 == s1 && c0 == c1
 
 
-getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, { userData : UserData, hiddenUsers : EverySet UserId } )
+getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, BackendUserData )
 getUserFromSessionId sessionId model =
     case Dict.get sessionId model.userSessions of
         Just { userId } ->
@@ -124,25 +123,25 @@ updateFromFrontend sessionId clientId msg model =
 
 
 updateLocalChange :
-    ( UserId, { userData : UserData, hiddenUsers : EverySet UserId } )
+    ( UserId, BackendUserData )
     -> Change.LocalChange
     -> BackendModel
     -> ( BackendModel, Maybe ServerChange )
 updateLocalChange ( userId, _ ) change model =
     case change of
         Change.LocalUndo ->
-            case Dict.get (User.rawId userId) model.undoPoints of
+            case Dict.get (User.rawId userId) model.users of
                 Just undoPoint ->
                     case undoPoint.undoHistory of
                         head :: rest ->
                             ( { model
-                                | undoPoints =
+                                | users =
                                     Dict.insert (User.rawId userId)
                                         { undoPoint
                                             | undoHistory = rest
                                             , redoHistory = Grid.undoPoint userId model.grid :: undoPoint.redoHistory
                                         }
-                                        model.undoPoints
+                                        model.users
                                 , grid = Grid.setUndoPoints userId head model.grid
                               }
                             , ServerUndoPoint { userId = userId, undoPoints = head } |> Just
@@ -165,18 +164,18 @@ updateLocalChange ( userId, _ ) change model =
             )
 
         Change.LocalRedo ->
-            case Dict.get (User.rawId userId) model.undoPoints of
-                Just undoPoint ->
-                    case undoPoint.redoHistory of
+            case Dict.get (User.rawId userId) model.users of
+                Just user ->
+                    case user.redoHistory of
                         head :: rest ->
                             ( { model
-                                | undoPoints =
+                                | users =
                                     Dict.insert (User.rawId userId)
-                                        { undoPoint
-                                            | undoHistory = Grid.undoPoint userId model.grid :: undoPoint.undoHistory
+                                        { user
+                                            | undoHistory = Grid.undoPoint userId model.grid :: user.undoHistory
                                             , redoHistory = rest
                                         }
-                                        model.undoPoints
+                                        model.users
                                 , grid = Grid.setUndoPoints userId head model.grid
                               }
                             , ServerUndoPoint { userId = userId, undoPoints = head } |> Just
@@ -190,25 +189,18 @@ updateLocalChange ( userId, _ ) change model =
 
         Change.LocalAddUndo ->
             ( { model
-                | undoPoints =
+                | users =
                     Dict.update
                         (User.rawId userId)
-                        (\maybeValue ->
-                            (case maybeValue of
-                                Just value ->
-                                    { value
-                                        | redoHistory = []
-                                        , undoHistory = Grid.undoPoint userId model.grid :: value.undoHistory
-                                    }
-
-                                Nothing ->
-                                    { redoHistory = []
-                                    , undoHistory = [ Grid.undoPoint userId model.grid ]
-                                    }
+                        (Maybe.map
+                            (\user ->
+                                { user
+                                    | redoHistory = []
+                                    , undoHistory = Grid.undoPoint userId model.grid :: user.undoHistory
+                                }
                             )
-                                |> Just
                         )
-                        model.undoPoints
+                        model.users
               }
             , Nothing
             )
@@ -242,7 +234,7 @@ updateLocalChange ( userId, _ ) change model =
 
 updateUser :
     UserId
-    -> ({ userData : UserData, hiddenUsers : EverySet UserId } -> { userData : UserData, hiddenUsers : EverySet UserId })
+    -> (BackendUserData -> BackendUserData)
     -> BackendModel
     -> BackendModel
 updateUser userId updateUserFunc model =
@@ -254,8 +246,8 @@ requestDataUpdate sessionId clientId model =
     case getUserFromSessionId sessionId model of
         Just ( userId, user ) ->
             let
-                undoPoints =
-                    Dict.get (User.rawId userId) model.undoPoints
+                users =
+                    Dict.get (User.rawId userId) model.users
             in
             ( { model
                 | userSessions =
@@ -280,8 +272,8 @@ requestDataUpdate sessionId clientId model =
                         Dict.toList model.users
                             |> List.map (Tuple.mapBoth User.userId .userData)
                             |> List.filter (Tuple.first >> (/=) userId)
-                    , undoHistory = Maybe.map .undoHistory undoPoints |> Maybe.withDefault []
-                    , redoHistory = Maybe.map .redoHistory undoPoints |> Maybe.withDefault []
+                    , undoHistory = Maybe.map .undoHistory users |> Maybe.withDefault []
+                    , redoHistory = Maybe.map .redoHistory users |> Maybe.withDefault []
                     }
                 )
             )
@@ -297,7 +289,14 @@ requestDataUpdate sessionId clientId model =
                         sessionId
                         { clientIds = Set.singleton clientId, userId = userId }
                         model.userSessions
-                , users = Dict.insert (User.rawId userId) { userData = user, hiddenUsers = EverySet.empty } model.users
+                , users =
+                    Dict.insert (User.rawId userId)
+                        { userData = user
+                        , hiddenUsers = EverySet.empty
+                        , undoHistory = []
+                        , redoHistory = []
+                        }
+                        model.users
               }
             , Cmd.batch
                 [ Lamdera.sendToFrontend
