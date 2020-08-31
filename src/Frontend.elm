@@ -985,6 +985,55 @@ updateLoadedFromBackend msg model =
             )
 
 
+textarea : FrontendLoaded -> Element.Attribute FrontendMsg
+textarea model =
+    if cursorEnabled model then
+        Html.textarea
+            [ Html.Events.onInput UserTyped
+            , Html.Attributes.value ""
+            , Html.Attributes.style "width" "100%"
+            , Html.Attributes.style "height" "100%"
+            , Html.Attributes.style "resize" "none"
+            , Html.Attributes.style "opacity" "0"
+            , Html.Attributes.id "textareaId"
+            , Html.Events.Extra.Touch.onWithOptions
+                "touchmove"
+                { stopPropagation = False, preventDefault = True }
+                (\event ->
+                    case event.touches of
+                        head :: _ ->
+                            let
+                                ( x, y ) =
+                                    head.pagePos
+                            in
+                            TouchMove (Point2d.pixels x y)
+
+                        [] ->
+                            NoOpFrontendMsg
+                )
+            , Html.Events.Extra.Mouse.onDown
+                (\{ clientPos, button } ->
+                    MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+                )
+            ]
+            []
+            |> Element.html
+            |> Element.inFront
+
+    else
+        Element.el
+            [ Element.width Element.fill
+            , Element.height Element.fill
+            , Element.htmlAttribute <|
+                Html.Events.Extra.Mouse.onDown
+                    (\{ clientPos, button } ->
+                        MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+                    )
+            ]
+            Element.none
+            |> Element.inFront
+
+
 view : FrontendModel -> Browser.Document FrontendMsg
 view model =
     { title = "Ascii Collab"
@@ -999,52 +1048,13 @@ view model =
 
             Loaded loadedModel ->
                 Element.layout
-                    ([ Element.width Element.fill
-                     , Element.height Element.fill
-                     , Element.clip
-                     , if cursorEnabled loadedModel then
-                        Element.inFront <|
-                            Element.html <|
-                                Html.textarea
-                                    [ Html.Events.onInput UserTyped
-                                    , Html.Attributes.value ""
-                                    , Html.Attributes.style "width" "100%"
-                                    , Html.Attributes.style "height" "100%"
-                                    , Html.Attributes.style "resize" "none"
-                                    , Html.Attributes.style "opacity" "0"
-                                    , Html.Attributes.id "textareaId"
-                                    , Html.Events.Extra.Touch.onWithOptions
-                                        "touchmove"
-                                        { stopPropagation = False, preventDefault = True }
-                                        (\event ->
-                                            case event.touches of
-                                                head :: _ ->
-                                                    let
-                                                        ( x, y ) =
-                                                            head.pagePos
-                                                    in
-                                                    TouchMove (Point2d.pixels x y)
-
-                                                [] ->
-                                                    NoOpFrontendMsg
-                                        )
-                                    , Html.Events.Extra.Mouse.onDown
-                                        (\{ clientPos, button } ->
-                                            MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                                        )
-                                    ]
-                                    []
-
-                       else
-                        Element.htmlAttribute <|
-                            Html.Events.Extra.Mouse.onDown
-                                (\{ clientPos, button } ->
-                                    MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                                )
-                     , Element.inFront (toolbarView loadedModel)
-                     , Element.inFront (userListView loadedModel)
-                     ]
-                        ++ (case ( loadedModel.mouseLeft, loadedModel.mouseMiddle, loadedModel.tool ) of
+                    (Element.width Element.fill
+                        :: Element.height Element.fill
+                        :: Element.clip
+                        :: textarea loadedModel
+                        :: Element.inFront (toolbarView loadedModel)
+                        :: Element.inFront (userListView loadedModel)
+                        :: (case ( loadedModel.mouseLeft, loadedModel.mouseMiddle, loadedModel.tool ) of
                                 ( MouseButtonDown _, _, _ ) ->
                                     mouseAttributes
 
