@@ -1,6 +1,7 @@
-module Grid exposing (Change, Grid(..), LocalChange, Vertex, addChange, allCells, allCellsDict, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, from, getCell, localChangeToChange, mesh, setUndoPoints, textToChange, undoPoint)
+module Grid exposing (Change, Grid(..), LocalChange, Vertex, addChange, allCells, allCellsDict, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, from, getCell, localChangeToChange, mesh, region, setUndoPoints, textToChange, undoPoint)
 
 import Ascii exposing (Ascii)
+import Bounds exposing (Bounds)
 import Dict exposing (Dict)
 import GridCell exposing (Cell)
 import Helper exposing (Coord)
@@ -171,6 +172,11 @@ allCells (Grid grid) =
 allCellsDict : Grid -> Dict ( Int, Int ) Cell
 allCellsDict (Grid grid) =
     grid
+
+
+region : Bounds CellUnit -> Grid -> Grid
+region bounds (Grid grid) =
+    Dict.filter (\coord _ -> Bounds.contains (Helper.fromRawCoord coord) bounds) grid |> Grid
 
 
 getCell : Coord Units.CellUnit -> Grid -> Maybe Cell

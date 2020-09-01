@@ -1,15 +1,15 @@
 module Backend exposing (app, init, update, updateFromFrontend)
 
+import Bounds exposing (Bounds)
 import Change exposing (ServerChange(..))
 import Dict
 import EverySet exposing (EverySet)
 import Grid
-import Helper exposing (Coord)
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty
 import Set
 import Types exposing (..)
-import Units
+import Units exposing (CellUnit)
 import User exposing (UserData, UserId)
 
 
@@ -26,6 +26,7 @@ init : ( BackendModel, Cmd BackendMsg )
 init =
     ( { grid = Grid.empty
       , userSessions = Dict.empty
+      , clientData = Dict.empty
       , users = Dict.empty
       }
     , Cmd.none
@@ -55,6 +56,7 @@ update msg model =
                             )
                         )
                         model.userSessions
+                , clientData = Dict.remove clientId model.clientData
               }
             , Cmd.none
             )
@@ -190,70 +192,51 @@ updateLocalChange ( userId, _ ) change model =
                     ( model, Nothing )
 
         Change.LocalAddUndo ->
-            ( { model
-                | users =
-                    Dict.update
-                        (User.rawId userId)
-                        (Maybe.map
-                            (\user ->
-                                { user
-                                    | redoHistory = []
-                                    , undoHistory = Grid.undoPoint userId model.grid :: user.undoHistory
-                                }
-                            )
-                        )
-                        model.users
-              }
+            ( updateUser
+                userId
+                (\user ->
+                    { user
+                        | redoHistory = []
+                        , undoHistory = Grid.undoPoint userId model.grid :: user.undoHistory
+                    }
+                )
+                model
             , Nothing
             )
 
         Change.LocalToggleUserVisibility userId_ ->
-            ( { model
-                | users =
-                    if userId == userId_ then
-                        model.users
+            ( if userId == userId_ then
+                model
 
-                    else
-                        Dict.update
-                            (User.rawId userId)
-                            (Maybe.map
-                                (\user ->
-                                    { user
-                                        | hiddenUsers =
-                                            if EverySet.member userId_ user.hiddenUsers then
-                                                EverySet.remove userId_ user.hiddenUsers
+              else
+                updateUser
+                    userId
+                    (\user ->
+                        { user
+                            | hiddenUsers =
+                                if EverySet.member userId_ user.hiddenUsers then
+                                    EverySet.remove userId_ user.hiddenUsers
 
-                                            else
-                                                EverySet.insert userId_ user.hiddenUsers
-                                    }
-                                )
-                            )
-                            model.users
-              }
+                                else
+                                    EverySet.insert userId_ user.hiddenUsers
+                        }
+                    )
+                    model
             , Nothing
             )
 
 
-updateUser :
-    UserId
-    -> (BackendUserData -> BackendUserData)
-    -> BackendModel
-    -> BackendModel
+updateUser : UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel
 updateUser userId updateUserFunc model =
     { model | users = Dict.update (User.rawId userId) (Maybe.map updateUserFunc) model.users }
 
 
-requestDataUpdate :
-    SessionId
-    -> ClientId
-    -> { viewPoint : Coord Units.AsciiUnit, viewSize : Coord Units.AsciiUnit }
-    -> BackendModel
-    -> ( BackendModel, Cmd BackendMsg )
-requestDataUpdate sessionId clientId view model =
+requestDataUpdate : SessionId -> ClientId -> Bounds CellUnit -> BackendModel -> ( BackendModel, Cmd BackendMsg )
+requestDataUpdate sessionId clientId viewBounds model =
     let
         loadingData ( userId, user ) =
             { user = ( userId, user.userData )
-            , grid = model.grid
+            , grid = Grid.region viewBounds model.grid
             , hiddenUsers = user.hiddenUsers
             , otherUsers =
                 Dict.toList model.users
@@ -261,16 +244,11 @@ requestDataUpdate sessionId clientId view model =
                     |> List.filter (Tuple.first >> (/=) userId)
             , undoHistory = user.undoHistory
             , redoHistory = user.redoHistory
-            , viewPoint = view.viewPoint
-            , viewSize = view.viewSize
+            , viewBounds = viewBounds
             }
     in
     case getUserFromSessionId sessionId model of
         Just ( userId, user ) ->
-            let
-                users =
-                    Dict.get (User.rawId userId) model.users
-            in
             ( { model
                 | userSessions =
                     Dict.update sessionId
@@ -283,6 +261,7 @@ requestDataUpdate sessionId clientId view model =
                                     Nothing
                         )
                         model.userSessions
+                , clientData = Dict.insert clientId viewBounds model.clientData
               }
             , Lamdera.sendToFrontend clientId (LoadingData (loadingData ( userId, user )))
             )
@@ -305,6 +284,7 @@ requestDataUpdate sessionId clientId view model =
                         sessionId
                         { clientIds = Set.singleton clientId, userId = userId }
                         model.userSessions
+                , clientData = Dict.insert clientId viewBounds model.clientData
                 , users = Dict.insert (User.rawId userId) userBackendData model.users
               }
             , Cmd.batch

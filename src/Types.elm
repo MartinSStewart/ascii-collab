@@ -13,6 +13,7 @@ module Types exposing
     , ToolType(..)
     )
 
+import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Change exposing (Change, ServerChange)
@@ -100,6 +101,7 @@ type MouseButtonState
 type alias BackendModel =
     { grid : Grid
     , userSessions : Dict SessionId { clientIds : Set ClientId, userId : UserId }
+    , clientData : Dict ClientId (Bounds CellUnit)
     , users : Dict RawUserId BackendUserData
     }
 
@@ -142,7 +144,7 @@ type FrontendMsg
 
 type ToBackend
     = NoOpToBackend
-    | RequestData { viewPoint : Coord Units.AsciiUnit, viewSize : Coord Units.AsciiUnit }
+    | RequestData (Bounds CellUnit)
     | GridChange (Nonempty Change.LocalChange)
 
 
@@ -165,6 +167,5 @@ type alias LoadingData_ =
     , hiddenUsers : EverySet UserId
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
-    , viewPoint : Coord Units.AsciiUnit
-    , viewSize : Coord Units.AsciiUnit
+    , viewBounds : Bounds CellUnit
     }

@@ -3,13 +3,14 @@ port module Frontend exposing (app, init, update, updateFromBackend, view)
 import Array
 import Ascii exposing (Ascii)
 import BoundingBox2d exposing (BoundingBox2d)
+import Bounds
 import Browser exposing (UrlRequest(..))
 import Browser.Dom
 import Browser.Events
 import Browser.Navigation
 import Change exposing (Change(..))
 import ColorIndex
-import Cursor
+import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Duration
 import Element exposing (Element)
@@ -78,8 +79,13 @@ app =
 
 
 loadedInit : FrontendLoading -> LoadingData_ -> ( FrontendModel, Cmd FrontendMsg )
-loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHistory, viewPoint, viewSize } =
+loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHistory, viewBounds } =
     let
+        viewPoint : Coord AsciiUnit
+        viewPoint =
+            Bounds.convert Units.cellToAscii viewBounds |> Bounds.center |> Helper.roundPoint
+
+        cursor : Cursor
         cursor =
             Cursor.setCursor viewPoint
     in
@@ -132,6 +138,29 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
 
 init : Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
 init url key =
+    let
+        ( viewPoint, cmd ) =
+            case Url.Parser.parse urlParser url of
+                Just viewPoint_ ->
+                    ( viewPoint_, Cmd.none )
+
+                Nothing ->
+                    let
+                        defaultViewPoint =
+                            ( Units.asciiUnit 0, Units.asciiUnit 0 )
+                    in
+                    ( defaultViewPoint, Browser.Navigation.replaceUrl key (encodeUrl defaultViewPoint) )
+
+        min_ =
+            Grid.asciiToCellAndLocalCoord viewPoint
+                |> Tuple.first
+                |> Helper.addTuple ( Units.cellUnit -2, Units.cellUnit -2 )
+
+        max_ =
+            Grid.asciiToCellAndLocalCoord viewPoint
+                |> Tuple.first
+                |> Helper.addTuple ( Units.cellUnit 2, Units.cellUnit 2 )
+    in
     ( Loading
         { key = key
         , windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 )
@@ -139,8 +168,7 @@ init url key =
         , zoomFactor = 1
         }
     , Cmd.batch
-        [ Lamdera.sendToBackend
-            (RequestData { viewPoint = parseUrl url, viewSize = ( Units.asciiUnit 20, Units.asciiUnit 20 ) })
+        [ Lamdera.sendToBackend (RequestData { min = min_, max = max_ })
         , Task.perform
             (\{ viewport } ->
                 WindowResized
@@ -149,6 +177,7 @@ init url key =
                     )
             )
             Browser.Dom.getViewport
+        , cmd
         ]
     )
 
@@ -168,9 +197,9 @@ urlParser =
     Url.Parser.top <?> coordQueryParser
 
 
-parseUrl : Url -> Coord AsciiUnit
-parseUrl =
-    Url.Parser.parse urlParser >> Maybe.withDefault ( Units.asciiUnit 0, Units.asciiUnit 0 )
+encodeUrl : Coord AsciiUnit -> String
+encodeUrl ( Quantity x, Quantity y ) =
+    Url.Builder.relative [] [ Url.Builder.int "x" x, Url.Builder.int "y" y ]
 
 
 isTouchDevice : FrontendLoaded -> Bool
@@ -353,14 +382,12 @@ updateLoaded msg model =
                 model_ =
                     { model | time = time, viewPointLastInterval = actualViewPoint_ }
 
-                ( x, y ) =
-                    Units.worldToAscii actualViewPoint_ |> Helper.toRawCoord
-
                 urlChange =
                     if Units.worldToAscii actualViewPoint_ /= Units.worldToAscii model.viewPointLastInterval then
-                        Browser.Navigation.replaceUrl
-                            model.key
-                            (Url.Builder.relative [] [ Url.Builder.int "x" x, Url.Builder.int "y" y ])
+                        Units.worldToAscii actualViewPoint_
+                            |> encodeUrl
+                            |> Browser.Navigation.replaceUrl
+                                model.key
 
                     else
                         Cmd.none

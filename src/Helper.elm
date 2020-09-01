@@ -1,4 +1,4 @@
-module Helper exposing (Coord, addTuple, boundsToBounds2d, coordRangeFold, coordRangeFoldReverse, coordToPoint, coordToVec, coordToVector2d, fromRawCoord, maxTuple, minTuple, minusTuple, multiplyTuple, toRawCoord)
+module Helper exposing (Coord, absTuple, addTuple, boundsToBounds2d, coordRangeFold, coordRangeFoldReverse, coordToPoint, coordToVec, coordToVector2d, fromRawCoord, maxTuple, minTuple, minusTuple, multiplyTuple, roundPoint, toRawCoord)
 
 import BoundingBox2d exposing (BoundingBox2d)
 import Math.Vector2 exposing (Vec2)
@@ -32,6 +32,11 @@ maxTuple ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.max x0 x1, Quantity.max y0 y1 )
 
 
+absTuple : Coord unit -> Coord unit
+absTuple ( x0, y0 ) =
+    ( Quantity.abs x0, Quantity.abs y0 )
+
+
 coordToVec : Coord units -> Vec2
 coordToVec ( Quantity x, Quantity y ) =
     Math.Vector2.vec2 (toFloat x) (toFloat y)
@@ -40,6 +45,15 @@ coordToVec ( Quantity x, Quantity y ) =
 coordToPoint : Coord units -> Point2d units coordinate
 coordToPoint ( x, y ) =
     Point2d.xy (Quantity.toFloatQuantity x) (Quantity.toFloatQuantity y)
+
+
+roundPoint : Point2d units coordinate -> Coord units
+roundPoint point2d =
+    let
+        { x, y } =
+            Point2d.unwrap point2d
+    in
+    fromRawCoord ( round x, round y )
 
 
 coordToVector2d : Coord units -> Vector2d units coordinate
