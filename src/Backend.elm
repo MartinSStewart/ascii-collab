@@ -1,13 +1,12 @@
 module Backend exposing (app, init, update, updateFromFrontend)
 
 import Bounds exposing (Bounds)
-import Change exposing (ServerChange(..))
+import Change exposing (ClientChange(..), ServerChange(..))
 import Dict
 import EverySet exposing (EverySet)
 import Grid
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty
-import Set
 import Types exposing (..)
 import Units exposing (CellUnit)
 import User exposing (UserData, UserId)
@@ -26,7 +25,6 @@ init : ( BackendModel, Cmd BackendMsg )
 init =
     ( { grid = Grid.empty
       , userSessions = Dict.empty
-      , clientData = Dict.empty
       , users = Dict.empty
       }
     , Cmd.none
@@ -50,26 +48,15 @@ update msg model =
                     Dict.update sessionId
                         (Maybe.map
                             (\session ->
-                                { clientIds = Set.remove clientId session.clientIds
+                                { clientIds = Dict.remove clientId session.clientIds
                                 , userId = session.userId
                                 }
                             )
                         )
                         model.userSessions
-                , clientData = Dict.remove clientId model.clientData
               }
             , Cmd.none
             )
-
-
-isSameUser : SessionId -> ClientId -> SessionId -> ClientId -> Bool
-isSameUser s0 _ s1 _ =
-    s0 == s1
-
-
-isSameClient : SessionId -> ClientId -> SessionId -> ClientId -> Bool
-isSameClient s0 c0 s1 c1 =
-    s0 == s1 && c0 == c1
 
 
 getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, BackendUserData )
@@ -90,9 +77,6 @@ getUserFromSessionId sessionId model =
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 updateFromFrontend sessionId clientId msg model =
     case msg of
-        NoOpToBackend ->
-            ( model, Cmd.none )
-
         RequestData requestData ->
             requestDataUpdate sessionId clientId requestData model
 
@@ -112,14 +96,64 @@ updateFromFrontend sessionId clientId msg model =
                     in
                     ( newModel
                     , broadcast
-                        (\sessionId_ clientId_ ->
-                            if isSameUser sessionId clientId sessionId_ clientId_ then
-                                LocalChangeResponse changes |> Just
+                        (\sessionId_ _ ->
+                            if sessionId == sessionId_ then
+                                List.Nonempty.map Change.LocalChange changes |> ChangeBroadcast |> Just
 
                             else
-                                List.Nonempty.fromList serverChanges |> Maybe.map ServerChangeBroadcast
+                                List.map Change.ServerChange serverChanges
+                                    |> List.Nonempty.fromList
+                                    |> Maybe.map ChangeBroadcast
                         )
                         model
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        ChangeViewBounds bounds ->
+            case
+                Dict.get sessionId model.userSessions
+                    |> Maybe.andThen (\{ clientIds } -> Dict.get clientId clientIds)
+            of
+                Just oldBounds ->
+                    let
+                        newCells =
+                            Bounds.coordRangeFold
+                                (\coord newCells_ ->
+                                    if Bounds.contains coord oldBounds then
+                                        newCells_
+
+                                    else
+                                        case Grid.getCell coord model.grid of
+                                            Just cell ->
+                                                ( coord, cell ) :: newCells_
+
+                                            Nothing ->
+                                                newCells_
+                                )
+                                identity
+                                bounds
+                                []
+                    in
+                    ( { model
+                        | userSessions =
+                            Dict.update
+                                sessionId
+                                (Maybe.map
+                                    (\session ->
+                                        { session
+                                            | clientIds = Dict.update clientId (\_ -> Just bounds) session.clientIds
+                                        }
+                                    )
+                                )
+                                model.userSessions
+                      }
+                    , ViewBoundsChange bounds newCells
+                        |> Change.ClientChange
+                        |> List.Nonempty.fromElement
+                        |> ChangeBroadcast
+                        |> Lamdera.sendToFrontend clientId
                     )
 
                 Nothing ->
@@ -255,13 +289,12 @@ requestDataUpdate sessionId clientId viewBounds model =
                         (\maybeSession ->
                             case maybeSession of
                                 Just session ->
-                                    Just { session | clientIds = Set.insert clientId session.clientIds }
+                                    Just { session | clientIds = Dict.insert clientId viewBounds session.clientIds }
 
                                 Nothing ->
                                     Nothing
                         )
                         model.userSessions
-                , clientData = Dict.insert clientId viewBounds model.clientData
               }
             , Lamdera.sendToFrontend clientId (LoadingData (loadingData ( userId, user )))
             )
@@ -282,9 +315,8 @@ requestDataUpdate sessionId clientId viewBounds model =
                 | userSessions =
                     Dict.insert
                         sessionId
-                        { clientIds = Set.singleton clientId, userId = userId }
+                        { clientIds = Dict.singleton clientId viewBounds, userId = userId }
                         model.userSessions
-                , clientData = Dict.insert clientId viewBounds model.clientData
                 , users = Dict.insert (User.rawId userId) userBackendData model.users
               }
             , Cmd.batch
@@ -292,12 +324,16 @@ requestDataUpdate sessionId clientId viewBounds model =
                     clientId
                     (LoadingData (loadingData ( userId, userBackendData )))
                 , broadcast
-                    (\sessionId_ clientId_ ->
-                        if isSameUser sessionId clientId sessionId_ clientId_ then
+                    (\sessionId_ _ ->
+                        if sessionId == sessionId_ then
                             Nothing
 
                         else
-                            List.Nonempty.fromElement (ServerUserNew ( userId, user )) |> ServerChangeBroadcast |> Just
+                            ServerUserNew ( userId, user )
+                                |> Change.ServerChange
+                                |> List.Nonempty.fromElement
+                                |> ChangeBroadcast
+                                |> Just
                     )
                     model
                 ]
@@ -308,7 +344,7 @@ broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Cmd B
 broadcast msgFunc model =
     model.userSessions
         |> Dict.toList
-        |> List.concatMap (\( sessionId, { clientIds } ) -> Set.toList clientIds |> List.map (Tuple.pair sessionId))
+        |> List.concatMap (\( sessionId, { clientIds } ) -> Dict.keys clientIds |> List.map (Tuple.pair sessionId))
         |> List.map
             (\( sessionId, clientId ) ->
                 msgFunc sessionId clientId

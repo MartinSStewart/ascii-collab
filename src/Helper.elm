@@ -1,10 +1,13 @@
-module Helper exposing (Coord, absTuple, addTuple, boundsToBounds2d, coordRangeFold, coordRangeFoldReverse, coordToPoint, coordToVec, coordToVector2d, fromRawCoord, maxTuple, minTuple, minusTuple, multiplyTuple, roundPoint, toRawCoord)
+module Helper exposing (Coord, RawCellCoord, absTuple, addTuple, coordToPoint, coordToVec, coordToVector2d, fromRawCoord, maxTuple, minTuple, minusTuple, multiplyTuple, roundPoint, toRawCoord)
 
-import BoundingBox2d exposing (BoundingBox2d)
 import Math.Vector2 exposing (Vec2)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Vector2d exposing (Vector2d)
+
+
+type alias RawCellCoord =
+    ( Int, Int )
 
 
 addTuple : Coord unit -> Coord unit -> Coord unit
@@ -69,103 +72,6 @@ toRawCoord ( Quantity x, Quantity y ) =
 fromRawCoord : ( Int, Int ) -> Coord units
 fromRawCoord ( x, y ) =
     ( Quantity x, Quantity y )
-
-
-boundsToBounds2d : { min : Coord units, max : Coord units } -> BoundingBox2d units coordinate
-boundsToBounds2d bounds =
-    BoundingBox2d.from (coordToPoint bounds.min) (coordToPoint bounds.max)
-
-
-coordRangeFold : (Coord units -> a -> a) -> (a -> a) -> Coord units -> Coord units -> a -> a
-coordRangeFold foldFunc rowChangeFunc minCoord maxCoord initialValue =
-    let
-        ( x0, y0 ) =
-            toRawCoord (minTuple minCoord maxCoord)
-
-        ( x1, y1 ) =
-            toRawCoord (maxTuple minCoord maxCoord)
-    in
-    coordRangeFoldHelper foldFunc rowChangeFunc x0 x1 y0 y1 x0 y0 initialValue
-
-
-coordRangeFoldHelper : (Coord units -> a -> a) -> (a -> a) -> Int -> Int -> Int -> Int -> Int -> Int -> a -> a
-coordRangeFoldHelper foldFunc rowChangeFunc minX maxX minY maxY x y value =
-    if y > maxY then
-        value
-
-    else
-        coordRangeFoldHelper foldFunc
-            rowChangeFunc
-            minX
-            maxX
-            minY
-            maxY
-            (if x > maxX then
-                minX
-
-             else
-                x + 1
-            )
-            (if x > maxX then
-                y + 1
-
-             else
-                y
-            )
-            (foldFunc ( Quantity x, Quantity y ) value
-                |> (if x > maxX && y < maxY then
-                        rowChangeFunc
-
-                    else
-                        identity
-                   )
-            )
-
-
-coordRangeFoldReverse : (Coord units -> a -> a) -> (a -> a) -> Coord units -> Coord units -> a -> a
-coordRangeFoldReverse foldFunc rowChangeFunc minCoord maxCoord initialValue =
-    let
-        ( x0, y0 ) =
-            toRawCoord (minTuple minCoord maxCoord)
-
-        ( x1, y1 ) =
-            toRawCoord (maxTuple minCoord maxCoord)
-    in
-    coordRangeFoldReverseHelper foldFunc rowChangeFunc x0 x1 y0 y1 x1 y1 initialValue
-
-
-coordRangeFoldReverseHelper : (Coord units -> a -> a) -> (a -> a) -> Int -> Int -> Int -> Int -> Int -> Int -> a -> a
-coordRangeFoldReverseHelper foldFunc rowChangeFunc minX maxX minY maxY x y value =
-    if y < minY then
-        value
-
-    else
-        coordRangeFoldReverseHelper foldFunc
-            rowChangeFunc
-            minX
-            maxX
-            minY
-            maxY
-            (if x <= minX then
-                maxX
-
-             else
-                x - 1
-            )
-            (if x <= minX then
-                y - 1
-
-             else
-                y
-            )
-            (foldFunc ( Quantity x, Quantity y ) value
-                |> (if x <= minX && y > minY then
-                        rowChangeFunc
-
-                    else
-                        identity
-                   )
-            )
 
 
 type alias Coord units =

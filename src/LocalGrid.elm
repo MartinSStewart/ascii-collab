@@ -1,12 +1,13 @@
 module LocalGrid exposing (LocalGrid, LocalGrid_, init, localModel, localModelConfig)
 
-import Change exposing (Change(..), LocalChange(..), ServerChange(..))
+import Bounds exposing (Bounds)
+import Change exposing (Change(..), ClientChange(..), LocalChange(..), ServerChange(..))
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
-import Helper
-import List.Nonempty exposing (Nonempty)
+import Helper exposing (RawCellCoord)
 import LocalModel exposing (LocalModel)
+import Units exposing (CellUnit)
 import User exposing (UserData, UserId)
 
 
@@ -16,11 +17,12 @@ type LocalGrid
 
 type alias LocalGrid_ =
     { grid : Grid
-    , undoHistory : List (Dict ( Int, Int ) Int)
-    , redoHistory : List (Dict ( Int, Int ) Int)
+    , undoHistory : List (Dict RawCellCoord Int)
+    , redoHistory : List (Dict RawCellCoord Int)
     , user : ( UserId, UserData )
     , otherUsers : List ( UserId, UserData )
     , hiddenUsers : EverySet UserId
+    , viewBounds : Bounds CellUnit
     }
 
 
@@ -31,13 +33,14 @@ localModel localModel_ =
 
 init :
     Grid
-    -> List (Dict ( Int, Int ) Int)
-    -> List (Dict ( Int, Int ) Int)
+    -> List (Dict RawCellCoord Int)
+    -> List (Dict RawCellCoord Int)
     -> ( UserId, UserData )
     -> EverySet UserId
     -> List ( UserId, UserData )
+    -> Bounds CellUnit
     -> LocalGrid
-init grid undoHistory redoHistory user hiddenUsers otherUsers =
+init grid undoHistory redoHistory user hiddenUsers otherUsers viewBounds =
     LocalGrid
         { grid = grid
         , undoHistory = undoHistory
@@ -45,6 +48,7 @@ init grid undoHistory redoHistory user hiddenUsers otherUsers =
         , user = user
         , hiddenUsers = hiddenUsers
         , otherUsers = otherUsers
+        , viewBounds = viewBounds
         }
 
 
@@ -112,6 +116,9 @@ update msg model =
 
         ServerChange (ServerUserNew user) ->
             { model | otherUsers = user :: model.otherUsers }
+
+        ClientChange (ViewBoundsChange bounds newCells) ->
+            model
 
 
 localModelConfig : LocalModel.Config Change LocalGrid

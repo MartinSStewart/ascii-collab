@@ -92,7 +92,7 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
     ( Loaded
         { key = loading.key
         , localModel =
-            LocalGrid.init grid undoHistory redoHistory user hiddenUsers otherUsers |> LocalModel.init
+            LocalGrid.init grid undoHistory redoHistory user hiddenUsers otherUsers viewBounds |> LocalModel.init
         , meshes =
             Grid.allCells grid
                 |> List.map
@@ -151,15 +151,16 @@ init url key =
                     in
                     ( defaultViewPoint, Browser.Navigation.replaceUrl key (encodeUrl defaultViewPoint) )
 
-        min_ =
-            Grid.asciiToCellAndLocalCoord viewPoint
-                |> Tuple.first
-                |> Helper.addTuple ( Units.cellUnit -2, Units.cellUnit -2 )
-
-        max_ =
-            Grid.asciiToCellAndLocalCoord viewPoint
-                |> Tuple.first
-                |> Helper.addTuple ( Units.cellUnit 2, Units.cellUnit 2 )
+        bounds =
+            Bounds.bounds
+                (Grid.asciiToCellAndLocalCoord viewPoint
+                    |> Tuple.first
+                    |> Helper.addTuple ( Units.cellUnit -2, Units.cellUnit -2 )
+                )
+                (Grid.asciiToCellAndLocalCoord viewPoint
+                    |> Tuple.first
+                    |> Helper.addTuple ( Units.cellUnit 2, Units.cellUnit 2 )
+                )
     in
     ( Loading
         { key = key
@@ -168,7 +169,7 @@ init url key =
         , zoomFactor = 1
         }
     , Cmd.batch
-        [ Lamdera.sendToBackend (RequestData { min = min_, max = max_ })
+        [ Lamdera.sendToBackend (RequestData bounds)
         , Task.perform
             (\{ viewport } ->
                 WindowResized
@@ -795,7 +796,7 @@ selectionToString bounds hiddenUsers grid =
             Grid.asciiToCellAndLocalCoord bounds.max |> Tuple.first
 
         flattenedCells =
-            Helper.coordRangeFold
+            Bounds.coordRangeFold
                 (\coord dict ->
                     case Grid.getCell coord grid of
                         Just cell ->
@@ -805,11 +806,10 @@ selectionToString bounds hiddenUsers grid =
                             dict
                 )
                 identity
-                minCell
-                maxCell
+                (Bounds.bounds minCell maxCell)
                 Dict.empty
     in
-    Helper.coordRangeFoldReverse
+    Bounds.coordRangeFoldReverse
         (\coord chars ->
             let
                 ( cellCoord, localCoord ) =
@@ -823,8 +823,10 @@ selectionToString bounds hiddenUsers grid =
                 :: chars
         )
         ((::) '\n')
-        bounds.min
-        (bounds.max |> Helper.minusTuple ( Units.asciiUnit 1, Units.asciiUnit 1 ))
+        (Bounds.bounds
+            bounds.min
+            (bounds.max |> Helper.minusTuple ( Units.asciiUnit 1, Units.asciiUnit 1 ))
+        )
         []
         |> String.fromList
 
@@ -1025,31 +1027,23 @@ updateFromBackend msg model =
 updateLoadedFromBackend : ToFrontend -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 updateLoadedFromBackend msg model =
     case msg of
-        NoOpToFrontend ->
-            ( model, Cmd.none )
-
         LoadingData _ ->
             ( model, Cmd.none )
 
-        ServerChangeBroadcast changeBroadcast ->
-            let
-                newLocalModel =
-                    LocalModel.updateFromBackend
-                        LocalGrid.localModelConfig
-                        (List.Nonempty.map ServerChange changeBroadcast)
-                        model.localModel
-            in
-            ( { model | localModel = newLocalModel }
-            , Cmd.none
-            )
-
-        LocalChangeResponse changes ->
+        --ServerChangeBroadcast changeBroadcast ->
+        --    let
+        --        newLocalModel =
+        --            LocalModel.updateFromBackend
+        --                LocalGrid.localModelConfig
+        --                (List.Nonempty.map ServerChange changeBroadcast)
+        --                model.localModel
+        --    in
+        --    ( { model | localModel = newLocalModel }
+        --    , Cmd.none
+        --    )
+        ChangeBroadcast changes ->
             ( { model
-                | localModel =
-                    LocalModel.updateFromBackend
-                        LocalGrid.localModelConfig
-                        (List.Nonempty.map LocalChange changes)
-                        model.localModel
+                | localModel = LocalModel.updateFromBackend LocalGrid.localModelConfig changes model.localModel
               }
             , Cmd.none
             )

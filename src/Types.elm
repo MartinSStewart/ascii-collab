@@ -21,7 +21,7 @@ import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
-import Helper exposing (Coord)
+import Helper exposing (Coord, RawCellCoord)
 import Html.Events.Extra.Mouse exposing (Button)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
@@ -32,7 +32,6 @@ import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
-import Set exposing (Set)
 import Time
 import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
@@ -79,10 +78,6 @@ type alias FrontendLoaded =
     }
 
 
-type alias RawCellCoord =
-    ( Int, Int )
-
-
 type ToolType
     = DragTool
     | SelectTool
@@ -100,8 +95,7 @@ type MouseButtonState
 
 type alias BackendModel =
     { grid : Grid
-    , userSessions : Dict SessionId { clientIds : Set ClientId, userId : UserId }
-    , clientData : Dict ClientId (Bounds CellUnit)
+    , userSessions : Dict SessionId { clientIds : Dict ClientId (Bounds CellUnit), userId : UserId }
     , users : Dict RawUserId BackendUserData
     }
 
@@ -143,9 +137,9 @@ type FrontendMsg
 
 
 type ToBackend
-    = NoOpToBackend
-    | RequestData (Bounds CellUnit)
+    = RequestData (Bounds CellUnit)
     | GridChange (Nonempty Change.LocalChange)
+    | ChangeViewBounds (Bounds CellUnit)
 
 
 type BackendMsg
@@ -154,10 +148,8 @@ type BackendMsg
 
 
 type ToFrontend
-    = NoOpToFrontend
-    | LoadingData LoadingData_
-    | ServerChangeBroadcast (Nonempty ServerChange)
-    | LocalChangeResponse (Nonempty Change.LocalChange)
+    = LoadingData LoadingData_
+    | ChangeBroadcast (Nonempty Change)
 
 
 type alias LoadingData_ =
