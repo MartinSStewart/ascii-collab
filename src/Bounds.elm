@@ -1,4 +1,4 @@
-module Bounds exposing (Bounds, bounds, boundsToBounds2d, center, contains, convert, coordRangeFold, coordRangeFoldReverse)
+module Bounds exposing (Bounds, bounds, boundsToBounds2d, center, contains, containsBounds, convert, coordRangeFold, coordRangeFoldReverse, expand)
 
 import BoundingBox2d exposing (BoundingBox2d)
 import Helper exposing (Coord)
@@ -18,6 +18,14 @@ bounds min_ max_ =
         }
 
 
+expand : Quantity Int unit -> Bounds unit -> Bounds unit
+expand expandBy (Bounds bounds_) =
+    Bounds
+        { min = Helper.minusTuple ( expandBy, expandBy ) bounds_.min
+        , max = Helper.addTuple ( expandBy, expandBy ) bounds_.max
+        }
+
+
 contains : Coord unit -> Bounds unit -> Bool
 contains ( Quantity x, Quantity y ) (Bounds bounds_) =
     let
@@ -28,6 +36,25 @@ contains ( Quantity x, Quantity y ) (Bounds bounds_) =
             bounds_.max
     in
     minX <= x && x < maxX && minY <= y && y < maxY
+
+
+containsBounds : Bounds unit -> Bounds unit -> Bool
+containsBounds (Bounds otherBounds) (Bounds bounds_) =
+    let
+        ( Quantity minX, Quantity minY ) =
+            bounds_.min
+
+        ( Quantity maxX, Quantity maxY ) =
+            bounds_.max
+
+        ( Quantity otherMinX, Quantity otherMinY ) =
+            otherBounds.min
+
+        ( Quantity otherMaxX, Quantity otherMaxY ) =
+            otherBounds.max
+    in
+    (minX <= otherMinX && otherMinX <= maxX && minY <= otherMinY && otherMinY <= maxY)
+        && (minX <= otherMaxX && otherMaxX <= maxX && minY <= otherMaxY && otherMaxY <= maxY)
 
 
 convert : (Coord unit0 -> Coord unit1) -> Bounds unit0 -> Bounds unit1

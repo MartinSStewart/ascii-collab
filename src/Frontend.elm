@@ -225,6 +225,7 @@ update msg model =
         Loaded frontendLoaded ->
             updateLoaded msg frontendLoaded
                 |> Tuple.mapFirst (updateMeshes frontendLoaded >> Cursor.updateMesh frontendLoaded)
+                |> viewBoundsUpdate
                 |> Tuple.mapFirst Loaded
 
 
@@ -974,6 +975,43 @@ updateMeshes oldModel newModel =
     }
 
 
+viewBoundsUpdate : ( FrontendLoaded, Cmd FrontendMsg ) -> ( FrontendLoaded, Cmd FrontendMsg )
+viewBoundsUpdate ( model, cmd ) =
+    let
+        { minX, minY, maxX, maxY } =
+            viewBoundingBox model |> BoundingBox2d.extrema
+
+        min_ =
+            Point2d.xy minX minY |> Units.worldToAscii |> Grid.asciiToCellAndLocalCoord |> Tuple.first
+
+        max_ =
+            Point2d.xy maxX maxY
+                |> Units.worldToAscii
+                |> Grid.asciiToCellAndLocalCoord
+                |> Tuple.first
+                |> Helper.addTuple ( Units.cellUnit 1, Units.cellUnit 1 )
+
+        bounds =
+            Bounds.bounds min_ max_
+
+        newBounds =
+            Bounds.expand (Units.cellUnit 1) bounds
+    in
+    if LocalGrid.localModel model.localModel |> .viewBounds |> Bounds.containsBounds bounds then
+        ( model, cmd )
+
+    else
+        ( { model
+            | localModel =
+                LocalModel.update
+                    LocalGrid.localModelConfig
+                    (ClientChange (Change.ViewBoundsChange newBounds []))
+                    model.localModel
+          }
+        , Cmd.batch [ cmd, Lamdera.sendToBackend (ChangeViewBounds newBounds) ]
+        )
+
+
 offsetViewPoint :
     FrontendLoaded
     -> Point2d Pixels ScreenCoordinate
@@ -1030,17 +1068,6 @@ updateLoadedFromBackend msg model =
         LoadingData _ ->
             ( model, Cmd.none )
 
-        --ServerChangeBroadcast changeBroadcast ->
-        --    let
-        --        newLocalModel =
-        --            LocalModel.updateFromBackend
-        --                LocalGrid.localModelConfig
-        --                (List.Nonempty.map ServerChange changeBroadcast)
-        --                model.localModel
-        --    in
-        --    ( { model | localModel = newLocalModel }
-        --    , Cmd.none
-        --    )
         ChangeBroadcast changes ->
             ( { model
                 | localModel = LocalModel.updateFromBackend LocalGrid.localModelConfig changes model.localModel
@@ -1543,8 +1570,8 @@ findPixelPerfectSize frontendModel =
     { canvasSize = ( w, h ), actualCanvasSize = ( actualW, actualH ) }
 
 
-canvasView : FrontendLoaded -> Html FrontendMsg
-canvasView model =
+viewBoundingBox : FrontendLoaded -> BoundingBox2d WorldPixel WorldCoordinate
+viewBoundingBox model =
     let
         viewMin =
             screenToWorld model Point2d.origin
@@ -1557,10 +1584,15 @@ canvasView model =
 
         viewMax =
             screenToWorld model (Helper.coordToPoint model.windowSize)
+    in
+    BoundingBox2d.from viewMin viewMax
 
-        viewBounds : BoundingBox2d WorldPixel WorldCoordinate
-        viewBounds =
-            BoundingBox2d.from viewMin viewMax
+
+canvasView : FrontendLoaded -> Html FrontendMsg
+canvasView model =
+    let
+        viewBounds_ =
+            viewBoundingBox model
 
         ( windowWidth, windowHeight ) =
             actualCanvasSize
@@ -1611,7 +1643,7 @@ canvasView model =
                                     |> Units.cellToAscii
                                     |> Units.asciiToWorld
                                     |> Helper.coordToPoint
-                                    |> (\p -> BoundingBox2d.contains p viewBounds)
+                                    |> (\p -> BoundingBox2d.contains p viewBounds_)
                             )
                             model.meshes
                         )

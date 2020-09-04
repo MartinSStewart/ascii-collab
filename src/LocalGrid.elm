@@ -60,10 +60,14 @@ update msg model =
     in
     case msg of
         LocalChange (LocalGridChange gridChange) ->
-            { model
-                | redoHistory = []
-                , grid = Grid.addChange (Grid.localChangeToChange userId gridChange) model.grid
-            }
+            if Bounds.contains gridChange.cellPosition model.viewBounds then
+                { model
+                    | redoHistory = []
+                    , grid = Grid.addChange (Grid.localChangeToChange userId gridChange) model.grid
+                }
+
+            else
+                model
 
         LocalChange LocalRedo ->
             case model.redoHistory of
@@ -109,7 +113,11 @@ update msg model =
             }
 
         ServerChange (ServerGridChange gridChange) ->
-            { model | grid = Grid.addChange gridChange model.grid }
+            if Bounds.contains gridChange.cellPosition model.viewBounds then
+                { model | grid = Grid.addChange gridChange model.grid }
+
+            else
+                model
 
         ServerChange (ServerUndoPoint undoPoint) ->
             { model | grid = Grid.setUndoPoints undoPoint.userId undoPoint.undoPoints model.grid }
@@ -118,11 +126,25 @@ update msg model =
             { model | otherUsers = user :: model.otherUsers }
 
         ClientChange (ViewBoundsChange bounds newCells) ->
-            model
+            { model
+                | grid =
+                    Grid.allCellsDict model.grid
+                        |> Dict.filter (\coord _ -> Bounds.contains (Helper.fromRawCoord coord) bounds)
+                        |> Dict.union (List.map (Tuple.mapFirst Helper.toRawCoord) newCells |> Dict.fromList)
+                        |> Grid.from
+                , viewBounds = bounds
+            }
 
 
 localModelConfig : LocalModel.Config Change LocalGrid
 localModelConfig =
-    { msgEqual = \msg0 msg1 -> msg0 == msg1
+    { msgEqual =
+        \msg0 msg1 ->
+            case ( msg0, msg1 ) of
+                ( ClientChange (ViewBoundsChange bounds0 _), ClientChange (ViewBoundsChange bounds1 _) ) ->
+                    bounds0 == bounds1
+
+                _ ->
+                    msg0 == msg1
     , update = \msg (LocalGrid model) -> update msg model |> LocalGrid
     }
