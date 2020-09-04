@@ -108,7 +108,7 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
             , pendingChanges = []
             , tool = DragTool
             , undoAddLast = Time.millisToPosix 0
-            , time = Time.millisToPosix 0
+            , time = loading.time
             , lastTouchMove = Nothing
             , userPressHighlighted = Nothing
             , userHoverHighlighted = Nothing
@@ -164,6 +164,7 @@ init url key =
         , windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 )
         , devicePixelRatio = Quantity 1
         , zoomFactor = 1
+        , time = Time.millisToPosix 0
         }
     , Cmd.batch
         [ Lamdera.sendToBackend (RequestData bounds)
@@ -175,6 +176,7 @@ init url key =
                     )
             )
             Browser.Dom.getViewport
+        , Task.perform ShortIntervalElapsed Time.now
         , cmd
         ]
     )
@@ -212,6 +214,9 @@ update msg model =
             case msg of
                 WindowResized windowSize ->
                     windowResizedUpdate windowSize loadingModel |> Tuple.mapFirst Loading
+
+                ShortIntervalElapsed time ->
+                    ( Loading { loadingModel | time = time }, Cmd.none )
 
                 GotDevicePixelRatio devicePixelRatio ->
                     devicePixelRatioUpdate devicePixelRatio loadingModel |> Tuple.mapFirst Loading

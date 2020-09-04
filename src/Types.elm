@@ -50,6 +50,7 @@ type alias FrontendLoading =
     , windowSize : Coord Pixels
     , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
     , zoomFactor : Int
+    , time : Time.Posix
     }
 
 
