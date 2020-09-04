@@ -88,39 +88,33 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
         cursor : Cursor
         cursor =
             Cursor.setCursor viewPoint
+
+        model =
+            { key = loading.key
+            , localModel =
+                LocalGrid.init grid undoHistory redoHistory user hiddenUsers otherUsers viewBounds |> LocalModel.init
+            , meshes = Dict.empty
+            , cursorMesh = Cursor.toMesh cursor
+            , viewPoint = Units.asciiToWorld viewPoint |> Helper.coordToPoint
+            , viewPointLastInterval = Point2d.origin
+            , cursor = cursor
+            , texture = Nothing
+            , pressedKeys = []
+            , windowSize = loading.windowSize
+            , devicePixelRatio = loading.devicePixelRatio
+            , zoomFactor = loading.zoomFactor
+            , mouseLeft = MouseButtonUp
+            , mouseMiddle = MouseButtonUp
+            , pendingChanges = []
+            , tool = DragTool
+            , undoAddLast = Time.millisToPosix 0
+            , time = Time.millisToPosix 0
+            , lastTouchMove = Nothing
+            , userPressHighlighted = Nothing
+            , userHoverHighlighted = Nothing
+            }
     in
-    ( Loaded
-        { key = loading.key
-        , localModel =
-            LocalGrid.init grid undoHistory redoHistory user hiddenUsers otherUsers viewBounds |> LocalModel.init
-        , meshes =
-            Grid.allCells grid
-                |> List.map
-                    (\( cellCoord, cell ) ->
-                        ( Helper.toRawCoord cellCoord
-                        , Grid.mesh cellCoord (GridCell.flatten hiddenUsers cell |> Array.toList)
-                        )
-                    )
-                |> Dict.fromList
-        , cursorMesh = Cursor.toMesh cursor
-        , viewPoint = Units.asciiToWorld viewPoint |> Helper.coordToPoint
-        , viewPointLastInterval = Point2d.origin
-        , cursor = cursor
-        , texture = Nothing
-        , pressedKeys = []
-        , windowSize = loading.windowSize
-        , devicePixelRatio = loading.devicePixelRatio
-        , zoomFactor = loading.zoomFactor
-        , mouseLeft = MouseButtonUp
-        , mouseMiddle = MouseButtonUp
-        , pendingChanges = []
-        , tool = DragTool
-        , undoAddLast = Time.millisToPosix 0
-        , time = Time.millisToPosix 0
-        , lastTouchMove = Nothing
-        , userPressHighlighted = Nothing
-        , userHoverHighlighted = Nothing
-        }
+    ( updateMeshes model model
     , Cmd.batch
         [ WebGL.Texture.loadWith
             { magnify = WebGL.Texture.nearest
@@ -134,6 +128,8 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
         , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
         ]
     )
+        |> viewBoundsUpdate
+        |> Tuple.mapFirst Loaded
 
 
 init : Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
@@ -151,6 +147,7 @@ init url key =
                     in
                     ( defaultViewPoint, Browser.Navigation.replaceUrl key (encodeUrl defaultViewPoint) )
 
+        -- We only load in a portion of the grid since we don't know the window size. The rest will get loaded in later anyway.
         bounds =
             Bounds.bounds
                 (Grid.asciiToCellAndLocalCoord viewPoint
@@ -750,6 +747,7 @@ updateLocalModel msg model =
         , localModel =
             LocalModel.update
                 LocalGrid.localModelConfig
+                model.time
                 (LocalChange msg)
                 model.localModel
     }
@@ -1005,6 +1003,7 @@ viewBoundsUpdate ( model, cmd ) =
             | localModel =
                 LocalModel.update
                     LocalGrid.localModelConfig
+                    model.time
                     (ClientChange (Change.ViewBoundsChange newBounds []))
                     model.localModel
           }
@@ -1125,9 +1124,29 @@ textarea model =
             |> Element.inFront
 
 
+lostConnection : FrontendLoaded -> Bool
+lostConnection model =
+    case LocalModel.localMsgs model.localModel of
+        ( time, _ ) :: _ ->
+            Duration.from time model.time |> Quantity.greaterThan (Duration.seconds 10)
+
+        [] ->
+            False
+
+
 view : FrontendModel -> Browser.Document FrontendMsg
 view model =
-    { title = "Ascii Collab"
+    { title =
+        case model of
+            Loading _ ->
+                "Ascii Collab"
+
+            Loaded loadedModel ->
+                if lostConnection loadedModel then
+                    "Ascii Collab (offline)"
+
+                else
+                    "Ascii Collab"
     , body =
         [ case model of
             Loading _ ->
@@ -1173,6 +1192,18 @@ view model =
                     (Element.html (canvasView loadedModel))
         ]
     }
+
+
+offlineWarningView : Element msg
+offlineWarningView =
+    Element.text "⚠ Unable to reach server. Your changes won't be saved."
+        |> Element.el
+            [ Element.Background.color warningColor
+            , Element.padding 8
+            , Element.Border.rounded 4
+            , Element.centerX
+            , Element.moveUp 8
+            ]
 
 
 mouseAttributes : List (Element.Attribute FrontendMsg)
@@ -1451,6 +1482,13 @@ toolbarView model =
         , Element.Border.color backgroundColor
         , Element.Border.width 2
         , Element.Font.color textColor
+        , Element.above
+            (if lostConnection model then
+                offlineWarningView
+
+             else
+                Element.none
+            )
         ]
         groups
         |> Element.el

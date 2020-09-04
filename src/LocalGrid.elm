@@ -60,14 +60,15 @@ update msg model =
     in
     case msg of
         LocalChange (LocalGridChange gridChange) ->
-            if Bounds.contains gridChange.cellPosition model.viewBounds then
-                { model
-                    | redoHistory = []
-                    , grid = Grid.addChange (Grid.localChangeToChange userId gridChange) model.grid
-                }
+            { model
+                | redoHistory = []
+                , grid =
+                    if Bounds.contains gridChange.cellPosition model.viewBounds then
+                        Grid.addChange (Grid.localChangeToChange userId gridChange) model.grid
 
-            else
-                model
+                    else
+                        model.grid
+            }
 
         LocalChange LocalRedo ->
             case model.redoHistory of
