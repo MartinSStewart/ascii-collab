@@ -390,8 +390,7 @@ updateLoaded msg model =
                     if Units.worldToAscii actualViewPoint_ /= Units.worldToAscii model.viewPointLastInterval then
                         Units.worldToAscii actualViewPoint_
                             |> encodeUrl
-                            |> Browser.Navigation.replaceUrl
-                                model.key
+                            |> Browser.Navigation.replaceUrl model.key
 
                     else
                         Cmd.none
@@ -758,16 +757,6 @@ updateLocalModel msg model =
     }
 
 
-isGridChange : Change.LocalChange -> Bool
-isGridChange localChange =
-    case localChange of
-        Change.LocalGridChange _ ->
-            True
-
-        _ ->
-            False
-
-
 clearTextSelection bounds model =
     let
         ( w, h ) =
@@ -866,12 +855,11 @@ devicePixelRatioUpdate devicePixelRatio model =
 
 maxStringLength : number
 maxStringLength =
-    case Env.mode of
-        Env.Production ->
-            5000
+    if Env.isProduction then
+        5000
 
-        Env.Development ->
-            100000
+    else
+        100000
 
 
 changeText : String -> FrontendLoaded -> FrontendLoaded

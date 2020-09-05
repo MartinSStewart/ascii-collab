@@ -2,12 +2,14 @@ module Types exposing
     ( BackendModel
     , BackendMsg(..)
     , BackendUserData
+    , ClientId
     , FrontendLoaded
     , FrontendLoading
     , FrontendModel(..)
     , FrontendMsg(..)
     , LoadingData_
     , MouseButtonState(..)
+    , SessionId
     , ToBackend(..)
     , ToFrontend(..)
     , ToolType(..)
@@ -24,7 +26,6 @@ import Grid exposing (Grid)
 import Helper exposing (Coord, RawCellCoord)
 import Html.Events.Extra.Mouse exposing (Button)
 import Keyboard
-import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
@@ -38,6 +39,14 @@ import Url exposing (Url)
 import User exposing (RawUserId, UserData, UserId)
 import WebGL
 import WebGL.Texture exposing (Texture)
+
+
+type alias SessionId =
+    String
+
+
+type alias ClientId =
+    String
 
 
 type FrontendModel
@@ -144,8 +153,7 @@ type ToBackend
 
 
 type BackendMsg
-    = NoOpBackendMsg
-    | UserDisconnected SessionId ClientId
+    = UserDisconnected SessionId ClientId
 
 
 type ToFrontend
