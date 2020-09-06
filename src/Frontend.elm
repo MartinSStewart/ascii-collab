@@ -34,7 +34,7 @@ import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty)
 import LocalGrid
-import LocalModel exposing (LocalModel)
+import LocalModel
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
@@ -92,7 +92,7 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
         model =
             { key = loading.key
             , localModel =
-                LocalGrid.init grid undoHistory redoHistory user hiddenUsers otherUsers viewBounds |> LocalModel.init
+                LocalGrid.init grid undoHistory redoHistory user hiddenUsers otherUsers viewBounds
             , meshes = Dict.empty
             , cursorMesh = Cursor.toMesh cursor
             , viewPoint = Units.asciiToWorld viewPoint |> Helper.coordToPoint
@@ -748,12 +748,7 @@ updateLocalModel : Change.LocalChange -> FrontendLoaded -> FrontendLoaded
 updateLocalModel msg model =
     { model
         | pendingChanges = model.pendingChanges ++ [ msg ]
-        , localModel =
-            LocalModel.update
-                LocalGrid.localModelConfig
-                model.time
-                (LocalChange msg)
-                model.localModel
+        , localModel = LocalGrid.update model.time (LocalChange msg) model.localModel
     }
 
 
@@ -994,8 +989,7 @@ viewBoundsUpdate ( model, cmd ) =
     else
         ( { model
             | localModel =
-                LocalModel.update
-                    LocalGrid.localModelConfig
+                LocalGrid.update
                     model.time
                     (ClientChange (Change.ViewBoundsChange newBounds []))
                     model.localModel
@@ -1062,7 +1056,7 @@ updateLoadedFromBackend msg model =
 
         ChangeBroadcast changes ->
             ( { model
-                | localModel = LocalModel.updateFromBackend LocalGrid.localModelConfig changes model.localModel
+                | localModel = LocalGrid.updateFromBackend changes model.localModel
               }
             , Cmd.none
             )

@@ -1,11 +1,18 @@
 module Tests exposing (..)
 
+import Ascii
 import BackendLogic exposing (Effect(..))
 import Bounds
+import Change exposing (LocalChange(..))
 import Dict
 import Element exposing (Element)
 import Element.Background
+import EverySet
+import Grid
 import Html exposing (Html)
+import List.Nonempty as Nonempty
+import LocalGrid
+import LocalModel
 import Time
 import Types exposing (BackendModel, ClientId, FrontendModel, SessionId, ToBackend(..), ToFrontend(..))
 import Units
@@ -83,7 +90,7 @@ newUserState =
         |> BackendLogic.updateFromFrontend
             "session0"
             "client0"
-            (RequestData (Bounds.bounds ( Units.cellUnit 0, Units.cellUnit 0 ) ( Units.cellUnit 2, Units.cellUnit 2 )))
+            (RequestData smallViewBounds)
 
 
 type alias Event =
@@ -99,11 +106,37 @@ type alias Simulation =
     { backend : BackendModel, frontend : List ( SessionId, ClientId, FrontendModel ), pendingEvents : List EventType }
 
 
+smallViewBounds =
+    Bounds.bounds ( Units.cellUnit 0, Units.cellUnit 0 ) ( Units.cellUnit 2, Units.cellUnit 2 )
+
+
 
 --simulate : List Event -> Simulation -> Simulation
+
+
+time seconds =
+    Time.millisToPosix ((seconds * 1000) + 10000000)
+
+type Test model = Test (List TestResult) model
+
+testAssert : (model -> TestResult) -> model -> Test model
+testAssert assertion model =
+
+
+asciiA =
+    Ascii.fromChar 'a' |> Maybe.withDefault Ascii.default
 
 
 testUndo : Element msg
 testUndo =
     test "Test undo"
-        Passed
+        (LocalGrid.init Grid.empty [] [] (User.newUser 0) EverySet.empty [] smallViewBounds
+            |> LocalGrid.update (time 0)
+                ({ cellPosition = ( Units.cellUnit 0, Units.cellUnit 0 ), localPosition = 0, change = Nonempty.fromElement asciiA }
+                    |> LocalGridChange
+                    |> LocalChange
+                )
+            |> LocalGrid.update (time 2) (LocalChange LocalAddUndo)
+            |> LocalGrid.update (time 3) (LocalChange LocalUndo)
+            |> LocalGrid.update (time 4) (LocalChange LocalRedo)
+        )

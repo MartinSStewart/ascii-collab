@@ -1,4 +1,4 @@
-module LocalGrid exposing (LocalGrid, LocalGrid_, init, localModel, localModelConfig)
+module LocalGrid exposing (LocalGrid, LocalGrid_, init, localModel, update, updateFromBackend)
 
 import Bounds exposing (Bounds)
 import Change exposing (Change(..), ClientChange(..), LocalChange(..), ServerChange(..))
@@ -6,7 +6,9 @@ import Dict exposing (Dict)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import Helper exposing (RawCellCoord)
+import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
+import Time
 import Units exposing (CellUnit)
 import User exposing (UserData, UserId)
 
@@ -39,7 +41,7 @@ init :
     -> EverySet UserId
     -> List ( UserId, UserData )
     -> Bounds CellUnit
-    -> LocalGrid
+    -> LocalModel Change LocalGrid
 init grid undoHistory redoHistory user hiddenUsers otherUsers viewBounds =
     LocalGrid
         { grid = grid
@@ -50,10 +52,21 @@ init grid undoHistory redoHistory user hiddenUsers otherUsers viewBounds =
         , otherUsers = otherUsers
         , viewBounds = viewBounds
         }
+        |> LocalModel.init
 
 
-update : Change -> LocalGrid_ -> LocalGrid_
-update msg model =
+update : Time.Posix -> Change -> LocalModel Change LocalGrid -> LocalModel Change LocalGrid
+update time change localModel_ =
+    LocalModel.update config time change localModel_
+
+
+updateFromBackend : Nonempty Change -> LocalModel Change LocalGrid -> LocalModel Change LocalGrid
+updateFromBackend changes localModel_ =
+    LocalModel.updateFromBackend config changes localModel_
+
+
+update_ : Change -> LocalGrid_ -> LocalGrid_
+update_ msg model =
     let
         userId =
             Tuple.first model.user
@@ -137,8 +150,8 @@ update msg model =
             }
 
 
-localModelConfig : LocalModel.Config Change LocalGrid
-localModelConfig =
+config : LocalModel.Config Change LocalGrid
+config =
     { msgEqual =
         \msg0 msg1 ->
             case ( msg0, msg1 ) of
@@ -147,5 +160,5 @@ localModelConfig =
 
                 _ ->
                     msg0 == msg1
-    , update = \msg (LocalGrid model) -> update msg model |> LocalGrid
+    , update = \msg (LocalGrid model) -> update_ msg model |> LocalGrid
     }
