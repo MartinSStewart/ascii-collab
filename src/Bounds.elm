@@ -1,4 +1,4 @@
-module Bounds exposing (Bounds, bounds, boundsToBounds2d, center, contains, containsBounds, convert, coordRangeFold, coordRangeFoldReverse, expand)
+module Bounds exposing (Bounds, bounds, boundsToBounds2d, center, contains, containsBounds, convert, coordRangeFold, coordRangeFoldReverse, expand, translate)
 
 import BoundingBox2d exposing (BoundingBox2d)
 import Helper exposing (Coord)
@@ -15,6 +15,14 @@ bounds min_ max_ =
     Bounds
         { min = Helper.minTuple min_ max_
         , max = Helper.maxTuple min_ max_
+        }
+
+
+translate : Coord unit -> Bounds unit -> Bounds unit
+translate coord (Bounds bounds_) =
+    Bounds
+        { min = Helper.addTuple coord bounds_.min
+        , max = Helper.addTuple coord bounds_.max
         }
 
 

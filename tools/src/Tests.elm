@@ -1,9 +1,9 @@
 module Tests exposing (..)
 
 import Array
-import Ascii
+import Ascii exposing (Ascii)
 import BackendLogic exposing (Effect(..))
-import Bounds
+import Bounds exposing (Bounds)
 import Change exposing (LocalChange(..))
 import Dict
 import Element exposing (Element)
@@ -66,7 +66,43 @@ main =
                  )
                     |> testSingle
                 )
-            , testUndo
+            , test "Test undo"
+                (LocalGrid.init Grid.empty [] [] (User.newUser 0) EverySet.empty [] smallViewBounds
+                    |> testInit
+                    |> testMap (LocalGrid.update (time 2) (Change.LocalChange LocalAddUndo))
+                    |> testAssert (checkGridValue Nothing)
+                    |> testMap
+                        (LocalGrid.update (time 0)
+                            ({ cellPosition = ( Units.cellUnit 0, Units.cellUnit 0 ), localPosition = 0, change = Nonempty.fromElement asciiA }
+                                |> Change.LocalGridChange
+                                |> Change.LocalChange
+                            )
+                        )
+                    |> testAssert (checkGridValue (Just asciiA))
+                    |> testMap (LocalGrid.update (time 3) (Change.LocalChange LocalUndo))
+                    |> testAssert (checkGridValue (Just Ascii.default))
+                    |> testMap (LocalGrid.update (time 4) (Change.LocalChange LocalRedo))
+                    |> testAssert (checkGridValue (Just asciiA))
+                )
+            , test "Don't show changes outside of view bounds"
+                (LocalGrid.init
+                    Grid.empty
+                    []
+                    []
+                    (User.newUser 0)
+                    EverySet.empty
+                    []
+                    (Bounds.translate ( Units.cellUnit 1, Units.cellUnit 0 ) smallViewBounds)
+                    |> testInit
+                    |> testMap
+                        (LocalGrid.update (time 0)
+                            ({ cellPosition = ( Units.cellUnit 0, Units.cellUnit 0 ), localPosition = 0, change = Nonempty.fromElement asciiA }
+                                |> Change.LocalGridChange
+                                |> Change.LocalChange
+                            )
+                        )
+                    |> testAssert (checkGridValue Nothing)
+                )
             ]
 
 
@@ -108,8 +144,9 @@ newUserState =
             (RequestData smallViewBounds)
 
 
+smallViewBounds : Bounds Units.CellUnit
 smallViewBounds =
-    Bounds.bounds ( Units.cellUnit 0, Units.cellUnit 0 ) ( Units.cellUnit 2, Units.cellUnit 2 )
+    Bounds.bounds ( Units.cellUnit 0, Units.cellUnit 0 ) ( Units.cellUnit 1, Units.cellUnit 1 )
 
 
 time seconds =
@@ -144,58 +181,7 @@ asciiA =
     Ascii.fromChar 'a' |> Maybe.withDefault Ascii.default
 
 
-testUndo : Element msg
-testUndo =
-    test "Test undo"
-        (LocalGrid.init Grid.empty [] [] (User.newUser 0) EverySet.empty [] smallViewBounds
-            |> testInit
-            |> testMap (LocalGrid.update (time 2) (Change.LocalChange LocalAddUndo))
-            |> testAssert (checkGridValue Nothing)
-            |> testMap
-                (LocalGrid.update (time 0)
-                    ({ cellPosition = ( Units.cellUnit 0, Units.cellUnit 0 ), localPosition = 0, change = Nonempty.fromElement asciiA }
-                        |> Change.LocalGridChange
-                        |> Change.LocalChange
-                    )
-                )
-            |> testAssert (checkGridValue (Just asciiA))
-            |> testMap (LocalGrid.update (time 3) (Change.LocalChange LocalUndo))
-            |> testAssert (checkGridValue (Just Ascii.default))
-            |> testMap (LocalGrid.update (time 4) (Change.LocalChange LocalRedo))
-            |> testAssert (checkGridValue (Just asciiA))
-        )
-
-
-
---asdf =
---    Test [ Passed, Passed, Passed ]
---        (LocalModel
---            { localModel =
---                LocalGrid
---                    { grid =
---                        Grid
---                            (Dict.fromList
---                                [ ( ( 0, 0 )
---                                  , Cell
---                                        { history = [ { line = Nonempty (Ascii 109) [], position = 0, userId = UserId 0 } ]
---                                        , undoPoint = Dict.fromList [ ( 0, 1 ) ]
---                                        }
---                                  )
---                                ]
---                            )
---                    , hiddenUsers = EverySet (D [])
---                    , otherUsers = []
---                    , redoHistory = [ Dict.fromList [ ( ( 0, 0 ), 1 ) ] ]
---                    , undoHistory = []
---                    , user = ( UserId 0, User { color = Green } )
---                    , viewBounds = Bounds { max = ( Quantity 2, Quantity 2 ), min = ( Quantity 0, Quantity 0 ) }
---                    }
---            , localMsgs = [ ( Posix 10000000, LocalChange (LocalGridChange { cellPosition = ( Quantity 0, Quantity 0 ), change = Nonempty (Ascii 109) [], localPosition = 0 }) ), ( Posix 10002000, LocalChange LocalAddUndo ), ( Posix 10003000, LocalChange LocalUndo ) ]
---            , model = LocalGrid { grid = Grid (Dict.fromList []), hiddenUsers = EverySet (D []), otherUsers = [], redoHistory = [], undoHistory = [], user = ( UserId 0, User { color = Green } ), viewBounds = Bounds { max = ( Quantity 2, Quantity 2 ), min = ( Quantity 0, Quantity 0 ) } }
---            }
---        )
-
-
+checkGridValue : Maybe Ascii -> LocalModel.LocalModel a LocalGrid.LocalGrid -> TestResult
 checkGridValue value =
     LocalGrid.localModel
         >> .grid
