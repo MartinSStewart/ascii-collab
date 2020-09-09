@@ -1,10 +1,29 @@
-module Grid exposing (Change, Grid(..), LocalChange, Vertex, addChange, allCells, allCellsDict, asciiBox, asciiToCellAndLocalCoord, changeCount, empty, from, getCell, localChangeToChange, mesh, region, setUndoPoints, textToChange, undoPoint)
+module Grid exposing
+    ( Change
+    , Grid(..)
+    , LocalChange
+    , Vertex
+    , addChange
+    , allCells
+    , allCellsDict
+    , asciiBox
+    , asciiToCellAndLocalCoord
+    , changeCount
+    , empty
+    , from
+    , getCell
+    , localChangeToChange
+    , mesh
+    , moveUndoPoint
+    , region
+    , textToChange
+    )
 
 import Ascii exposing (Ascii)
 import Bounds exposing (Bounds)
 import Dict exposing (Dict)
 import GridCell exposing (Cell)
-import Helper exposing (Coord)
+import Helper exposing (Coord, RawCellCoord)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
@@ -96,25 +115,15 @@ textToChange asciiCoord lines =
             )
 
 
-setUndoPoints : UserId -> Dict ( Int, Int ) Int -> Grid -> Grid
-setUndoPoints userId undoPoints (Grid grid) =
-    Dict.map
-        (\coord cell ->
-            let
-                undoPoint_ =
-                    Dict.get coord undoPoints |> Maybe.withDefault 0
-            in
-            GridCell.setUndoPoint userId undoPoint_ cell
+moveUndoPoint : UserId -> Dict RawCellCoord Int -> Grid -> Grid
+moveUndoPoint userId undoPoint (Grid grid) =
+    Dict.foldl
+        (\coord moveAmount newGrid ->
+            Dict.update coord (Maybe.map (GridCell.moveUndoPoint userId moveAmount)) newGrid
         )
         grid
+        undoPoint
         |> Grid
-
-
-undoPoint : UserId -> Grid -> Dict ( Int, Int ) Int
-undoPoint userId (Grid grid) =
-    Dict.toList grid
-        |> List.filterMap (\( coord, cell ) -> GridCell.undoPoint userId cell |> Maybe.map (Tuple.pair coord))
-        |> Dict.fromList
 
 
 changeCount : Coord Units.CellUnit -> Grid -> Int

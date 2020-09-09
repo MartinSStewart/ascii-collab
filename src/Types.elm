@@ -115,6 +115,7 @@ type alias BackendUserData =
     , hiddenUsers : EverySet UserId
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
+    , undoCurrent : Dict RawCellCoord Int
     }
 
 

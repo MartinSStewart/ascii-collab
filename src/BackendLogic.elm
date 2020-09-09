@@ -7,6 +7,7 @@ import EverySet exposing (EverySet)
 import Grid
 import List.Nonempty
 import Types exposing (..)
+import Undo
 import Units exposing (CellUnit)
 import User exposing (UserData, UserId)
 
@@ -151,23 +152,21 @@ updateLocalChange ( userId, _ ) change model =
     case change of
         Change.LocalUndo ->
             case Dict.get (User.rawId userId) model.users of
-                Just undoPoint ->
-                    case undoPoint.undoHistory of
-                        head :: rest ->
+                Just user ->
+                    case Undo.undo user of
+                        Just newUser ->
+                            let
+                                undoMoveAmount =
+                                    Dict.map (\_ a -> -a) user.undoCurrent
+                            in
                             ( { model
-                                | users =
-                                    Dict.insert (User.rawId userId)
-                                        { undoPoint
-                                            | undoHistory = rest
-                                            , redoHistory = Grid.undoPoint userId model.grid :: undoPoint.redoHistory
-                                        }
-                                        model.users
-                                , grid = Grid.setUndoPoints userId head model.grid
+                                | users = Dict.insert (User.rawId userId) newUser model.users
+                                , grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
                               }
-                            , ServerUndoPoint { userId = userId, undoPoints = head } |> Just
+                            , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
                             )
 
-                        [] ->
+                        Nothing ->
                             ( model, Nothing )
 
                 Nothing ->
@@ -186,39 +185,27 @@ updateLocalChange ( userId, _ ) change model =
         Change.LocalRedo ->
             case Dict.get (User.rawId userId) model.users of
                 Just user ->
-                    case user.redoHistory of
-                        head :: rest ->
+                    case Undo.redo user of
+                        Just newUser ->
+                            let
+                                undoMoveAmount =
+                                    newUser.undoCurrent
+                            in
                             ( { model
-                                | users =
-                                    Dict.insert (User.rawId userId)
-                                        { user
-                                            | undoHistory = Grid.undoPoint userId model.grid :: user.undoHistory
-                                            , redoHistory = rest
-                                        }
-                                        model.users
-                                , grid = Grid.setUndoPoints userId head model.grid
+                                | users = Dict.insert (User.rawId userId) newUser model.users
+                                , grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
                               }
-                            , ServerUndoPoint { userId = userId, undoPoints = head } |> Just
+                            , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
                             )
 
-                        [] ->
+                        Nothing ->
                             ( model, Nothing )
 
                 Nothing ->
                     ( model, Nothing )
 
         Change.LocalAddUndo ->
-            ( updateUser
-                userId
-                (\user ->
-                    { user
-                        | redoHistory = []
-                        , undoHistory = Grid.undoPoint userId model.grid :: user.undoHistory
-                    }
-                )
-                model
-            , Nothing
-            )
+            ( updateUser userId Undo.add model, Nothing )
 
         Change.LocalToggleUserVisibility userId_ ->
             ( if userId == userId_ then
@@ -291,6 +278,7 @@ requestDataUpdate sessionId clientId viewBounds model =
                     , hiddenUsers = EverySet.empty
                     , undoHistory = []
                     , redoHistory = []
+                    , undoCurrent = Dict.empty
                     }
             in
             ( { model

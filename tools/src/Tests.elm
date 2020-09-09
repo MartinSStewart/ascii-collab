@@ -11,13 +11,14 @@ import Element.Background
 import EverySet
 import Grid
 import GridCell
+import Helper exposing (Coord)
 import Html exposing (Html)
 import List.Nonempty as Nonempty
 import LocalGrid
 import LocalModel
 import Time
 import Types exposing (BackendModel, ClientId, FrontendModel, SessionId, ToBackend(..), ToFrontend(..))
-import Units
+import Units exposing (CellUnit)
 import User
 
 
@@ -70,7 +71,7 @@ main =
                 (LocalGrid.init Grid.empty [] [] (User.newUser 0) EverySet.empty [] smallViewBounds
                     |> testInit
                     |> testMap (LocalGrid.update (time 2) (Change.LocalChange LocalAddUndo))
-                    |> testAssert (checkGridValue Nothing)
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) Nothing)
                     |> testMap
                         (LocalGrid.update (time 0)
                             ({ cellPosition = ( Units.cellUnit 0, Units.cellUnit 0 ), localPosition = 0, change = Nonempty.fromElement asciiA }
@@ -78,11 +79,54 @@ main =
                                 |> Change.LocalChange
                             )
                         )
-                    |> testAssert (checkGridValue (Just asciiA))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) (Just asciiA))
                     |> testMap (LocalGrid.update (time 3) (Change.LocalChange LocalUndo))
-                    |> testAssert (checkGridValue (Just Ascii.default))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) (Just Ascii.default))
                     |> testMap (LocalGrid.update (time 4) (Change.LocalChange LocalRedo))
-                    |> testAssert (checkGridValue (Just asciiA))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) (Just asciiA))
+                )
+            , test "Test undo multiple"
+                (LocalGrid.init Grid.empty [] [] (User.newUser 0) EverySet.empty [] smallViewBounds
+                    |> testInit
+                    |> testMap (LocalGrid.update (time 0) (Change.LocalChange LocalAddUndo))
+                    |> testMap
+                        (LocalGrid.update (time 1)
+                            ({ cellPosition = ( Units.cellUnit 0, Units.cellUnit 0 ), localPosition = 0, change = Nonempty.fromElement asciiA }
+                                |> Change.LocalGridChange
+                                |> Change.LocalChange
+                            )
+                        )
+                    |> testMap (LocalGrid.update (time 2) (Change.LocalChange LocalAddUndo))
+                    |> testMap
+                        (LocalGrid.update (time 3)
+                            ({ cellPosition = ( Units.cellUnit 0, Units.cellUnit 0 ), localPosition = 1, change = Nonempty.fromElement asciiA }
+                                |> Change.LocalGridChange
+                                |> Change.LocalChange
+                            )
+                        )
+                    |> testMap (LocalGrid.update (time 4) (Change.LocalChange LocalAddUndo))
+                    |> testMap
+                        (LocalGrid.update (time 5)
+                            ({ cellPosition = ( Units.cellUnit 0, Units.cellUnit 0 ), localPosition = 2, change = Nonempty.fromElement asciiA }
+                                |> Change.LocalGridChange
+                                |> Change.LocalChange
+                            )
+                        )
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) (Just asciiA))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 1 ) (Just asciiA))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 2 ) (Just asciiA))
+                    |> testMap (LocalGrid.update (time 6) (Change.LocalChange LocalUndo))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) (Just asciiA))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 1 ) (Just asciiA))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 2 ) (Just Ascii.default))
+                    |> testMap (LocalGrid.update (time 7) (Change.LocalChange LocalUndo))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) (Just asciiA))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 1 ) (Just Ascii.default))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 2 ) (Just Ascii.default))
+                    |> testMap (LocalGrid.update (time 8) (Change.LocalChange LocalUndo))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) (Just Ascii.default))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 1 ) (Just Ascii.default))
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 2 ) (Just Ascii.default))
                 )
             , test "Don't show changes outside of view bounds"
                 (LocalGrid.init
@@ -101,7 +145,7 @@ main =
                                 |> Change.LocalChange
                             )
                         )
-                    |> testAssert (checkGridValue Nothing)
+                    |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) Nothing)
                 )
             ]
 
@@ -181,16 +225,23 @@ asciiA =
     Ascii.fromChar 'a' |> Maybe.withDefault Ascii.default
 
 
-checkGridValue : Maybe Ascii -> LocalModel.LocalModel a LocalGrid.LocalGrid -> TestResult
-checkGridValue value =
+checkGridValue : ( Coord CellUnit, Int ) -> Maybe Ascii -> LocalModel.LocalModel a LocalGrid.LocalGrid -> TestResult
+checkGridValue ( cellPosition, localPosition ) value =
     LocalGrid.localModel
         >> .grid
-        >> Grid.getCell ( Units.cellUnit 0, Units.cellUnit 0 )
-        >> Maybe.andThen (GridCell.flatten EverySet.empty >> Array.get 0 >> Maybe.map Tuple.second)
+        >> Grid.getCell cellPosition
+        >> Maybe.andThen (GridCell.flatten EverySet.empty >> Array.get localPosition >> Maybe.map Tuple.second)
         >> (\ascii ->
                 if ascii == value then
                     Passed
 
                 else
-                    Failed ("Wrong value found in grid " ++ Debug.toString ascii)
+                    Failed
+                        ("Wrong value found in grid "
+                            ++ Debug.toString ascii
+                            ++ " at cell position "
+                            ++ Debug.toString cellPosition
+                            ++ " and local position "
+                            ++ Debug.toString localPosition
+                        )
            )

@@ -5,10 +5,11 @@ import Change exposing (Change(..), ClientChange(..), LocalChange(..), ServerCha
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
-import Helper exposing (RawCellCoord)
+import Helper exposing (Coord, RawCellCoord)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import Time
+import Undo
 import Units exposing (CellUnit)
 import User exposing (UserData, UserId)
 
@@ -25,6 +26,7 @@ type alias LocalGrid_ =
     , otherUsers : List ( UserId, UserData )
     , hiddenUsers : EverySet UserId
     , viewBounds : Bounds CellUnit
+    , undoCurrent : Dict RawCellCoord Int
     }
 
 
@@ -51,6 +53,7 @@ init grid undoHistory redoHistory user hiddenUsers otherUsers viewBounds =
         , hiddenUsers = hiddenUsers
         , otherUsers = otherUsers
         , viewBounds = viewBounds
+        , undoCurrent = Dict.empty
         }
         |> LocalModel.init
 
@@ -81,37 +84,31 @@ update_ msg model =
 
                     else
                         model.grid
+                , undoCurrent =
+                    Dict.update
+                        (Helper.toRawCoord gridChange.cellPosition)
+                        (Maybe.withDefault 0 >> (+) 1 >> Just)
+                        model.undoCurrent
             }
 
         LocalChange LocalRedo ->
-            case model.redoHistory of
-                head :: rest ->
-                    { model
-                        | undoHistory = Grid.undoPoint userId model.grid :: model.undoHistory
-                        , redoHistory = rest
-                        , grid = Grid.setUndoPoints userId head model.grid
-                    }
+            case Undo.redo model of
+                Just newModel ->
+                    { newModel | grid = Grid.moveUndoPoint userId newModel.undoCurrent model.grid }
 
-                [] ->
+                Nothing ->
                     model
 
         LocalChange LocalUndo ->
-            case model.undoHistory of
-                head :: rest ->
-                    { model
-                        | undoHistory = rest
-                        , redoHistory = Grid.undoPoint userId model.grid :: model.redoHistory
-                        , grid = Grid.setUndoPoints userId head model.grid
-                    }
+            case Undo.undo model of
+                Just newModel ->
+                    { newModel | grid = Grid.moveUndoPoint userId (Dict.map (\_ a -> -a) model.undoCurrent) model.grid }
 
-                [] ->
+                Nothing ->
                     model
 
         LocalChange LocalAddUndo ->
-            { model
-                | redoHistory = []
-                , undoHistory = Grid.undoPoint userId model.grid :: model.undoHistory
-            }
+            Undo.add model
 
         LocalChange (LocalToggleUserVisibility userId_) ->
             { model
@@ -134,7 +131,7 @@ update_ msg model =
                 model
 
         ServerChange (ServerUndoPoint undoPoint) ->
-            { model | grid = Grid.setUndoPoints undoPoint.userId undoPoint.undoPoints model.grid }
+            { model | grid = Grid.moveUndoPoint undoPoint.userId undoPoint.undoPoints model.grid }
 
         ServerChange (ServerUserNew user) ->
             { model | otherUsers = user :: model.otherUsers }
