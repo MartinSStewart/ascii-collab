@@ -16,7 +16,6 @@ import Evergreen.V8.User
 import EverySet
 import Lamdera.Migrations exposing (..)
 import List.Nonempty
-import User
 
 
 frontendModel : Old.FrontendModel -> ModelMigration New.FrontendModel New.FrontendMsg
@@ -84,26 +83,6 @@ migrateColorIndex colorIndex =
 
         Evergreen.V4.ColorIndex.Gray ->
             Evergreen.V8.ColorIndex.Gray
-
-
-
---{ grid : Evergreen.V4.Grid.Grid
---, undoPoints :
---    Dict.Dict Evergreen.V4.User.RawUserId
---        { undoHistory : List (Dict.Dict ( Int, Int ) Int)
---        , redoHistory : List (Dict.Dict ( Int, Int ) Int)
---        }
---, userSessions :
---    Dict.Dict Lamdera.SessionId
---        { clientIds : Set.Set Lamdera.ClientId
---        , userId : Evergreen.V4.User.UserId
---        }
---, users :
---    Dict.Dict Evergreen.V4.User.RawUserId
---        { userData : Evergreen.V4.User.UserData
---        , hiddenUsers : EverySet.EverySet Evergreen.V4.User.UserId
---        }
---}
 
 
 migrateBackendModel : Old.BackendModel -> New.BackendModel

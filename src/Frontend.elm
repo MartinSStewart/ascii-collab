@@ -1255,10 +1255,10 @@ userListView model =
                 (if Just (Tuple.first localModel.user) == Env.adminUserId then
                     Element.el
                         [ Element.Font.bold, Element.centerX, Element.Font.color (Element.rgb255 255 0 0) ]
-                        (Element.text "🠔 Admin")
+                        (Element.text "⇽ Admin")
 
                  else
-                    Element.el [ Element.Font.bold, Element.centerX ] (Element.text "🠔 You")
+                    Element.el [ Element.Font.bold, Element.centerX ] (Element.text "⇽ You")
                 )
                 localModel.user
 
