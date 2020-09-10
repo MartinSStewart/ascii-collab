@@ -5,7 +5,9 @@ import Change exposing (ClientChange(..), ServerChange(..))
 import Dict
 import EverySet exposing (EverySet)
 import Grid
+import Helper
 import List.Nonempty
+import LocalGrid
 import Types exposing (..)
 import Undo
 import Units exposing (CellUnit)
@@ -159,10 +161,8 @@ updateLocalChange ( userId, _ ) change model =
                                 undoMoveAmount =
                                     Dict.map (\_ a -> -a) user.undoCurrent
                             in
-                            ( { model
-                                | users = Dict.insert (User.rawId userId) newUser model.users
-                                , grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
-                              }
+                            ( { model | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid }
+                                |> updateUser userId (always newUser)
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
                             )
 
@@ -173,14 +173,17 @@ updateLocalChange ( userId, _ ) change model =
                     ( model, Nothing )
 
         Change.LocalGridChange localChange ->
-            ( { model
-                | grid =
-                    Grid.addChange
-                        (Grid.localChangeToChange userId localChange)
-                        model.grid
-              }
-            , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
-            )
+            case Dict.get (User.rawId userId) model.users of
+                Just user ->
+                    ( { model
+                        | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
+                      }
+                        |> updateUser userId (always { user | undoCurrent = LocalGrid.incrementUndoCurrent localChange user.undoCurrent })
+                    , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
+                    )
+
+                Nothing ->
+                    ( model, Nothing )
 
         Change.LocalRedo ->
             case Dict.get (User.rawId userId) model.users of
@@ -192,9 +195,9 @@ updateLocalChange ( userId, _ ) change model =
                                     newUser.undoCurrent
                             in
                             ( { model
-                                | users = Dict.insert (User.rawId userId) newUser model.users
-                                , grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
+                                | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
                               }
+                                |> updateUser userId (always newUser)
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
                             )
 
@@ -247,6 +250,7 @@ requestDataUpdate sessionId clientId viewBounds model =
                     |> List.filter (Tuple.first >> (/=) userId)
             , undoHistory = user.undoHistory
             , redoHistory = user.redoHistory
+            , undoCurrent = user.undoCurrent
             , viewBounds = viewBounds
             }
     in

@@ -1,4 +1,4 @@
-module LocalGrid exposing (LocalGrid, LocalGrid_, init, localModel, update, updateFromBackend)
+module LocalGrid exposing (LocalGrid, LocalGrid_, incrementUndoCurrent, init, localModel, update, updateFromBackend)
 
 import Bounds exposing (Bounds)
 import Change exposing (Change(..), ClientChange(..), LocalChange(..), ServerChange(..))
@@ -36,15 +36,17 @@ localModel localModel_ =
 
 
 init :
-    Grid
-    -> List (Dict RawCellCoord Int)
-    -> List (Dict RawCellCoord Int)
-    -> ( UserId, UserData )
-    -> EverySet UserId
-    -> List ( UserId, UserData )
-    -> Bounds CellUnit
+    { user : ( UserId, UserData )
+    , grid : Grid
+    , otherUsers : List ( UserId, UserData )
+    , hiddenUsers : EverySet UserId
+    , undoHistory : List (Dict RawCellCoord Int)
+    , redoHistory : List (Dict RawCellCoord Int)
+    , undoCurrent : Dict RawCellCoord Int
+    , viewBounds : Bounds CellUnit
+    }
     -> LocalModel Change LocalGrid
-init grid undoHistory redoHistory user hiddenUsers otherUsers viewBounds =
+init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, otherUsers, viewBounds } =
     LocalGrid
         { grid = grid
         , undoHistory = undoHistory
@@ -53,7 +55,7 @@ init grid undoHistory redoHistory user hiddenUsers otherUsers viewBounds =
         , hiddenUsers = hiddenUsers
         , otherUsers = otherUsers
         , viewBounds = viewBounds
-        , undoCurrent = Dict.empty
+        , undoCurrent = undoCurrent
         }
         |> LocalModel.init
 
@@ -66,6 +68,14 @@ update time change localModel_ =
 updateFromBackend : Nonempty Change -> LocalModel Change LocalGrid -> LocalModel Change LocalGrid
 updateFromBackend changes localModel_ =
     LocalModel.updateFromBackend config changes localModel_
+
+
+incrementUndoCurrent : { a | cellPosition : Coord units } -> Dict RawCellCoord Int -> Dict RawCellCoord Int
+incrementUndoCurrent gridChange undoCurrent =
+    Dict.update
+        (Helper.toRawCoord gridChange.cellPosition)
+        (Maybe.withDefault 0 >> (+) 1 >> Just)
+        undoCurrent
 
 
 update_ : Change -> LocalGrid_ -> LocalGrid_
@@ -84,11 +94,7 @@ update_ msg model =
 
                     else
                         model.grid
-                , undoCurrent =
-                    Dict.update
-                        (Helper.toRawCoord gridChange.cellPosition)
-                        (Maybe.withDefault 0 >> (+) 1 >> Just)
-                        model.undoCurrent
+                , undoCurrent = incrementUndoCurrent gridChange model.undoCurrent
             }
 
         LocalChange LocalRedo ->

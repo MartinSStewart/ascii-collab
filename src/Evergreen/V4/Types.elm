@@ -2,46 +2,46 @@ module Evergreen.V4.Types exposing (..)
 
 import Browser
 import Browser.Navigation
+import Dict
 import Evergreen.V4.Change
 import Evergreen.V4.Cursor
-import Dict
-import EverySet
 import Evergreen.V4.Grid
 import Evergreen.V4.Helper
+import Evergreen.V4.LocalGrid
+import Evergreen.V4.LocalModel
+import Evergreen.V4.Point2d
+import Evergreen.V4.Units
+import Evergreen.V4.User
+import EverySet
 import Html.Events.Extra.Mouse
 import Keyboard
 import Lamdera
 import List.Nonempty
-import Evergreen.V4.LocalGrid
-import Evergreen.V4.LocalModel
 import Math.Vector2
 import Pixels
-import Evergreen.V4.Point2d
 import Quantity
 import Set
 import Time
-import Evergreen.V4.Units
 import Url
-import Evergreen.V4.User
 import WebGL
 import WebGL.Texture
 
 
-type alias FrontendLoading = 
+type alias FrontendLoading =
     { key : Browser.Navigation.Key
-    , windowSize : (Evergreen.V4.Helper.Coord Pixels.Pixels)
-    , devicePixelRatio : (Quantity.Quantity Float (Quantity.Rate Evergreen.V4.Units.WorldPixel Pixels.Pixels))
+    , windowSize : Evergreen.V4.Helper.Coord Pixels.Pixels
+    , devicePixelRatio : Quantity.Quantity Float (Quantity.Rate Evergreen.V4.Units.WorldPixel Pixels.Pixels)
     , zoomFactor : Int
     }
 
 
 type MouseButtonState
     = MouseButtonUp
-    | MouseButtonDown 
-    { start : (Evergreen.V4.Point2d.Point2d Pixels.Pixels Evergreen.V4.Units.ScreenCoordinate)
-    , start_ : (Evergreen.V4.Point2d.Point2d Evergreen.V4.Units.WorldPixel Evergreen.V4.Units.WorldCoordinate)
-    , current : (Evergreen.V4.Point2d.Point2d Pixels.Pixels Evergreen.V4.Units.ScreenCoordinate)
-    }
+    | MouseButtonDown
+        { start : Evergreen.V4.Point2d.Point2d Pixels.Pixels Evergreen.V4.Units.ScreenCoordinate
+        , start_ : Evergreen.V4.Point2d.Point2d Evergreen.V4.Units.WorldPixel Evergreen.V4.Units.WorldCoordinate
+        , current : Evergreen.V4.Point2d.Point2d Pixels.Pixels Evergreen.V4.Units.ScreenCoordinate
+        }
 
 
 type ToolType
@@ -50,29 +50,30 @@ type ToolType
     | HideUserTool (Maybe Evergreen.V4.User.UserId)
 
 
-type alias FrontendLoaded = 
+type alias FrontendLoaded =
     { key : Browser.Navigation.Key
-    , localModel : (Evergreen.V4.LocalModel.LocalModel Evergreen.V4.Change.Change Evergreen.V4.LocalGrid.LocalGrid)
-    , meshes : (Dict.Dict (Int, Int) (WebGL.Mesh Evergreen.V4.Grid.Vertex))
-    , cursorMesh : (WebGL.Mesh 
-    { position : Math.Vector2.Vec2
-    })
-    , viewPoint : (Evergreen.V4.Point2d.Point2d Evergreen.V4.Units.WorldPixel Evergreen.V4.Units.WorldCoordinate)
+    , localModel : Evergreen.V4.LocalModel.LocalModel Evergreen.V4.Change.Change Evergreen.V4.LocalGrid.LocalGrid
+    , meshes : Dict.Dict ( Int, Int ) (WebGL.Mesh Evergreen.V4.Grid.Vertex)
+    , cursorMesh :
+        WebGL.Mesh
+            { position : Math.Vector2.Vec2
+            }
+    , viewPoint : Evergreen.V4.Point2d.Point2d Evergreen.V4.Units.WorldPixel Evergreen.V4.Units.WorldCoordinate
     , cursor : Evergreen.V4.Cursor.Cursor
-    , texture : (Maybe WebGL.Texture.Texture)
-    , pressedKeys : (List Keyboard.Key)
-    , windowSize : (Evergreen.V4.Helper.Coord Pixels.Pixels)
-    , devicePixelRatio : (Quantity.Quantity Float (Quantity.Rate Evergreen.V4.Units.WorldPixel Pixels.Pixels))
+    , texture : Maybe WebGL.Texture.Texture
+    , pressedKeys : List Keyboard.Key
+    , windowSize : Evergreen.V4.Helper.Coord Pixels.Pixels
+    , devicePixelRatio : Quantity.Quantity Float (Quantity.Rate Evergreen.V4.Units.WorldPixel Pixels.Pixels)
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
     , mouseMiddle : MouseButtonState
-    , pendingChanges : (List Evergreen.V4.Change.LocalChange)
+    , pendingChanges : List Evergreen.V4.Change.LocalChange
     , tool : ToolType
     , undoAddLast : Time.Posix
     , time : Time.Posix
-    , lastTouchMove : (Maybe Time.Posix)
-    , userPressHighlighted : (Maybe Evergreen.V4.User.UserId)
-    , userHoverHighlighted : (Maybe Evergreen.V4.User.UserId)
+    , lastTouchMove : Maybe Time.Posix
+    , userPressHighlighted : Maybe Evergreen.V4.User.UserId
+    , userHoverHighlighted : Maybe Evergreen.V4.User.UserId
     }
 
 
@@ -83,18 +84,21 @@ type FrontendModel
 
 type alias BackendModel =
     { grid : Evergreen.V4.Grid.Grid
-    , undoPoints : (Dict.Dict Evergreen.V4.User.RawUserId 
-    { undoHistory : (List (Dict.Dict (Int, Int) Int))
-    , redoHistory : (List (Dict.Dict (Int, Int) Int))
-    })
-    , userSessions : (Dict.Dict Lamdera.SessionId 
-    { clientIds : (Set.Set Lamdera.ClientId)
-    , userId : Evergreen.V4.User.UserId
-    })
-    , users : (Dict.Dict Evergreen.V4.User.RawUserId 
-    { userData : Evergreen.V4.User.UserData
-    , hiddenUsers : (EverySet.EverySet Evergreen.V4.User.UserId)
-    })
+    , undoPoints :
+        Dict.Dict Evergreen.V4.User.RawUserId
+            { undoHistory : List (Dict.Dict ( Int, Int ) Int)
+            , redoHistory : List (Dict.Dict ( Int, Int ) Int)
+            }
+    , userSessions :
+        Dict.Dict Lamdera.SessionId
+            { clientIds : Set.Set Lamdera.ClientId
+            , userId : Evergreen.V4.User.UserId
+            }
+    , users :
+        Dict.Dict Evergreen.V4.User.RawUserId
+            { userData : Evergreen.V4.User.UserData
+            , hiddenUsers : EverySet.EverySet Evergreen.V4.User.UserId
+            }
     }
 
 
@@ -137,13 +141,13 @@ type BackendMsg
     | UserDisconnected Lamdera.SessionId Lamdera.ClientId
 
 
-type alias LoadingData_ = 
-    { user : (Evergreen.V4.User.UserId, Evergreen.V4.User.UserData)
+type alias LoadingData_ =
+    { user : ( Evergreen.V4.User.UserId, Evergreen.V4.User.UserData )
     , grid : Evergreen.V4.Grid.Grid
-    , otherUsers : (List (Evergreen.V4.User.UserId, Evergreen.V4.User.UserData))
-    , hiddenUsers : (EverySet.EverySet Evergreen.V4.User.UserId)
-    , undoHistory : (List (Dict.Dict (Int, Int) Int))
-    , redoHistory : (List (Dict.Dict (Int, Int) Int))
+    , otherUsers : List ( Evergreen.V4.User.UserId, Evergreen.V4.User.UserData )
+    , hiddenUsers : EverySet.EverySet Evergreen.V4.User.UserId
+    , undoHistory : List (Dict.Dict ( Int, Int ) Int)
+    , redoHistory : List (Dict.Dict ( Int, Int ) Int)
     }
 
 

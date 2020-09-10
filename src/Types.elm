@@ -169,5 +169,6 @@ type alias LoadingData_ =
     , hiddenUsers : EverySet UserId
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
+    , undoCurrent : Dict RawCellCoord Int
     , viewBounds : Bounds CellUnit
     }

@@ -79,11 +79,11 @@ app =
 
 
 loadedInit : FrontendLoading -> LoadingData_ -> ( FrontendModel, Cmd FrontendMsg )
-loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHistory, viewBounds } =
+loadedInit loading loadingData =
     let
         viewPoint : Coord AsciiUnit
         viewPoint =
-            Bounds.convert Units.cellToAscii viewBounds |> Bounds.center |> Helper.roundPoint
+            Bounds.convert Units.cellToAscii loadingData.viewBounds |> Bounds.center |> Helper.roundPoint
 
         cursor : Cursor
         cursor =
@@ -92,7 +92,7 @@ loadedInit loading { grid, user, otherUsers, hiddenUsers, undoHistory, redoHisto
         model =
             { key = loading.key
             , localModel =
-                LocalGrid.init grid undoHistory redoHistory user hiddenUsers otherUsers viewBounds
+                LocalGrid.init loadingData
             , meshes = Dict.empty
             , cursorMesh = Cursor.toMesh cursor
             , viewPoint = Units.asciiToWorld viewPoint |> Helper.coordToPoint
