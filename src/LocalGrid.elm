@@ -25,6 +25,7 @@ type alias LocalGrid_ =
     , user : ( UserId, UserData )
     , otherUsers : List ( UserId, UserData )
     , hiddenUsers : EverySet UserId
+    , adminHiddenUsers : EverySet UserId
     , viewBounds : Bounds CellUnit
     , undoCurrent : Dict RawCellCoord Int
     }
@@ -40,19 +41,21 @@ init :
     , grid : Grid
     , otherUsers : List ( UserId, UserData )
     , hiddenUsers : EverySet UserId
+    , adminHiddenUsers : EverySet UserId
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
     , viewBounds : Bounds CellUnit
     }
     -> LocalModel Change LocalGrid
-init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, otherUsers, viewBounds } =
+init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHiddenUsers, otherUsers, viewBounds } =
     LocalGrid
         { grid = grid
         , undoHistory = undoHistory
         , redoHistory = redoHistory
         , user = user
         , hiddenUsers = hiddenUsers
+        , adminHiddenUsers = adminHiddenUsers
         , otherUsers = otherUsers
         , viewBounds = viewBounds
         , undoCurrent = undoCurrent
@@ -122,12 +125,12 @@ update_ msg model =
                     if userId_ == userId then
                         model.hiddenUsers
 
-                    else if EverySet.member userId_ model.hiddenUsers then
-                        EverySet.remove userId_ model.hiddenUsers
-
                     else
-                        EverySet.insert userId_ model.hiddenUsers
+                        Helper.toggleSet userId_ model.hiddenUsers
             }
+
+        LocalChange (LocalToggleUserVisibilityForAll hideUserId) ->
+            { model | adminHiddenUsers = Helper.toggleSet hideUserId model.adminHiddenUsers }
 
         ServerChange (ServerGridChange gridChange) ->
             if Bounds.contains gridChange.cellPosition model.viewBounds then
@@ -141,6 +144,9 @@ update_ msg model =
 
         ServerChange (ServerUserNew user) ->
             { model | otherUsers = user :: model.otherUsers }
+
+        ServerChange (ServerToggleUserVisibilityForAll hideUserId) ->
+            { model | adminHiddenUsers = Helper.toggleSet hideUserId model.adminHiddenUsers }
 
         ClientChange (ViewBoundsChange bounds newCells) ->
             { model

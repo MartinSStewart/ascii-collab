@@ -1,5 +1,6 @@
-module Helper exposing (Coord, RawCellCoord, absTuple, addTuple, coordToPoint, coordToVec, coordToVector2d, fromRawCoord, maxTuple, minTuple, minusTuple, multiplyTuple, roundPoint, toRawCoord)
+module Helper exposing (Coord, RawCellCoord, absTuple, addTuple, coordToPoint, coordToVec, coordToVector2d, fromRawCoord, maxTuple, minTuple, minusTuple, multiplyTuple, roundPoint, toRawCoord, toggleSet)
 
+import EverySet exposing (EverySet)
 import Math.Vector2 exposing (Vec2)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
@@ -76,3 +77,12 @@ fromRawCoord ( x, y ) =
 
 type alias Coord units =
     ( Quantity Int units, Quantity Int units )
+
+
+toggleSet : a -> EverySet a -> EverySet a
+toggleSet value set =
+    if EverySet.member value set then
+        EverySet.remove value set
+
+    else
+        EverySet.insert value set

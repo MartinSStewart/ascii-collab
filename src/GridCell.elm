@@ -71,11 +71,15 @@ changeCount (Cell { history }) =
     List.length history
 
 
-flatten : EverySet UserId -> Cell -> Array ( Maybe UserId, Ascii )
-flatten hiddenUsers (Cell cell) =
+flatten : EverySet UserId -> EverySet UserId -> Cell -> Array ( Maybe UserId, Ascii )
+flatten hiddenUsers hiddenUsersForAll (Cell cell) =
+    let
+        hidden =
+            EverySet.union hiddenUsers hiddenUsersForAll
+    in
     List.foldr
         (\{ userId, position, line } state ->
-            if EverySet.member userId hiddenUsers then
+            if EverySet.member userId hidden then
                 state
 
             else

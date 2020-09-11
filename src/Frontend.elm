@@ -81,21 +81,16 @@ app =
 loadedInit : FrontendLoading -> LoadingData_ -> ( FrontendModel, Cmd FrontendMsg )
 loadedInit loading loadingData =
     let
-        viewPoint : Coord AsciiUnit
-        viewPoint =
-            Bounds.convert Units.cellToAscii loadingData.viewBounds |> Bounds.center |> Helper.roundPoint
-
         cursor : Cursor
         cursor =
-            Cursor.setCursor viewPoint
+            Cursor.setCursor loading.viewPoint
 
         model =
             { key = loading.key
-            , localModel =
-                LocalGrid.init loadingData
+            , localModel = LocalGrid.init loadingData
             , meshes = Dict.empty
             , cursorMesh = Cursor.toMesh cursor
-            , viewPoint = Units.asciiToWorld viewPoint |> Helper.coordToPoint
+            , viewPoint = Units.asciiToWorld loading.viewPoint |> Helper.coordToPoint
             , viewPointLastInterval = Point2d.origin
             , cursor = cursor
             , texture = Nothing
@@ -112,6 +107,7 @@ loadedInit loading loadingData =
             , lastTouchMove = Nothing
             , userPressHighlighted = Nothing
             , userHoverHighlighted = Nothing
+            , adminEnabled = False
             }
     in
     ( updateMeshes model model
@@ -165,6 +161,7 @@ init url key =
         , devicePixelRatio = Quantity 1
         , zoomFactor = 1
         , time = Time.millisToPosix 0
+        , viewPoint = viewPoint
         }
     , Cmd.batch
         [ Lamdera.sendToBackend (RequestData bounds)
@@ -368,6 +365,7 @@ updateLoaded msg model =
                                 selectionPoint
                                     (screenToWorld model mousePosition |> Units.worldToAscii)
                                     localModel.hiddenUsers
+                                    localModel.adminHiddenUsers
                                     localModel.grid
                                     |> Tuple.first
                                     |> HideUserTool
@@ -484,18 +482,18 @@ updateLoaded msg model =
         VeryShortIntervalElapsed time ->
             ( { model | time = time }, Cmd.none )
 
-        UnhideUserPressed userId ->
+        UnhideUserPressed userToUnhide ->
             ( updateLocalModel
-                (Change.LocalToggleUserVisibility userId)
+                (Change.LocalToggleUserVisibility userToUnhide)
                 { model
                     | userPressHighlighted =
-                        if Just userId == model.userPressHighlighted then
+                        if Just userToUnhide == model.userPressHighlighted then
                             Nothing
 
                         else
                             model.userPressHighlighted
                     , userHoverHighlighted =
-                        if Just userId == model.userHoverHighlighted then
+                        if Just userToUnhide == model.userHoverHighlighted then
                             Nothing
 
                         else
@@ -532,6 +530,18 @@ updateLoaded msg model =
 
         UserTagMouseExited _ ->
             ( { model | userHoverHighlighted = Nothing }, Cmd.none )
+
+        HideForAllTogglePressed userToHide ->
+            ( updateLocalModel (Change.LocalToggleUserVisibilityForAll userToHide) model, Cmd.none )
+
+        ToggleAdminEnabledPressed ->
+            ( if Just (currentUserId model) == Env.adminUserId then
+                { model | adminEnabled = not model.adminEnabled }
+
+              else
+                model
+            , Cmd.none
+            )
 
 
 cursorEnabled : FrontendLoaded -> Bool
@@ -720,7 +730,7 @@ copyText model =
     in
     ( model_
     , localModel.grid
-        |> selectionToString (Cursor.bounds model_.cursor) localModel.hiddenUsers
+        |> selectionToString (Cursor.bounds model_.cursor) localModel.hiddenUsers localModel.adminHiddenUsers
         |> supermario_copy_to_clipboard_to_js
     )
 
@@ -739,7 +749,7 @@ cutText model =
     in
     ( clearTextSelection bounds model_
     , localModel.grid
-        |> selectionToString bounds localModel.hiddenUsers
+        |> selectionToString bounds localModel.hiddenUsers localModel.adminHiddenUsers
         |> supermario_copy_to_clipboard_to_js
     )
 
@@ -774,8 +784,8 @@ screenToWorld model =
         >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
 
 
-selectionToString : { min : Coord AsciiUnit, max : Coord AsciiUnit } -> EverySet UserId -> Grid -> String
-selectionToString bounds hiddenUsers grid =
+selectionToString : { min : Coord AsciiUnit, max : Coord AsciiUnit } -> EverySet UserId -> EverySet UserId -> Grid -> String
+selectionToString bounds hiddenUsers hiddenUsersForAll grid =
     let
         minCell =
             Grid.asciiToCellAndLocalCoord bounds.min |> Tuple.first
@@ -788,7 +798,10 @@ selectionToString bounds hiddenUsers grid =
                 (\coord dict ->
                     case Grid.getCell coord grid of
                         Just cell ->
-                            Dict.insert (Helper.toRawCoord coord) (GridCell.flatten hiddenUsers cell) dict
+                            Dict.insert
+                                (Helper.toRawCoord coord)
+                                (GridCell.flatten hiddenUsers hiddenUsersForAll cell)
+                                dict
 
                         Nothing ->
                             dict
@@ -819,14 +832,14 @@ selectionToString bounds hiddenUsers grid =
         |> String.fromList
 
 
-selectionPoint : Coord AsciiUnit -> EverySet UserId -> Grid -> ( Maybe UserId, Ascii )
-selectionPoint position hiddenUsers grid =
+selectionPoint : Coord AsciiUnit -> EverySet UserId -> EverySet UserId -> Grid -> ( Maybe UserId, Ascii )
+selectionPoint position hiddenUsers hiddenUsersForAll grid =
     let
         ( cellPosition, localPosition ) =
             Grid.asciiToCellAndLocalCoord position
     in
     Grid.getCell cellPosition grid
-        |> Maybe.andThen (GridCell.flatten hiddenUsers >> Array.get localPosition)
+        |> Maybe.andThen (GridCell.flatten hiddenUsers hiddenUsersForAll >> Array.get localPosition)
         |> Maybe.withDefault ( Nothing, Ascii.default )
 
 
@@ -913,22 +926,31 @@ updateMeshes oldModel newModel =
         oldHidden =
             LocalGrid.localModel oldModel.localModel |> .hiddenUsers |> showHighlighted oldModel
 
+        oldHiddenForAll =
+            LocalGrid.localModel oldModel.localModel |> .adminHiddenUsers |> showHighlighted oldModel
+
         newCells =
             LocalGrid.localModel newModel.localModel |> .grid |> Grid.allCellsDict
 
         newHidden =
             LocalGrid.localModel newModel.localModel |> .hiddenUsers |> showHighlighted newModel
 
+        newHiddenForAll =
+            LocalGrid.localModel newModel.localModel |> .adminHiddenUsers |> showHighlighted newModel
+
         newMesh newCell coord =
             Grid.mesh
                 (Helper.fromRawCoord coord)
-                (GridCell.flatten newHidden newCell |> Array.toList)
+                (GridCell.flatten newHidden newHiddenForAll newCell |> Array.toList)
 
         hiddenUnchanged =
-            oldHidden == newHidden
+            oldHidden == newHidden && oldHiddenForAll == newHiddenForAll
 
         hiddenChanges =
-            EverySet.union (EverySet.diff newHidden oldHidden) (EverySet.diff oldHidden newHidden) |> EverySet.toList
+            EverySet.union (EverySet.diff newHidden oldHidden) (EverySet.diff oldHidden newHidden)
+                |> EverySet.union (EverySet.diff newHiddenForAll oldHiddenForAll)
+                |> EverySet.union (EverySet.diff oldHiddenForAll newHiddenForAll)
+                |> EverySet.toList
     in
     { newModel
         | meshes =
@@ -1208,6 +1230,16 @@ mouseAttributes =
     ]
 
 
+isAdmin : FrontendLoaded -> Bool
+isAdmin model =
+    currentUserId model |> Just |> (==) Env.adminUserId |> (&&) model.adminEnabled
+
+
+currentUserId : FrontendLoaded -> UserId
+currentUserId =
+    .localModel >> LocalGrid.localModel >> .user >> Tuple.first
+
+
 userListView : FrontendLoaded -> Element FrontendMsg
 userListView model =
     let
@@ -1247,18 +1279,29 @@ userListView model =
                         Element.none
                 }
 
+        youText =
+            if isAdmin model then
+                Element.el
+                    [ Element.Font.bold, Element.centerX, Element.Font.color (Element.rgb255 255 0 0) ]
+                    (Element.text "⇽ Admin")
+
+            else
+                Element.el [ Element.Font.bold, Element.centerX ] (Element.text "⇽ You")
+
         userTag : Element FrontendMsg
         userTag =
             baseTag
                 True
                 (List.isEmpty hiddenUsers)
-                (if Just (Tuple.first localModel.user) == Env.adminUserId then
-                    Element.el
-                        [ Element.Font.bold, Element.centerX, Element.Font.color (Element.rgb255 255 0 0) ]
-                        (Element.text "⇽ Admin")
+                (if Just (currentUserId model) == Env.adminUserId then
+                    Element.Input.button
+                        [ Element.width Element.fill, Element.height Element.fill ]
+                        { onPress = Just ToggleAdminEnabledPressed
+                        , label = youText
+                        }
 
                  else
-                    Element.el [ Element.Font.bold, Element.centerX ] (Element.text "⇽ You")
+                    youText
                 )
                 localModel.user
 
@@ -1282,6 +1325,25 @@ userListView model =
                 , content
                 ]
 
+        rowBorderWidth : Bool -> Bool -> Element.Attribute msg
+        rowBorderWidth isFirst isLast =
+            Element.Border.widthEach
+                { left = 0
+                , right = 0
+                , top =
+                    if isFirst then
+                        0
+
+                    else
+                        2
+                , bottom =
+                    if isLast then
+                        0
+
+                    else
+                        2
+                }
+
         hiddenUserTag : Bool -> Bool -> ( UserId, UserData ) -> Element FrontendMsg
         hiddenUserTag isFirst isLast ( userId, userData ) =
             Element.Input.button
@@ -1289,22 +1351,7 @@ userListView model =
                     :: Element.Events.onMouseLeave (UserTagMouseExited userId)
                     :: Element.width Element.fill
                     :: Element.padding 4
-                    :: Element.Border.widthEach
-                        { left = 0
-                        , right = 0
-                        , top =
-                            if isFirst then
-                                0
-
-                            else
-                                2
-                        , bottom =
-                            if isLast then
-                                0
-
-                            else
-                                2
-                        }
+                    :: rowBorderWidth isFirst isLast
                     :: buttonAttributes (isActive userId)
                 )
                 { onPress = Just (UnhideUserPressed userId)
@@ -1319,6 +1366,49 @@ userListView model =
                         , Element.el [ Element.centerX ] (Element.text "Unhide")
                         ]
                 }
+                |> (\a ->
+                        if isAdmin model then
+                            Element.row [ Element.width Element.fill ]
+                                [ a
+                                , Element.Input.button
+                                    [ Element.Border.color backgroundColor
+                                    , Element.Background.color buttonDefault
+                                    , Element.mouseOver [ Element.Background.color buttonHighlight ]
+                                    , Element.height Element.fill
+                                    , Element.width Element.fill
+                                    , rowBorderWidth isFirst isLast
+                                    ]
+                                    { onPress = Just (HideForAllTogglePressed userId)
+                                    , label = Element.el [ Element.centerX ] (Element.text "Hide for all")
+                                    }
+                                ]
+
+                        else
+                            a
+                   )
+
+        hiddenUserForAllTag : Bool -> Bool -> ( UserId, UserData ) -> Element FrontendMsg
+        hiddenUserForAllTag isFirst isLast ( userId, userData ) =
+            Element.Input.button
+                (Element.Events.onMouseEnter (UserTagMouseEntered userId)
+                    :: Element.Events.onMouseLeave (UserTagMouseExited userId)
+                    :: Element.width Element.fill
+                    :: Element.padding 4
+                    :: rowBorderWidth isFirst isLast
+                    :: buttonAttributes (isActive userId)
+                )
+                { onPress = Just (HideForAllTogglePressed userId)
+                , label =
+                    Element.row [ Element.width Element.fill ]
+                        [ Element.el
+                            [ Element.width (Element.px 20)
+                            , Element.height (Element.px 20)
+                            , Element.Background.color <| ColorIndex.toColor <| User.color userData
+                            ]
+                            Element.none
+                        , Element.el [ Element.centerX ] (Element.text "Unhide for all")
+                        ]
+                }
 
         buttonAttributes isActive_ =
             [ Element.Border.color backgroundColor
@@ -1331,10 +1421,13 @@ userListView model =
                 )
             ]
 
+        hiddenUserList : List ( UserId, UserData )
         hiddenUserList =
-            EverySet.toList localModel.hiddenUsers
+            EverySet.diff localModel.hiddenUsers localModel.adminHiddenUsers
+                |> EverySet.toList
                 |> List.filterMap (\userId -> List.find (Tuple.first >> (==) userId) localModel.otherUsers)
 
+        isActive : UserId -> Bool
         isActive userId =
             (model.userPressHighlighted == Just userId)
                 || (model.userHoverHighlighted == Just userId)
@@ -1347,9 +1440,28 @@ userListView model =
                     (\index otherUser ->
                         hiddenUserTag
                             False
-                            (List.length hiddenUserList - 1 == index)
+                            (List.length hiddenUserList - 1 == index && not showHiddenUsersForAll)
                             otherUser
                     )
+
+        hiddenusersForAllList : List ( UserId, UserData )
+        hiddenusersForAllList =
+            EverySet.toList localModel.adminHiddenUsers
+                |> List.filterMap (\userId -> List.find (Tuple.first >> (==) userId) localModel.otherUsers)
+
+        hiddenUsersForAll : List (Element FrontendMsg)
+        hiddenUsersForAll =
+            hiddenusersForAllList
+                |> List.indexedMap
+                    (\index otherUser ->
+                        hiddenUserForAllTag
+                            False
+                            (List.length hiddenusersForAllList - 1 == index)
+                            otherUser
+                    )
+
+        showHiddenUsersForAll =
+            not (List.isEmpty hiddenUsersForAll) && isAdmin model
     in
     Element.column
         [ Element.Background.color lightColor
@@ -1358,10 +1470,14 @@ userListView model =
         , Element.Border.width 2
         , Element.Border.color backgroundColor
         , Element.Font.color textColor
-        , Element.width (Element.px 130)
+        , if isAdmin model then
+            Element.width (Element.px 230)
+
+          else
+            Element.width (Element.px 130)
         ]
         [ userTag
-        , if List.isEmpty hiddenUsers then
+        , if List.isEmpty hiddenUsers && not showHiddenUsersForAll then
             Element.none
 
           else
@@ -1372,6 +1488,17 @@ userListView model =
                     [ Element.width Element.fill, Element.spacing 2 ]
                     hiddenUsers
                 ]
+        , if showHiddenUsersForAll then
+            Element.column
+                [ Element.width Element.fill, Element.spacing 4 ]
+                [ Element.el [ Element.paddingXY 8 0 ] (Element.text "Hidden for all")
+                , Element.column
+                    [ Element.width Element.fill, Element.spacing 2 ]
+                    hiddenUsersForAll
+                ]
+
+          else
+            Element.none
         ]
 
 

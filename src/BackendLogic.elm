@@ -3,10 +3,11 @@ module BackendLogic exposing (Effect(..), init, update, updateFromFrontend)
 import Bounds exposing (Bounds)
 import Change exposing (ClientChange(..), ServerChange(..))
 import Dict
+import Env
 import EverySet exposing (EverySet)
 import Grid
 import Helper
-import List.Nonempty
+import List.Nonempty exposing (Nonempty)
 import LocalGrid
 import Types exposing (..)
 import Undo
@@ -58,6 +59,57 @@ getUserFromSessionId sessionId model =
             Nothing
 
 
+broadcastLocalChange :
+    ( UserId, BackendUserData )
+    -> Nonempty Change.LocalChange
+    -> BackendModel
+    -> ( BackendModel, List Effect )
+broadcastLocalChange userIdAndUser changes model =
+    let
+        ( newModel, serverChanges ) =
+            List.Nonempty.foldl
+                (\change ( model_, serverChanges_ ) ->
+                    updateLocalChange userIdAndUser change model_
+                        |> Tuple.mapSecond (\serverChange -> serverChange :: serverChanges_)
+                )
+                ( model, [] )
+                changes
+                |> Tuple.mapSecond (List.filterMap identity >> List.reverse)
+    in
+    ( newModel
+    , broadcast
+        (\sessionId_ _ ->
+            case getUserFromSessionId sessionId_ model of
+                Just ( userId_, _ ) ->
+                    if Tuple.first userIdAndUser == userId_ then
+                        List.Nonempty.map Change.LocalChange changes |> ChangeBroadcast |> Just
+
+                    else
+                        List.filterMap
+                            (\serverChange ->
+                                case serverChange of
+                                    Change.ServerToggleUserVisibilityForAll toggleUserId ->
+                                        -- Don't let the user who got hidden know that they are hidden.
+                                        if toggleUserId == userId_ then
+                                            Nothing
+
+                                        else
+                                            Change.ServerChange serverChange |> Just
+
+                                    _ ->
+                                        Change.ServerChange serverChange |> Just
+                            )
+                            serverChanges
+                            |> List.Nonempty.fromList
+                            |> Maybe.map ChangeBroadcast
+
+                Nothing ->
+                    Nothing
+        )
+        model
+    )
+
+
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, List Effect )
 updateFromFrontend sessionId clientId msg model =
     case msg of
@@ -67,30 +119,7 @@ updateFromFrontend sessionId clientId msg model =
         GridChange changes ->
             case getUserFromSessionId sessionId model of
                 Just userIdAndUser ->
-                    let
-                        ( newModel, serverChanges ) =
-                            List.Nonempty.foldl
-                                (\change ( model_, serverChanges_ ) ->
-                                    updateLocalChange userIdAndUser change model_
-                                        |> Tuple.mapSecond (\serverChange -> serverChange :: serverChanges_)
-                                )
-                                ( model, [] )
-                                changes
-                                |> Tuple.mapSecond (List.filterMap identity >> List.reverse)
-                    in
-                    ( newModel
-                    , broadcast
-                        (\sessionId_ _ ->
-                            if sessionId == sessionId_ then
-                                List.Nonempty.map Change.LocalChange changes |> ChangeBroadcast |> Just
-
-                            else
-                                List.map Change.ServerChange serverChanges
-                                    |> List.Nonempty.fromList
-                                    |> Maybe.map ChangeBroadcast
-                        )
-                        model
-                    )
+                    broadcastLocalChange userIdAndUser changes model
 
                 Nothing ->
                     ( model, [] )
@@ -210,31 +239,48 @@ updateLocalChange ( userId, _ ) change model =
         Change.LocalAddUndo ->
             ( updateUser userId Undo.add model, Nothing )
 
-        Change.LocalToggleUserVisibility userId_ ->
-            ( if userId == userId_ then
+        Change.LocalToggleUserVisibility hideUserId ->
+            ( if userId == hideUserId then
                 model
 
               else
                 updateUser
                     userId
-                    (\user ->
-                        { user
-                            | hiddenUsers =
-                                if EverySet.member userId_ user.hiddenUsers then
-                                    EverySet.remove userId_ user.hiddenUsers
-
-                                else
-                                    EverySet.insert userId_ user.hiddenUsers
-                        }
-                    )
+                    (\user -> { user | hiddenUsers = Helper.toggleSet hideUserId user.hiddenUsers })
                     model
             , Nothing
             )
+
+        Change.LocalToggleUserVisibilityForAll hideUserId ->
+            if Just userId == Env.adminUserId && userId /= hideUserId then
+                ( updateUser hideUserId (\user -> { user | hiddenForAll = not user.hiddenForAll }) model
+                , ServerToggleUserVisibilityForAll hideUserId |> Just
+                )
+
+            else
+                ( model, Nothing )
 
 
 updateUser : UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel
 updateUser userId updateUserFunc model =
     { model | users = Dict.update (User.rawId userId) (Maybe.map updateUserFunc) model.users }
+
+
+{-| Gets globally hidden users known to a specific user.
+-}
+hiddenUsers : UserId -> BackendModel -> EverySet UserId
+hiddenUsers userId model =
+    model.users
+        |> Dict.toList
+        |> List.filterMap
+            (\( userId_, { hiddenForAll } ) ->
+                if hiddenForAll && userId /= User.userId userId_ then
+                    Just (User.userId userId_)
+
+                else
+                    Nothing
+            )
+        |> EverySet.fromList
 
 
 requestDataUpdate : SessionId -> ClientId -> Bounds CellUnit -> BackendModel -> ( BackendModel, List Effect )
@@ -244,6 +290,7 @@ requestDataUpdate sessionId clientId viewBounds model =
             { user = ( userId, user.userData )
             , grid = Grid.region viewBounds model.grid
             , hiddenUsers = user.hiddenUsers
+            , adminHiddenUsers = hiddenUsers userId model
             , otherUsers =
                 Dict.toList model.users
                     |> List.map (Tuple.mapBoth User.userId .userData)
@@ -277,9 +324,11 @@ requestDataUpdate sessionId clientId viewBounds model =
                 ( userId, user ) =
                     Dict.size model.users |> User.newUser
 
+                userBackendData : BackendUserData
                 userBackendData =
                     { userData = user
                     , hiddenUsers = EverySet.empty
+                    , hiddenForAll = False
                     , undoHistory = []
                     , redoHistory = []
                     , undoCurrent = Dict.empty

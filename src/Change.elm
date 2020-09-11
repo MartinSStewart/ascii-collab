@@ -21,6 +21,7 @@ type LocalChange
     | LocalRedo
     | LocalAddUndo
     | LocalToggleUserVisibility UserId
+    | LocalToggleUserVisibilityForAll UserId
 
 
 type ClientChange
@@ -31,3 +32,4 @@ type ServerChange
     = ServerGridChange Grid.Change
     | ServerUndoPoint { userId : UserId, undoPoints : Dict RawCellCoord Int }
     | ServerUserNew ( UserId, UserData )
+    | ServerToggleUserVisibilityForAll UserId

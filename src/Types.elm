@@ -34,7 +34,7 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
 import Time
-import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
+import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
 import User exposing (RawUserId, UserData, UserId)
 import WebGL
@@ -60,6 +60,7 @@ type alias FrontendLoading =
     , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
     , zoomFactor : Int
     , time : Time.Posix
+    , viewPoint : Coord AsciiUnit
     }
 
 
@@ -85,6 +86,7 @@ type alias FrontendLoaded =
     , lastTouchMove : Maybe Time.Posix
     , userPressHighlighted : Maybe UserId
     , userHoverHighlighted : Maybe UserId
+    , adminEnabled : Bool
     }
 
 
@@ -113,6 +115,7 @@ type alias BackendModel =
 type alias BackendUserData =
     { userData : UserData
     , hiddenUsers : EverySet UserId
+    , hiddenForAll : Bool
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
@@ -145,6 +148,8 @@ type FrontendMsg
     | UserColorSquarePressed UserId
     | UserTagMouseEntered UserId
     | UserTagMouseExited UserId
+    | HideForAllTogglePressed UserId
+    | ToggleAdminEnabledPressed
 
 
 type ToBackend
@@ -167,6 +172,7 @@ type alias LoadingData_ =
     , grid : Grid
     , otherUsers : List ( UserId, UserData )
     , hiddenUsers : EverySet UserId
+    , adminHiddenUsers : EverySet UserId
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
