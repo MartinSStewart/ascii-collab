@@ -68,7 +68,17 @@ main =
                     |> testSingle
                 )
             , test "Test undo"
-                (LocalGrid.init Grid.empty [] [] (User.newUser 0) EverySet.empty [] smallViewBounds
+                (LocalGrid.init
+                    { user = User.newUser 0
+                    , grid = Grid.empty
+                    , otherUsers = []
+                    , hiddenUsers = EverySet.empty
+                    , adminHiddenUsers = EverySet.empty
+                    , undoHistory = []
+                    , redoHistory = []
+                    , undoCurrent = Dict.empty
+                    , viewBounds = smallViewBounds
+                    }
                     |> testInit
                     |> testMap (LocalGrid.update (time 2) (Change.LocalChange LocalAddUndo))
                     |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) Nothing)
@@ -86,7 +96,17 @@ main =
                     |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) (Just asciiA))
                 )
             , test "Test undo multiple"
-                (LocalGrid.init Grid.empty [] [] (User.newUser 0) EverySet.empty [] smallViewBounds
+                (LocalGrid.init
+                    { user = User.newUser 0
+                    , grid = Grid.empty
+                    , otherUsers = []
+                    , hiddenUsers = EverySet.empty
+                    , adminHiddenUsers = EverySet.empty
+                    , undoHistory = []
+                    , redoHistory = []
+                    , undoCurrent = Dict.empty
+                    , viewBounds = smallViewBounds
+                    }
                     |> testInit
                     |> testMap (LocalGrid.update (time 0) (Change.LocalChange LocalAddUndo))
                     |> testMap
@@ -130,13 +150,16 @@ main =
                 )
             , test "Don't show changes outside of view bounds"
                 (LocalGrid.init
-                    Grid.empty
-                    []
-                    []
-                    (User.newUser 0)
-                    EverySet.empty
-                    []
-                    (Bounds.translate ( Units.cellUnit 1, Units.cellUnit 0 ) smallViewBounds)
+                    { user = User.newUser 0
+                    , grid = Grid.empty
+                    , otherUsers = []
+                    , hiddenUsers = EverySet.empty
+                    , adminHiddenUsers = EverySet.empty
+                    , undoHistory = []
+                    , redoHistory = []
+                    , undoCurrent = Dict.empty
+                    , viewBounds = Bounds.translate ( Units.cellUnit 1, Units.cellUnit 0 ) smallViewBounds
+                    }
                     |> testInit
                     |> testMap
                         (LocalGrid.update (time 0)
@@ -230,7 +253,7 @@ checkGridValue ( cellPosition, localPosition ) value =
     LocalGrid.localModel
         >> .grid
         >> Grid.getCell cellPosition
-        >> Maybe.andThen (GridCell.flatten EverySet.empty >> Array.get localPosition >> Maybe.map Tuple.second)
+        >> Maybe.andThen (GridCell.flatten EverySet.empty EverySet.empty >> Array.get localPosition >> Maybe.map Tuple.second)
         >> (\ascii ->
                 if ascii == value then
                     Passed
