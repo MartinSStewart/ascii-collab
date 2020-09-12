@@ -44,6 +44,7 @@ import Quantity exposing (Quantity(..), Rate)
 import Task
 import Time
 import Types exposing (..)
+import UiColors
 import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
 import Url.Builder
@@ -263,11 +264,7 @@ updateLoaded msg model =
             )
 
         KeyDown rawKey ->
-            if cursorEnabled model then
-                keyMsgCanvasUpdate rawKey model
-
-            else
-                ( model, Cmd.none )
+            keyMsgCanvasUpdate rawKey model
 
         WindowResized windowSize ->
             windowResizedUpdate windowSize model
@@ -566,7 +563,11 @@ keyMsgCanvasUpdate rawKey model =
 
         Just (Keyboard.Character "x") ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                cutText model
+                if cursorEnabled model then
+                    cutText model
+
+                else
+                    ( model, Cmd.none )
 
             else
                 ( model, Cmd.none )
@@ -593,69 +594,93 @@ keyMsgCanvasUpdate rawKey model =
                 ( model, Cmd.none )
 
         Just Keyboard.Delete ->
-            let
-                bounds =
-                    Cursor.bounds model.cursor
-            in
-            ( clearTextSelection bounds model
-            , Cmd.none
-            )
+            if cursorEnabled model then
+                let
+                    bounds =
+                        Cursor.bounds model.cursor
+                in
+                ( clearTextSelection bounds model
+                , Cmd.none
+                )
+
+            else
+                ( model, Cmd.none )
 
         Just Keyboard.ArrowLeft ->
-            ( { model
-                | cursor =
-                    Cursor.moveCursor
-                        (keyDown Keyboard.Shift model)
-                        ( Units.asciiUnit -1, Units.asciiUnit 0 )
-                        model.cursor
-              }
-            , Cmd.none
-            )
+            if cursorEnabled model then
+                ( { model
+                    | cursor =
+                        Cursor.moveCursor
+                            (keyDown Keyboard.Shift model)
+                            ( Units.asciiUnit -1, Units.asciiUnit 0 )
+                            model.cursor
+                  }
+                , Cmd.none
+                )
+
+            else
+                ( model, Cmd.none )
 
         Just Keyboard.ArrowRight ->
-            ( { model
-                | cursor =
-                    Cursor.moveCursor
-                        (keyDown Keyboard.Shift model)
-                        ( Units.asciiUnit 1, Units.asciiUnit 0 )
-                        model.cursor
-              }
-            , Cmd.none
-            )
+            if cursorEnabled model then
+                ( { model
+                    | cursor =
+                        Cursor.moveCursor
+                            (keyDown Keyboard.Shift model)
+                            ( Units.asciiUnit 1, Units.asciiUnit 0 )
+                            model.cursor
+                  }
+                , Cmd.none
+                )
+
+            else
+                ( model, Cmd.none )
 
         Just Keyboard.ArrowUp ->
-            ( { model
-                | cursor =
-                    Cursor.moveCursor
-                        (keyDown Keyboard.Shift model)
-                        ( Units.asciiUnit 0, Units.asciiUnit -1 )
-                        model.cursor
-              }
-            , Cmd.none
-            )
+            if cursorEnabled model then
+                ( { model
+                    | cursor =
+                        Cursor.moveCursor
+                            (keyDown Keyboard.Shift model)
+                            ( Units.asciiUnit 0, Units.asciiUnit -1 )
+                            model.cursor
+                  }
+                , Cmd.none
+                )
+
+            else
+                ( model, Cmd.none )
 
         Just Keyboard.ArrowDown ->
-            ( { model
-                | cursor =
-                    Cursor.moveCursor
-                        (keyDown Keyboard.Shift model)
-                        ( Units.asciiUnit 0, Units.asciiUnit 1 )
-                        model.cursor
-              }
-            , Cmd.none
-            )
+            if cursorEnabled model then
+                ( { model
+                    | cursor =
+                        Cursor.moveCursor
+                            (keyDown Keyboard.Shift model)
+                            ( Units.asciiUnit 0, Units.asciiUnit 1 )
+                            model.cursor
+                  }
+                , Cmd.none
+                )
+
+            else
+                ( model, Cmd.none )
 
         Just Keyboard.Backspace ->
-            let
-                newCursor =
-                    Cursor.moveCursor
-                        False
-                        ( Units.asciiUnit -1, Units.asciiUnit 0 )
-                        model.cursor
-            in
-            ( { model | cursor = newCursor } |> changeText " " |> (\m -> { m | cursor = newCursor })
-            , Cmd.none
-            )
+            if cursorEnabled model then
+                let
+                    newCursor =
+                        Cursor.moveCursor
+                            False
+                            ( Units.asciiUnit -1, Units.asciiUnit 0 )
+                            model.cursor
+                in
+                ( { model | cursor = newCursor } |> changeText " " |> (\m -> { m | cursor = newCursor })
+                , Cmd.none
+                )
+
+            else
+                ( model, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -1207,7 +1232,7 @@ offlineWarningView : Element msg
 offlineWarningView =
     Element.text "⚠ Unable to reach server. Your changes won't be saved."
         |> Element.el
-            [ Element.Background.color warningColor
+            [ Element.Background.color UiColors.warning
             , Element.padding 8
             , Element.Border.rounded 4
             , Element.centerX
@@ -1251,38 +1276,44 @@ userListView model =
                 (Element.padding 4
                     :: Element.Border.widthEach
                         { left = 0
-                        , right = 2
+                        , right = 1
                         , top =
                             if isFirst then
                                 0
 
                             else
-                                2
+                                1
                         , bottom =
                             if isLast then
                                 0
 
                             else
-                                2
+                                1
                         }
                     :: Element.Events.onMouseEnter (UserTagMouseEntered userId)
                     :: Element.Events.onMouseLeave (UserTagMouseExited userId)
                     :: buttonAttributes (isActive userId)
                 )
                 { onPress = Just (UserColorSquarePressed userId)
-                , label =
-                    Element.el
-                        [ Element.width (Element.px 20)
-                        , Element.height (Element.px 20)
-                        , Element.Background.color <| ColorIndex.toColor <| User.color userData
-                        ]
-                        Element.none
+                , label = colorSquareInner userData
                 }
+
+        colorSquareInner : UserData -> Element FrontendMsg
+        colorSquareInner userData =
+            Element.el
+                [ Element.width (Element.px 20)
+                , Element.height (Element.px 20)
+                , Element.Border.rounded 2
+                , Element.Border.width 1
+                , Element.Border.color UiColors.colorSquareBorder
+                , Element.Background.color <| ColorIndex.toColor <| User.color userData
+                ]
+                Element.none
 
         youText =
             if isAdmin model then
                 Element.el
-                    [ Element.Font.bold, Element.centerX, Element.Font.color (Element.rgb255 255 0 0) ]
+                    [ Element.Font.bold, Element.centerX, Element.Font.color UiColors.adminText ]
                     (Element.text "⇽ Admin")
 
             else
@@ -1309,12 +1340,6 @@ userListView model =
         baseTag isFirst isLast content ( userId, userData ) =
             Element.row
                 [ Element.width Element.fill
-                , Element.Background.color <|
-                    if Just userId == model.userPressHighlighted || Just userId == model.userHoverHighlighted then
-                        Element.rgba 1 1 1 0.3
-
-                    else
-                        Element.rgba 0 0 0 0
                 , "User Id: "
                     ++ String.fromInt (User.rawId userId)
                     |> Element.text
@@ -1325,7 +1350,7 @@ userListView model =
                 , content
                 ]
 
-        rowBorderWidth : Bool -> Bool -> Element.Attribute msg
+        rowBorderWidth : Bool -> Bool -> List (Element.Attribute msg)
         rowBorderWidth isFirst isLast =
             Element.Border.widthEach
                 { left = 0
@@ -1335,14 +1360,20 @@ userListView model =
                         0
 
                     else
-                        2
+                        1
                 , bottom =
                     if isLast then
                         0
 
                     else
-                        2
+                        1
                 }
+                :: (if isLast then
+                        [ Element.Border.roundEach { bottomLeft = 1, topLeft = 0, topRight = 0, bottomRight = 0 } ]
+
+                    else
+                        []
+                   )
 
         hiddenUserTag : Bool -> Bool -> ( UserId, UserData ) -> Element FrontendMsg
         hiddenUserTag isFirst isLast ( userId, userData ) =
@@ -1352,17 +1383,12 @@ userListView model =
                     :: Element.width Element.fill
                     :: Element.padding 4
                     :: rowBorderWidth isFirst isLast
-                    :: buttonAttributes (isActive userId)
+                    ++ buttonAttributes (isActive userId)
                 )
                 { onPress = Just (UnhideUserPressed userId)
                 , label =
                     Element.row [ Element.width Element.fill ]
-                        [ Element.el
-                            [ Element.width (Element.px 20)
-                            , Element.height (Element.px 20)
-                            , Element.Background.color <| ColorIndex.toColor <| User.color userData
-                            ]
-                            Element.none
+                        [ colorSquareInner userData
                         , Element.el [ Element.centerX ] (Element.text "Unhide")
                         ]
                 }
@@ -1371,13 +1397,13 @@ userListView model =
                             Element.row [ Element.width Element.fill ]
                                 [ a
                                 , Element.Input.button
-                                    [ Element.Border.color backgroundColor
-                                    , Element.Background.color buttonDefault
-                                    , Element.mouseOver [ Element.Background.color buttonHighlight ]
-                                    , Element.height Element.fill
-                                    , Element.width Element.fill
-                                    , rowBorderWidth isFirst isLast
-                                    ]
+                                    (Element.Border.color UiColors.border
+                                        :: Element.Background.color UiColors.button
+                                        :: Element.mouseOver [ Element.Background.color UiColors.buttonActive ]
+                                        :: Element.height Element.fill
+                                        :: Element.width Element.fill
+                                        :: rowBorderWidth isFirst isLast
+                                    )
                                     { onPress = Just (HideForAllTogglePressed userId)
                                     , label = Element.el [ Element.centerX ] (Element.text "Hide for all")
                                     }
@@ -1395,7 +1421,7 @@ userListView model =
                     :: Element.width Element.fill
                     :: Element.padding 4
                     :: rowBorderWidth isFirst isLast
-                    :: buttonAttributes (isActive userId)
+                    ++ buttonAttributes (isActive userId)
                 )
                 { onPress = Just (HideForAllTogglePressed userId)
                 , label =
@@ -1411,13 +1437,13 @@ userListView model =
                 }
 
         buttonAttributes isActive_ =
-            [ Element.Border.color backgroundColor
+            [ Element.Border.color UiColors.border
             , Element.Background.color
                 (if isActive_ then
-                    buttonHighlight
+                    UiColors.buttonActive
 
                  else
-                    buttonDefault
+                    UiColors.button
                 )
             ]
 
@@ -1464,12 +1490,13 @@ userListView model =
             not (List.isEmpty hiddenUsersForAll) && isAdmin model
     in
     Element.column
-        [ Element.Background.color lightColor
+        [ Element.Background.color UiColors.background
         , Element.alignRight
         , Element.spacing 8
-        , Element.Border.width 2
-        , Element.Border.color backgroundColor
-        , Element.Font.color textColor
+        , Element.Border.widthEach { bottom = 1, left = 1, right = 1, top = 0 }
+        , Element.Border.roundEach { bottomLeft = 3, topLeft = 0, topRight = 0, bottomRight = 0 }
+        , Element.Border.color UiColors.border
+        , Element.Font.color UiColors.text
         , if isAdmin model then
             Element.width (Element.px 230)
 
@@ -1502,6 +1529,16 @@ userListView model =
         ]
 
 
+canUndo : FrontendLoaded -> Bool
+canUndo model =
+    LocalGrid.localModel model.localModel |> .undoHistory |> List.isEmpty |> not
+
+
+canRedo : FrontendLoaded -> Bool
+canRedo model =
+    LocalGrid.localModel model.localModel |> .redoHistory |> List.isEmpty |> not
+
+
 toolbarView : FrontendLoaded -> Element FrontendMsg
 toolbarView model =
     let
@@ -1511,13 +1548,14 @@ toolbarView model =
                     (\zoom ->
                         toolbarButton
                             [ if model.zoomFactor == zoom then
-                                Element.Background.color buttonHighlight
+                                Element.Background.color UiColors.buttonActive
 
                               else
-                                Element.Background.color buttonDefault
+                                Element.Background.color UiColors.button
                             ]
                             (ZoomFactorPressed zoom)
-                            (Element.text (String.fromInt zoom ++ "x"))
+                            True
+                            (Element.el [ Element.moveDown 1 ] (Element.text (String.fromInt zoom ++ "x")))
                     )
 
         toolView =
@@ -1525,12 +1563,13 @@ toolbarView model =
                 (\( toolDefault, isTool, icon ) ->
                     toolbarButton
                         [ if isTool model.tool then
-                            Element.Background.color buttonHighlight
+                            Element.Background.color UiColors.buttonActive
 
                           else
-                            Element.Background.color buttonDefault
+                            Element.Background.color UiColors.button
                         ]
                         (SelectToolPressed toolDefault)
+                        True
                         icon
                 )
                 tools
@@ -1539,27 +1578,17 @@ toolbarView model =
             [ toolbarButton
                 []
                 UndoPressed
+                (canUndo model)
                 (Element.image
-                    [ Element.width (Element.px 20)
-                    , if LocalGrid.localModel model.localModel |> .undoHistory |> List.isEmpty then
-                        Element.alpha 0.5
-
-                      else
-                        Element.alpha 1
-                    ]
+                    [ Element.width (Element.px 22) ]
                     { src = "undo.svg", description = "Undo button" }
                 )
             , toolbarButton
                 []
                 RedoPressed
+                (canRedo model)
                 (Element.image
-                    [ Element.width (Element.px 20)
-                    , if LocalGrid.localModel model.localModel |> .redoHistory |> List.isEmpty then
-                        Element.alpha 0.5
-
-                      else
-                        Element.alpha 1
-                    ]
+                    [ Element.width (Element.px 22) ]
                     { src = "redo.svg", description = "Undo button" }
                 )
             ]
@@ -1568,21 +1597,23 @@ toolbarView model =
             [ toolbarButton
                 []
                 CopyPressed
+                (cursorEnabled model)
                 (Element.image
-                    [ Element.width (Element.px 20) ]
+                    [ Element.width (Element.px 22) ]
                     { src = "copy.svg", description = "Copy text button" }
                 )
             , toolbarButton
                 []
                 CutPressed
+                (cursorEnabled model)
                 (Element.image
-                    [ Element.width (Element.px 20) ]
+                    [ Element.width (Element.px 22) ]
                     { src = "cut.svg", description = "Cut text button" }
                 )
             ]
 
         groups =
-            [ Element.el [ Element.paddingXY 2 0 ] (Element.text "🔎") :: zoomView
+            [ Element.el [ Element.paddingXY 4 0 ] (Element.text "🔎") :: zoomView
             , toolView
             , undoRedoView
             , copyView
@@ -1590,12 +1621,13 @@ toolbarView model =
                 |> List.map (Element.row [ Element.spacing 2 ])
     in
     Element.wrappedRow
-        [ Element.Background.color lightColor
-        , Element.spacing 8
-        , Element.padding 8
-        , Element.Border.color backgroundColor
-        , Element.Border.width 2
-        , Element.Font.color textColor
+        [ Element.Background.color UiColors.background
+        , Element.spacingXY 10 8
+        , Element.padding 6
+        , Element.Border.color UiColors.border
+        , Element.Border.width 1
+        , Element.Border.rounded 3
+        , Element.Font.color UiColors.text
         , Element.above
             (if lostConnection model then
                 offlineWarningView
@@ -1618,7 +1650,7 @@ tools =
     [ ( DragTool
       , (==) DragTool
       , Element.image
-            [ Element.width (Element.px 20) ]
+            [ Element.width (Element.px 22) ]
             { src = "4-direction-arrows.svg", description = "Drag tool" }
       )
     , ( SelectTool
@@ -1626,8 +1658,8 @@ tools =
       , Element.el
             [ Element.Border.width 2
             , Element.Border.dashed
-            , Element.width (Element.px 20)
-            , Element.height (Element.px 20)
+            , Element.width (Element.px 22)
+            , Element.height (Element.px 22)
             ]
             Element.none
       )
@@ -1639,57 +1671,42 @@ tools =
 
                 _ ->
                     False
-      , Element.el
-            [ Element.width (Element.px 20)
-            , Element.height (Element.px 20)
-            , Element.moveLeft 3
-            ]
-            (Element.text "🙈")
+      , Element.el [ Element.Font.size 24, Element.moveDown 1 ] (Element.text "🙈")
       )
     ]
 
 
-lightColor : Element.Color
-lightColor =
-    Element.rgb255 239 249 240
-
-
-backgroundColor : Element.Color
-backgroundColor =
-    Element.rgb255 107 77 87
-
-
-buttonHighlight : Element.Color
-buttonHighlight =
-    Element.rgb255 221 200 196
-
-
-buttonDefault : Element.Color
-buttonDefault =
-    Element.rgb255 167 129 123
-
-
-textColor : Element.Color
-textColor =
-    Element.rgb255 19 7 12
-
-
-warningColor : Element.Color
-warningColor =
-    Element.rgb255 255 210 212
-
-
-toolbarButton : List (Element.Attribute msg) -> msg -> Element msg -> Element msg
-toolbarButton attributes onPress label =
+toolbarButton : List (Element.Attribute msg) -> msg -> Bool -> Element msg -> Element msg
+toolbarButton attributes onPress isEnabled label =
     Element.Input.button
-        (Element.padding 8
-            :: Element.Background.color buttonDefault
-            :: Element.mouseOver [ Element.Background.color buttonHighlight ]
-            :: Element.Border.width 2
-            :: Element.Border.color backgroundColor
+        (Element.Background.color UiColors.button
+            :: Element.width (Element.px 40)
+            :: Element.height (Element.px 40)
+            :: Element.mouseOver
+                (if isEnabled then
+                    [ Element.Background.color UiColors.buttonActive ]
+
+                 else
+                    []
+                )
+            :: Element.Border.width 1
+            :: Element.Border.rounded 2
+            :: Element.Border.color UiColors.border
             :: attributes
         )
-        { onPress = Just onPress, label = label }
+        { onPress = Just onPress
+        , label =
+            Element.el
+                [ if isEnabled then
+                    Element.alpha 1
+
+                  else
+                    Element.alpha 0.5
+                , Element.centerX
+                , Element.centerY
+                ]
+                label
+        }
 
 
 findPixelPerfectSize : FrontendLoaded -> { canvasSize : ( Int, Int ), actualCanvasSize : ( Int, Int ) }
