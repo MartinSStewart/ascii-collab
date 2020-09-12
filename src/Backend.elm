@@ -1,7 +1,9 @@
 module Backend exposing (app)
 
 import BackendLogic exposing (Effect(..))
+import Duration
 import Lamdera exposing (ClientId, SessionId)
+import Time
 import Types exposing (..)
 
 
@@ -22,4 +24,7 @@ app =
 
 subscriptions : BackendModel -> Sub BackendMsg
 subscriptions _ =
-    Lamdera.onDisconnect UserDisconnected
+    Sub.batch
+        [ Lamdera.onDisconnect UserDisconnected
+        , Time.every (Duration.hours 3 |> Duration.inMilliseconds) NotifyAdminTimeElapsed
+        ]

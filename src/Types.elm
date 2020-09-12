@@ -33,6 +33,7 @@ import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
+import SendGrid
 import Time
 import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
@@ -93,7 +94,7 @@ type alias FrontendLoaded =
 type ToolType
     = DragTool
     | SelectTool
-    | HideUserTool (Maybe UserId)
+    | HideUserTool (Maybe ( UserId, Coord AsciiUnit ))
 
 
 type MouseButtonState
@@ -109,6 +110,7 @@ type alias BackendModel =
     { grid : Grid
     , userSessions : Dict SessionId { clientIds : Dict ClientId (Bounds CellUnit), userId : UserId }
     , users : Dict RawUserId BackendUserData
+    , usersHiddenRecently : List { reporter : UserId, hiddenUser : UserId, hidePoint : Coord AsciiUnit }
     }
 
 
@@ -160,6 +162,8 @@ type ToBackend
 
 type BackendMsg
     = UserDisconnected SessionId ClientId
+    | NotifyAdminTimeElapsed Time.Posix
+    | NotifyAdminEmailSent
 
 
 type ToFrontend

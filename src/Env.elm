@@ -3,6 +3,7 @@ module Env exposing (..)
 -- The Env.elm file is for per-environment configuration.
 -- See https://dashboard.lamdera.app/docs/environment for more info.
 
+import SendGrid
 import User exposing (UserId)
 
 
@@ -32,3 +33,23 @@ isProduction =
 
         _ ->
             False
+
+
+adminEmail : String
+adminEmail =
+    ""
+
+
+sendGridKey_ : String
+sendGridKey_ =
+    ""
+
+
+sendGridKey : SendGrid.ApiKey
+sendGridKey =
+    SendGrid.apiKey sendGridKey_
+
+
+domain : String
+domain =
+    "localhost:8000"

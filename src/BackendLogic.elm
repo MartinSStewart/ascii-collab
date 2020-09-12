@@ -9,9 +9,12 @@ import Grid
 import Helper
 import List.Nonempty exposing (Nonempty)
 import LocalGrid
+import SendGrid
+import String.Nonempty
 import Types exposing (..)
 import Undo
 import Units exposing (CellUnit)
+import UrlHelper
 import User exposing (UserData, UserId)
 
 
@@ -21,7 +24,7 @@ type Effect
 
 init : BackendModel
 init =
-    { grid = Grid.empty, userSessions = Dict.empty, users = Dict.empty }
+    { grid = Grid.empty, userSessions = Dict.empty, users = Dict.empty, usersHiddenRecently = [] }
 
 
 update : BackendMsg -> BackendModel -> ( BackendModel, Cmd BackendMsg )
@@ -42,6 +45,47 @@ update msg model =
               }
             , Cmd.none
             )
+
+        NotifyAdminTimeElapsed time ->
+            let
+                maybeContent =
+                    List.map
+                        (\{ reporter, hiddenUser, hidePoint } ->
+                            "User "
+                                ++ String.fromInt (User.rawId reporter)
+                                ++ " hid user "
+                                ++ String.fromInt (User.rawId hiddenUser)
+                                ++ "'s text at "
+                                ++ (Env.domain ++ "/" ++ UrlHelper.encodeUrl hidePoint)
+                        )
+                        model.usersHiddenRecently
+                        |> String.join "\n"
+                        |> String.Nonempty.fromString
+            in
+            case ( model.usersHiddenRecently, maybeContent ) of
+                ( _ :: _, Just content ) ->
+                    ( { model | usersHiddenRecently = [] }
+                    , SendGrid.sendEmail
+                        (always NotifyAdminEmailSent)
+                        Env.sendGridKey
+                        { subject =
+                            String.Nonempty.append_
+                                (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
+                                " users hidden"
+                        , content = SendGrid.textContent content
+                        , to = List.Nonempty.fromElement Env.adminEmail
+                        , cc = []
+                        , bcc = []
+                        , nameOfSender = "ascii-collab"
+                        , emailAddressOfSender = "ascii-collab@lamdera.app"
+                        }
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        NotifyAdminEmailSent ->
+            ( model, Cmd.none )
 
 
 getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, BackendUserData )
@@ -239,15 +283,44 @@ updateLocalChange ( userId, _ ) change model =
         Change.LocalAddUndo ->
             ( updateUser userId Undo.add model, Nothing )
 
-        Change.LocalToggleUserVisibility hideUserId ->
+        Change.LocalHideUser hideUserId hidePoint ->
             ( if userId == hideUserId then
                 model
 
-              else
+              else if Dict.member (User.rawId hideUserId) model.users then
                 updateUser
                     userId
                     (\user -> { user | hiddenUsers = Helper.toggleSet hideUserId user.hiddenUsers })
-                    model
+                    { model
+                        | usersHiddenRecently =
+                            if Just userId == Env.adminUserId then
+                                model.usersHiddenRecently
+
+                            else
+                                { reporter = userId, hiddenUser = hideUserId, hidePoint = hidePoint } :: model.usersHiddenRecently
+                    }
+
+              else
+                model
+            , Nothing
+            )
+
+        Change.LocalUnhideUser unhideUserId ->
+            ( updateUser
+                userId
+                (\user -> { user | hiddenUsers = Helper.toggleSet unhideUserId user.hiddenUsers })
+                { model
+                    | usersHiddenRecently =
+                        List.filterMap
+                            (\value ->
+                                if value.reporter == userId && unhideUserId == value.hiddenUser then
+                                    Nothing
+
+                                else
+                                    Just value
+                            )
+                            model.usersHiddenRecently
+                }
             , Nothing
             )
 

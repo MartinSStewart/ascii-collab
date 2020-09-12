@@ -1,4 +1,20 @@
-module Helper exposing (Coord, RawCellCoord, absTuple, addTuple, coordToPoint, coordToVec, coordToVector2d, fromRawCoord, maxTuple, minTuple, minusTuple, multiplyTuple, roundPoint, toRawCoord, toggleSet)
+module Helper exposing
+    ( Coord
+    , RawCellCoord
+    , absTuple
+    , addTuple
+    , coordToPoint
+    , coordToVec
+    , coordToVector2d
+    , fromRawCoord
+    , maxTuple
+    , minTuple
+    , minusTuple
+    , multiplyTuple
+    , roundPoint
+    , toRawCoord
+    , toggleSet
+    )
 
 import EverySet exposing (EverySet)
 import Math.Vector2 exposing (Vec2)

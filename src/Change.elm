@@ -5,7 +5,7 @@ import Dict exposing (Dict)
 import Grid
 import GridCell
 import Helper exposing (Coord, RawCellCoord)
-import Units exposing (CellUnit)
+import Units exposing (AsciiUnit, CellUnit)
 import User exposing (UserData, UserId)
 
 
@@ -20,7 +20,8 @@ type LocalChange
     | LocalUndo
     | LocalRedo
     | LocalAddUndo
-    | LocalToggleUserVisibility UserId
+    | LocalHideUser UserId (Coord AsciiUnit)
+    | LocalUnhideUser UserId
     | LocalToggleUserVisibilityForAll UserId
 
 

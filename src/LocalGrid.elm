@@ -119,14 +119,24 @@ update_ msg model =
         LocalChange LocalAddUndo ->
             Undo.add model
 
-        LocalChange (LocalToggleUserVisibility userId_) ->
+        LocalChange (LocalHideUser userId_ _) ->
             { model
                 | hiddenUsers =
                     if userId_ == userId then
                         model.hiddenUsers
 
                     else
-                        Helper.toggleSet userId_ model.hiddenUsers
+                        EverySet.insert userId_ model.hiddenUsers
+            }
+
+        LocalChange (LocalUnhideUser userId_) ->
+            { model
+                | hiddenUsers =
+                    if userId_ == userId then
+                        model.hiddenUsers
+
+                    else
+                        EverySet.remove userId_ model.hiddenUsers
             }
 
         LocalChange (LocalToggleUserVisibilityForAll hideUserId) ->

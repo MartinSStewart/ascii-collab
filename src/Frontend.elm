@@ -47,9 +47,8 @@ import Types exposing (..)
 import UiColors
 import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
-import Url.Builder
 import Url.Parser exposing ((<?>))
-import Url.Parser.Query
+import UrlHelper
 import User exposing (UserData, UserId(..))
 import Vector2d exposing (Vector2d)
 import WebGL exposing (Shader)
@@ -133,7 +132,7 @@ init : Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
 init url key =
     let
         ( viewPoint, cmd ) =
-            case Url.Parser.parse urlParser url of
+            case Url.Parser.parse UrlHelper.urlParser url of
                 Just viewPoint_ ->
                     ( viewPoint_, Cmd.none )
 
@@ -142,7 +141,7 @@ init url key =
                         defaultViewPoint =
                             ( Units.asciiUnit 0, Units.asciiUnit 0 )
                     in
-                    ( defaultViewPoint, Browser.Navigation.replaceUrl key (encodeUrl defaultViewPoint) )
+                    ( defaultViewPoint, Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultViewPoint) )
 
         -- We only load in a portion of the grid since we don't know the window size. The rest will get loaded in later anyway.
         bounds =
@@ -178,26 +177,6 @@ init url key =
         , cmd
         ]
     )
-
-
-coordQueryParser : Url.Parser.Query.Parser (Coord AsciiUnit)
-coordQueryParser =
-    Url.Parser.Query.map2
-        (\maybeX maybeY ->
-            ( Maybe.withDefault 0 maybeX, Maybe.withDefault 0 maybeY ) |> Helper.fromRawCoord
-        )
-        (Url.Parser.Query.int "x")
-        (Url.Parser.Query.int "y")
-
-
-urlParser : Url.Parser.Parser (Coord AsciiUnit -> b) b
-urlParser =
-    Url.Parser.top <?> coordQueryParser
-
-
-encodeUrl : Coord AsciiUnit -> String
-encodeUrl ( Quantity x, Quantity y ) =
-    Url.Builder.relative [] [ Url.Builder.int "x" x, Url.Builder.int "y" y ]
 
 
 isTouchDevice : FrontendLoaded -> Bool
@@ -358,14 +337,19 @@ updateLoaded msg model =
                                 let
                                     localModel =
                                         LocalGrid.localModel model.localModel
+
+                                    position : Coord AsciiUnit
+                                    position =
+                                        screenToWorld model mousePosition |> Units.worldToAscii
+
+                                    ( hideUserId, _ ) =
+                                        selectionPoint
+                                            position
+                                            localModel.hiddenUsers
+                                            localModel.adminHiddenUsers
+                                            localModel.grid
                                 in
-                                selectionPoint
-                                    (screenToWorld model mousePosition |> Units.worldToAscii)
-                                    localModel.hiddenUsers
-                                    localModel.adminHiddenUsers
-                                    localModel.grid
-                                    |> Tuple.first
-                                    |> HideUserTool
+                                hideUserId |> Maybe.map (\a -> ( a, position )) |> HideUserTool
 
                             _ ->
                                 model.tool
@@ -384,7 +368,7 @@ updateLoaded msg model =
                 urlChange =
                     if Units.worldToAscii actualViewPoint_ /= Units.worldToAscii model.viewPointLastInterval then
                         Units.worldToAscii actualViewPoint_
-                            |> encodeUrl
+                            |> UrlHelper.encodeUrl
                             |> Browser.Navigation.replaceUrl model.key
 
                     else
@@ -481,7 +465,7 @@ updateLoaded msg model =
 
         UnhideUserPressed userToUnhide ->
             ( updateLocalModel
-                (Change.LocalToggleUserVisibility userToUnhide)
+                (Change.LocalUnhideUser userToUnhide)
                 { model
                     | userPressHighlighted =
                         if Just userToUnhide == model.userPressHighlighted then
@@ -719,9 +703,9 @@ mouseUp mousePosition mouseState model =
             }
     in
     case model_.tool of
-        HideUserTool (Just userId) ->
+        HideUserTool (Just ( userId, hidePoint )) ->
             if isSmallDistance then
-                updateLocalModel (Change.LocalToggleUserVisibility userId) model_
+                updateLocalModel (Change.LocalHideUser userId hidePoint) model_
 
             else
                 model_
@@ -1212,8 +1196,13 @@ view model =
                                     []
                            )
                         ++ (case loadedModel.tool of
-                                HideUserTool (Just userId) ->
-                                    if LocalGrid.localModel loadedModel.localModel |> .user |> Tuple.first |> (==) userId then
+                                HideUserTool (Just ( hideUserId, _ )) ->
+                                    if
+                                        LocalGrid.localModel loadedModel.localModel
+                                            |> .user
+                                            |> Tuple.first
+                                            |> (==) hideUserId
+                                    then
                                         []
 
                                     else
@@ -1457,7 +1446,13 @@ userListView model =
         isActive userId =
             (model.userPressHighlighted == Just userId)
                 || (model.userHoverHighlighted == Just userId)
-                || (model.tool == HideUserTool (Just userId))
+                || (case model.tool of
+                        HideUserTool (Just ( hideUserId, _ )) ->
+                            hideUserId == userId
+
+                        _ ->
+                            False
+                   )
 
         hiddenUsers : List (Element FrontendMsg)
         hiddenUsers =
@@ -1821,7 +1816,7 @@ canvasView model =
                             ( _, Just userId ) ->
                                 List.find (Tuple.first >> (==) userId) allUsers
 
-                            ( HideUserTool (Just userId), _ ) ->
+                            ( HideUserTool (Just ( userId, _ )), _ ) ->
                                 List.find (Tuple.first >> (==) userId) allUsers
 
                             _ ->
@@ -1835,7 +1830,13 @@ canvasView model =
         )
 
 
-drawText : Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex) -> Maybe ( UserId, UserData ) -> Maybe ( UserId, UserData ) -> Mat4 -> Texture -> List WebGL.Entity
+drawText :
+    Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex)
+    -> Maybe ( UserId, UserData )
+    -> Maybe ( UserId, UserData )
+    -> Mat4
+    -> Texture
+    -> List WebGL.Entity
 drawText meshes userPressHighlighted userHoverHighlighted viewMatrix texture =
     let
         hover =
