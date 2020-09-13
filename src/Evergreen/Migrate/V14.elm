@@ -141,7 +141,7 @@ migrateBackendModel old =
                                 |> (\(Evergreen.V13.User.User { color }) -> color)
                                 |> migrateColorIndex
                                 |> (\a -> Evergreen.V14.User.User { color = a })
-                      , hiddenUsers = EverySet.empty
+                      , hiddenUsers = EverySet.map migrateUserId user.hiddenUsers
                       , hiddenForAll = user.hiddenForAll
                       , undoHistory = []
                       , redoHistory = []
