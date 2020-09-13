@@ -8,6 +8,7 @@ module Grid exposing
     , allCellsDict
     , asciiBox
     , asciiToCellAndLocalCoord
+    , cellAndLocalCoordToAscii
     , changeCount
     , empty
     , from
@@ -58,6 +59,13 @@ asciiToCellAndLocalCoord ( Quantity x, Quantity y ) =
       , (y + (GridCell.cellSize * offset)) // GridCell.cellSize - offset |> Quantity
       )
     , modBy GridCell.cellSize x + modBy GridCell.cellSize y * GridCell.cellSize
+    )
+
+
+cellAndLocalCoordToAscii : ( Coord Units.CellUnit, Int ) -> Coord Units.AsciiUnit
+cellAndLocalCoordToAscii ( ( Quantity x, Quantity y ), local ) =
+    ( (x * GridCell.cellSize + modBy GridCell.cellSize local) |> Quantity
+    , (y * GridCell.cellSize + local // GridCell.cellSize) |> Quantity
     )
 
 

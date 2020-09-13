@@ -7,6 +7,7 @@ import Env
 import EverySet exposing (EverySet)
 import Grid
 import Helper
+import List.Extra as List
 import List.Nonempty exposing (Nonempty)
 import LocalGrid
 import SendGrid
@@ -24,7 +25,12 @@ type Effect
 
 init : BackendModel
 init =
-    { grid = Grid.empty, userSessions = Dict.empty, users = Dict.empty, usersHiddenRecently = [] }
+    { grid = Grid.empty
+    , userSessions = Dict.empty
+    , users = Dict.empty
+    , usersHiddenRecently = []
+    , userChangesRecently = Dict.empty
+    }
 
 
 update : BackendMsg -> BackendModel -> ( BackendModel, Cmd BackendMsg )
@@ -46,25 +52,51 @@ update msg model =
             , Cmd.none
             )
 
-        NotifyAdminTimeElapsed time ->
+        NotifyAdminTimeElapsed _ ->
             let
-                maybeContent =
+                idToString =
+                    User.rawId >> String.fromInt
+
+                fullUrl point =
+                    Env.domain ++ "/" ++ UrlHelper.encodeUrl point
+
+                changes =
+                    Dict.toList model.userChangesRecently
+                        |> List.gatherEqualsBy (\( ( userId, _ ), _ ) -> userId)
+                        |> List.map
+                            (\( ( ( userId, _ ), _ ) as head, rest ) ->
+                                List.map
+                                    (\( ( _, cellCoord ), localPos ) ->
+                                        Grid.cellAndLocalCoordToAscii ( Helper.fromRawCoord cellCoord, localPos )
+                                            |> fullUrl
+                                            |> (++) "\n    "
+                                    )
+                                    (head :: rest)
+                                    |> String.concat
+                                    |> (++) ("User " ++ String.fromInt userId ++ " made changes at ")
+                            )
+                        |> String.join "\n"
+
+                hidden =
                     List.map
                         (\{ reporter, hiddenUser, hidePoint } ->
                             "User "
-                                ++ String.fromInt (User.rawId reporter)
+                                ++ idToString reporter
                                 ++ " hid user "
-                                ++ String.fromInt (User.rawId hiddenUser)
+                                ++ idToString hiddenUser
                                 ++ "'s text at "
-                                ++ (Env.domain ++ "/" ++ UrlHelper.encodeUrl hidePoint)
+                                ++ fullUrl hidePoint
                         )
                         model.usersHiddenRecently
                         |> String.join "\n"
-                        |> String.Nonempty.fromString
             in
-            case ( model.usersHiddenRecently, maybeContent ) of
-                ( _ :: _, Just content ) ->
-                    ( { model | usersHiddenRecently = [] }
+            case
+                ( List.isEmpty model.usersHiddenRecently && Dict.isEmpty model.userChangesRecently
+                , String.Nonempty.fromString (changes ++ "\n\n" ++ hidden)
+                )
+            of
+                ( False, Just content ) ->
+                    ( { model | usersHiddenRecently = [], userChangesRecently = Dict.empty }
                     , SendGrid.sendEmail
                         (always NotifyAdminEmailSent)
                         Env.sendGridKey
@@ -250,6 +282,15 @@ updateLocalChange ( userId, _ ) change model =
                 Just user ->
                     ( { model
                         | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
+                        , userChangesRecently =
+                            if Just userId == Env.adminUserId then
+                                model.userChangesRecently
+
+                            else
+                                Dict.insert
+                                    ( User.rawId userId, Helper.toRawCoord localChange.cellPosition )
+                                    localChange.localPosition
+                                    model.userChangesRecently
                       }
                         |> updateUser userId (always { user | undoCurrent = LocalGrid.incrementUndoCurrent localChange user.undoCurrent })
                     , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just

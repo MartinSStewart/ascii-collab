@@ -111,6 +111,7 @@ type alias BackendModel =
     , userSessions : Dict SessionId { clientIds : Dict ClientId (Bounds CellUnit), userId : UserId }
     , users : Dict RawUserId BackendUserData
     , usersHiddenRecently : List { reporter : UserId, hiddenUser : UserId, hidePoint : Coord AsciiUnit }
+    , userChangesRecently : Dict ( RawUserId, RawCellCoord ) Int
     }
 
 
