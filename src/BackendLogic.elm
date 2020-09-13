@@ -103,7 +103,10 @@ update msg model =
                         { subject =
                             String.Nonempty.append_
                                 (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
-                                " users hidden"
+                                (" users hidden & "
+                                    ++ String.fromInt (Dict.size model.userChangesRecently)
+                                    ++ " cells changed"
+                                )
                         , content = SendGrid.textContent content
                         , to = List.Nonempty.fromElement Env.adminEmail
                         , cc = []

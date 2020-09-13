@@ -676,7 +676,7 @@ mouseUp mousePosition mouseState model =
         isSmallDistance =
             Vector2d.from mouseState.start mousePosition
                 |> Vector2d.length
-                |> Quantity.lessThan (Pixels.pixels 15)
+                |> Quantity.lessThan (Pixels.pixels 5)
 
         model_ =
             { model
@@ -1284,11 +1284,11 @@ userListView model =
                     :: buttonAttributes (isActive userId)
                 )
                 { onPress = Just (UserColorSquarePressed userId)
-                , label = colorSquareInner userData
+                , label = colorSquareInner ( userId, userData )
                 }
 
-        colorSquareInner : UserData -> Element FrontendMsg
-        colorSquareInner userData =
+        colorSquareInner : ( UserId, UserData ) -> Element FrontendMsg
+        colorSquareInner ( userId, userData ) =
             Element.el
                 [ Element.width (Element.px 20)
                 , Element.height (Element.px 20)
@@ -1297,7 +1297,14 @@ userListView model =
                 , Element.Border.color UiColors.colorSquareBorder
                 , Element.Background.color <| ColorIndex.toColor <| User.color userData
                 ]
-                Element.none
+                (if isAdmin model then
+                    Element.paragraph
+                        [ Element.Font.size 9, Element.spacing 0, Element.moveDown 1, Element.moveRight 1 ]
+                        [ User.rawId userId |> String.fromInt |> Element.text ]
+
+                 else
+                    Element.none
+                )
 
         youText =
             if isAdmin model then
@@ -1312,7 +1319,7 @@ userListView model =
         userTag =
             baseTag
                 True
-                (List.isEmpty hiddenUsers)
+                (List.isEmpty hiddenUsers && not showHiddenUsersForAll)
                 (if Just (currentUserId model) == Env.adminUserId then
                     Element.Input.button
                         [ Element.width Element.fill, Element.height Element.fill ]
@@ -1377,7 +1384,7 @@ userListView model =
                 { onPress = Just (UnhideUserPressed userId)
                 , label =
                     Element.row [ Element.width Element.fill ]
-                        [ colorSquareInner userData
+                        [ colorSquareInner ( userId, userData )
                         , Element.el [ Element.centerX ] (Element.text "Unhide")
                         ]
                 }
@@ -1415,12 +1422,7 @@ userListView model =
                 { onPress = Just (HideForAllTogglePressed userId)
                 , label =
                     Element.row [ Element.width Element.fill ]
-                        [ Element.el
-                            [ Element.width (Element.px 20)
-                            , Element.height (Element.px 20)
-                            , Element.Background.color <| ColorIndex.toColor <| User.color userData
-                            ]
-                            Element.none
+                        [ colorSquareInner ( userId, userData )
                         , Element.el [ Element.centerX ] (Element.text "Unhide for all")
                         ]
                 }
