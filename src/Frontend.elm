@@ -1104,6 +1104,7 @@ textarea model =
             , Html.Attributes.style "resize" "none"
             , Html.Attributes.style "opacity" "0"
             , Html.Attributes.id "textareaId"
+            , Html.Attributes.attribute "data-gramm" "false"
             , Html.Events.Extra.Touch.onWithOptions
                 "touchmove"
                 { stopPropagation = False, preventDefault = True }
