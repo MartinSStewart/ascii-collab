@@ -1,7 +1,7 @@
 module Cursor exposing (Cursor, bounds, draw, fragmentShader, mesh, moveCursor, newLine, position, selection, setCursor, toMesh, updateMesh, vertexShader)
 
 import Ascii
-import ColorIndex
+import ColorHelper
 import Element
 import Helper exposing (Coord)
 import Math.Matrix4 exposing (Mat4)
@@ -177,7 +177,7 @@ draw viewMatrix color model =
         model.cursorMesh
         { view = viewMatrix
         , offset = bounds_.min |> Units.asciiToWorld |> Helper.coordToVec
-        , color = ColorIndex.colorToVec3 color
+        , color = ColorHelper.colorToVec3 color
         }
 
 

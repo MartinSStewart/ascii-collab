@@ -16,7 +16,7 @@ import Types exposing (..)
 import Undo
 import Units exposing (CellUnit)
 import UrlHelper
-import User exposing (UserData, UserId)
+import User exposing (UserId)
 
 
 type Effect
@@ -404,14 +404,10 @@ requestDataUpdate : SessionId -> ClientId -> Bounds CellUnit -> BackendModel -> 
 requestDataUpdate sessionId clientId viewBounds model =
     let
         loadingData ( userId, user ) =
-            { user = ( userId, user.userData )
+            { user = userId
             , grid = Grid.region viewBounds model.grid
             , hiddenUsers = user.hiddenUsers
             , adminHiddenUsers = hiddenUsers userId model
-            , otherUsers =
-                Dict.toList model.users
-                    |> List.map (Tuple.mapBoth User.userId .userData)
-                    |> List.filter (Tuple.first >> (/=) userId)
             , undoHistory = user.undoHistory
             , redoHistory = user.redoHistory
             , undoCurrent = user.undoCurrent
@@ -438,13 +434,12 @@ requestDataUpdate sessionId clientId viewBounds model =
 
         Nothing ->
             let
-                ( userId, user ) =
-                    Dict.size model.users |> User.newUser
+                userId =
+                    Dict.size model.users |> User.userId
 
                 userBackendData : BackendUserData
                 userBackendData =
-                    { userData = user
-                    , hiddenUsers = EverySet.empty
+                    { hiddenUsers = EverySet.empty
                     , hiddenForAll = False
                     , undoHistory = []
                     , redoHistory = []
@@ -459,22 +454,10 @@ requestDataUpdate sessionId clientId viewBounds model =
                         model.userSessions
                 , users = Dict.insert (User.rawId userId) userBackendData model.users
               }
-            , Effect
-                clientId
-                (LoadingData (loadingData ( userId, userBackendData )))
-                :: broadcast
-                    (\sessionId_ _ ->
-                        if sessionId == sessionId_ then
-                            Nothing
-
-                        else
-                            ServerUserNew ( userId, user )
-                                |> Change.ServerChange
-                                |> List.Nonempty.fromElement
-                                |> ChangeBroadcast
-                                |> Just
-                    )
-                    model
+            , [ Effect
+                    clientId
+                    (LoadingData (loadingData ( userId, userBackendData )))
+              ]
             )
 
 

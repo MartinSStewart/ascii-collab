@@ -6,7 +6,7 @@ import Grid
 import GridCell
 import Helper exposing (Coord, RawCellCoord)
 import Units exposing (AsciiUnit, CellUnit)
-import User exposing (UserData, UserId)
+import User exposing (UserId)
 
 
 type Change
@@ -32,5 +32,4 @@ type ClientChange
 type ServerChange
     = ServerGridChange Grid.Change
     | ServerUndoPoint { userId : UserId, undoPoints : Dict RawCellCoord Int }
-    | ServerUserNew ( UserId, UserData )
     | ServerToggleUserVisibilityForAll UserId

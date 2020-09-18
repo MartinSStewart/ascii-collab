@@ -33,11 +33,10 @@ import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
-import SendGrid
 import Time
 import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
-import User exposing (RawUserId, UserData, UserId)
+import User exposing (RawUserId, UserId)
 import WebGL
 import WebGL.Texture exposing (Texture)
 
@@ -116,8 +115,7 @@ type alias BackendModel =
 
 
 type alias BackendUserData =
-    { userData : UserData
-    , hiddenUsers : EverySet UserId
+    { hiddenUsers : EverySet UserId
     , hiddenForAll : Bool
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
@@ -173,9 +171,8 @@ type ToFrontend
 
 
 type alias LoadingData_ =
-    { user : ( UserId, UserData )
+    { user : UserId
     , grid : Grid
-    , otherUsers : List ( UserId, UserData )
     , hiddenUsers : EverySet UserId
     , adminHiddenUsers : EverySet UserId
     , undoHistory : List (Dict RawCellCoord Int)

@@ -9,7 +9,7 @@ import Browser.Dom
 import Browser.Events
 import Browser.Navigation
 import Change exposing (Change(..))
-import ColorIndex
+import ColorHelper
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Duration
@@ -49,7 +49,7 @@ import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, W
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
 import UrlHelper
-import User exposing (UserData, UserId(..))
+import User exposing (UserId(..))
 import Vector2d exposing (Vector2d)
 import WebGL exposing (Shader)
 import WebGL.Settings
@@ -1201,7 +1201,6 @@ view model =
                                     if
                                         LocalGrid.localModel loadedModel.localModel
                                             |> .user
-                                            |> Tuple.first
                                             |> (==) hideUserId
                                     then
                                         []
@@ -1252,7 +1251,7 @@ isAdmin model =
 
 currentUserId : FrontendLoaded -> UserId
 currentUserId =
-    .localModel >> LocalGrid.localModel >> .user >> Tuple.first
+    .localModel >> LocalGrid.localModel >> .user
 
 
 userListView : FrontendLoaded -> Element FrontendMsg
@@ -1261,7 +1260,7 @@ userListView model =
         localModel =
             LocalGrid.localModel model.localModel
 
-        colorSquare isFirst isLast ( userId, userData ) =
+        colorSquare isFirst isLast userId =
             Element.Input.button
                 (Element.padding 4
                     :: Element.Border.widthEach
@@ -1285,18 +1284,18 @@ userListView model =
                     :: buttonAttributes (isActive userId)
                 )
                 { onPress = Just (UserColorSquarePressed userId)
-                , label = colorSquareInner ( userId, userData )
+                , label = colorSquareInner userId
                 }
 
-        colorSquareInner : ( UserId, UserData ) -> Element FrontendMsg
-        colorSquareInner ( userId, userData ) =
+        colorSquareInner : UserId -> Element FrontendMsg
+        colorSquareInner userId =
             Element.el
                 [ Element.width (Element.px 20)
                 , Element.height (Element.px 20)
                 , Element.Border.rounded 2
                 , Element.Border.width 1
                 , Element.Border.color UiColors.colorSquareBorder
-                , Element.Background.color <| ColorIndex.toColor <| User.color userData
+                , Element.Background.color <| User.color userId
                 ]
                 (if isAdmin model then
                     Element.paragraph
@@ -1333,8 +1332,8 @@ userListView model =
                 )
                 localModel.user
 
-        baseTag : Bool -> Bool -> Element FrontendMsg -> ( UserId, UserData ) -> Element FrontendMsg
-        baseTag isFirst isLast content ( userId, userData ) =
+        baseTag : Bool -> Bool -> Element FrontendMsg -> UserId -> Element FrontendMsg
+        baseTag isFirst isLast content userId =
             Element.row
                 [ Element.width Element.fill
                 , "User Id: "
@@ -1343,7 +1342,7 @@ userListView model =
                     |> Element.el [ Element.htmlAttribute <| Html.Attributes.style "visibility" "collapse" ]
                     |> Element.behindContent
                 ]
-                [ colorSquare isFirst isLast ( userId, userData )
+                [ colorSquare isFirst isLast userId
                 , content
                 ]
 
@@ -1372,8 +1371,8 @@ userListView model =
                         []
                    )
 
-        hiddenUserTag : Bool -> Bool -> ( UserId, UserData ) -> Element FrontendMsg
-        hiddenUserTag isFirst isLast ( userId, userData ) =
+        hiddenUserTag : Bool -> Bool -> UserId -> Element FrontendMsg
+        hiddenUserTag isFirst isLast userId =
             Element.Input.button
                 (Element.Events.onMouseEnter (UserTagMouseEntered userId)
                     :: Element.Events.onMouseLeave (UserTagMouseExited userId)
@@ -1385,7 +1384,7 @@ userListView model =
                 { onPress = Just (UnhideUserPressed userId)
                 , label =
                     Element.row [ Element.width Element.fill ]
-                        [ colorSquareInner ( userId, userData )
+                        [ colorSquareInner userId
                         , Element.el [ Element.centerX ] (Element.text "Unhide")
                         ]
                 }
@@ -1410,8 +1409,8 @@ userListView model =
                             a
                    )
 
-        hiddenUserForAllTag : Bool -> Bool -> ( UserId, UserData ) -> Element FrontendMsg
-        hiddenUserForAllTag isFirst isLast ( userId, userData ) =
+        hiddenUserForAllTag : Bool -> Bool -> UserId -> Element FrontendMsg
+        hiddenUserForAllTag isFirst isLast userId =
             Element.Input.button
                 (Element.Events.onMouseEnter (UserTagMouseEntered userId)
                     :: Element.Events.onMouseLeave (UserTagMouseExited userId)
@@ -1423,7 +1422,7 @@ userListView model =
                 { onPress = Just (HideForAllTogglePressed userId)
                 , label =
                     Element.row [ Element.width Element.fill ]
-                        [ colorSquareInner ( userId, userData )
+                        [ colorSquareInner userId
                         , Element.el [ Element.centerX ] (Element.text "Unhide for all")
                         ]
                 }
@@ -1439,11 +1438,10 @@ userListView model =
                 )
             ]
 
-        hiddenUserList : List ( UserId, UserData )
+        hiddenUserList : List UserId
         hiddenUserList =
             EverySet.diff localModel.hiddenUsers localModel.adminHiddenUsers
                 |> EverySet.toList
-                |> List.filterMap (\userId -> List.find (Tuple.first >> (==) userId) localModel.otherUsers)
 
         isActive : UserId -> Bool
         isActive userId =
@@ -1468,10 +1466,9 @@ userListView model =
                             otherUser
                     )
 
-        hiddenusersForAllList : List ( UserId, UserData )
+        hiddenusersForAllList : List UserId
         hiddenusersForAllList =
             EverySet.toList localModel.adminHiddenUsers
-                |> List.filterMap (\userId -> List.find (Tuple.first >> (==) userId) localModel.otherUsers)
 
         hiddenUsersForAll : List (Element FrontendMsg)
         hiddenUsersForAll =
@@ -1781,13 +1778,7 @@ canvasView model =
                     0
 
         color =
-            LocalGrid.localModel model.localModel |> .user |> Tuple.second |> User.color |> ColorIndex.toColor
-
-        localModel =
-            LocalGrid.localModel model.localModel
-
-        allUsers =
-            localModel.user :: localModel.otherUsers
+            LocalGrid.localModel model.localModel |> .user |> User.color
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False, WebGL.antialias ]
@@ -1814,13 +1805,13 @@ canvasView model =
                             )
                             model.meshes
                         )
-                        (Maybe.andThen (\userId -> List.find (Tuple.first >> (==) userId) allUsers) model.userPressHighlighted)
+                        model.userPressHighlighted
                         (case ( model.tool, model.userHoverHighlighted ) of
                             ( _, Just userId ) ->
-                                List.find (Tuple.first >> (==) userId) allUsers
+                                Just userId
 
                             ( HideUserTool (Just ( userId, _ )), _ ) ->
-                                List.find (Tuple.first >> (==) userId) allUsers
+                                Just userId
 
                             _ ->
                                 Nothing
@@ -1835,8 +1826,8 @@ canvasView model =
 
 drawText :
     Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex)
-    -> Maybe ( UserId, UserData )
-    -> Maybe ( UserId, UserData )
+    -> Maybe UserId
+    -> Maybe UserId
     -> Mat4
     -> Texture
     -> List WebGL.Entity
@@ -1863,19 +1854,19 @@ drawText meshes userPressHighlighted userHoverHighlighted viewMatrix texture =
                     , texture = texture
                     , highlightColor0 =
                         userPressHighlighted
-                            |> Maybe.map (Tuple.second >> User.color >> ColorIndex.toColor >> ColorIndex.colorToVec3)
+                            |> Maybe.map (User.color >> ColorHelper.colorToVec3)
                             |> Maybe.withDefault (Math.Vector3.vec3 0 0 0)
                     , highlightedUser0 =
                         userPressHighlighted
-                            |> Maybe.map (Tuple.first >> User.rawId >> toFloat)
+                            |> Maybe.map (User.rawId >> toFloat)
                             |> Maybe.withDefault -2
                     , highlightColor1 =
                         hover
-                            |> Maybe.map (Tuple.second >> User.color >> ColorIndex.toColor >> ColorIndex.colorToVec3)
+                            |> Maybe.map (User.color >> ColorHelper.colorToVec3)
                             |> Maybe.withDefault (Math.Vector3.vec3 0 0 0)
                     , highlightedUser1 =
                         hover
-                            |> Maybe.map (Tuple.first >> User.rawId >> toFloat)
+                            |> Maybe.map (User.rawId >> toFloat)
                             |> Maybe.withDefault -2
                     }
             )

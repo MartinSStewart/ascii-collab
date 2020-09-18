@@ -11,7 +11,7 @@ import LocalModel exposing (LocalModel)
 import Time
 import Undo
 import Units exposing (CellUnit)
-import User exposing (UserData, UserId)
+import User exposing (UserId)
 
 
 type LocalGrid
@@ -22,8 +22,7 @@ type alias LocalGrid_ =
     { grid : Grid
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
-    , user : ( UserId, UserData )
-    , otherUsers : List ( UserId, UserData )
+    , user : UserId
     , hiddenUsers : EverySet UserId
     , adminHiddenUsers : EverySet UserId
     , viewBounds : Bounds CellUnit
@@ -37,9 +36,8 @@ localModel localModel_ =
 
 
 init :
-    { user : ( UserId, UserData )
+    { user : UserId
     , grid : Grid
-    , otherUsers : List ( UserId, UserData )
     , hiddenUsers : EverySet UserId
     , adminHiddenUsers : EverySet UserId
     , undoHistory : List (Dict RawCellCoord Int)
@@ -48,15 +46,14 @@ init :
     , viewBounds : Bounds CellUnit
     }
     -> LocalModel Change LocalGrid
-init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHiddenUsers, otherUsers, viewBounds } =
+init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHiddenUsers, viewBounds } =
     LocalGrid
         { grid = grid
+        , user = user
         , undoHistory = undoHistory
         , redoHistory = redoHistory
-        , user = user
         , hiddenUsers = hiddenUsers
         , adminHiddenUsers = adminHiddenUsers
-        , otherUsers = otherUsers
         , viewBounds = viewBounds
         , undoCurrent = undoCurrent
         }
@@ -83,17 +80,13 @@ incrementUndoCurrent gridChange undoCurrent =
 
 update_ : Change -> LocalGrid_ -> LocalGrid_
 update_ msg model =
-    let
-        userId =
-            Tuple.first model.user
-    in
     case msg of
         LocalChange (LocalGridChange gridChange) ->
             { model
                 | redoHistory = []
                 , grid =
                     if Bounds.contains gridChange.cellPosition model.viewBounds then
-                        Grid.addChange (Grid.localChangeToChange userId gridChange) model.grid
+                        Grid.addChange (Grid.localChangeToChange model.user gridChange) model.grid
 
                     else
                         model.grid
@@ -103,7 +96,7 @@ update_ msg model =
         LocalChange LocalRedo ->
             case Undo.redo model of
                 Just newModel ->
-                    { newModel | grid = Grid.moveUndoPoint userId newModel.undoCurrent model.grid }
+                    { newModel | grid = Grid.moveUndoPoint model.user newModel.undoCurrent model.grid }
 
                 Nothing ->
                     model
@@ -111,7 +104,7 @@ update_ msg model =
         LocalChange LocalUndo ->
             case Undo.undo model of
                 Just newModel ->
-                    { newModel | grid = Grid.moveUndoPoint userId (Dict.map (\_ a -> -a) model.undoCurrent) model.grid }
+                    { newModel | grid = Grid.moveUndoPoint model.user (Dict.map (\_ a -> -a) model.undoCurrent) model.grid }
 
                 Nothing ->
                     model
@@ -122,7 +115,7 @@ update_ msg model =
         LocalChange (LocalHideUser userId_ _) ->
             { model
                 | hiddenUsers =
-                    if userId_ == userId then
+                    if userId_ == model.user then
                         model.hiddenUsers
 
                     else
@@ -132,7 +125,7 @@ update_ msg model =
         LocalChange (LocalUnhideUser userId_) ->
             { model
                 | hiddenUsers =
-                    if userId_ == userId then
+                    if userId_ == model.user then
                         model.hiddenUsers
 
                     else
@@ -151,9 +144,6 @@ update_ msg model =
 
         ServerChange (ServerUndoPoint undoPoint) ->
             { model | grid = Grid.moveUndoPoint undoPoint.userId undoPoint.undoPoints model.grid }
-
-        ServerChange (ServerUserNew user) ->
-            { model | otherUsers = user :: model.otherUsers }
 
         ServerChange (ServerToggleUserVisibilityForAll hideUserId) ->
             { model | adminHiddenUsers = Helper.toggleSet hideUserId model.adminHiddenUsers }

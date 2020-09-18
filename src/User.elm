@@ -1,11 +1,9 @@
-module User exposing (RawUserId, UserData(..), UserId(..), color, newUser, rawId, userId)
+module User exposing (RawUserId, UserId(..), color, rawId, userId)
 
-import ColorIndex exposing (ColorIndex(..))
-import List.Extra as List
-
-
-type UserData
-    = User { color : ColorIndex }
+import Angle
+import ColorHelper
+import Element
+import Random
 
 
 type UserId
@@ -21,20 +19,17 @@ userId index =
     UserId index
 
 
-newUser : Int -> ( UserId, UserData )
-newUser index =
-    ( userId index
-    , User
-        { color = List.getAt (modBy (List.length ColorIndex.colors) index) ColorIndex.colors |> Maybe.withDefault Green
-        }
-    )
-
-
 rawId : UserId -> Int
 rawId (UserId userId_) =
     userId_
 
 
-color : UserData -> ColorIndex
-color (User user) =
-    user.color
+color : UserId -> Element.Color
+color (UserId userId_) =
+    Random.map3 ColorHelper.Hsv
+        (Random.float 0 360 |> Random.map Angle.degrees)
+        (Random.float 0 1 |> Random.map ((*) 0.2 >> (+) 0.7))
+        (Random.float 0 1 |> Random.map ((*) 0.2 >> (+) 0.7))
+        |> (\hsvGen -> Random.step hsvGen (Random.initialSeed userId_))
+        |> Tuple.first
+        |> ColorHelper.hsvToRgb
