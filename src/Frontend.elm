@@ -9,7 +9,6 @@ import Browser.Dom
 import Browser.Events
 import Browser.Navigation
 import Change exposing (Change(..))
-import ColorHelper
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Duration
@@ -38,6 +37,7 @@ import LocalModel
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
+import Math.Vector4 exposing (Vec4)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -1852,18 +1852,10 @@ drawText meshes userPressHighlighted userHoverHighlighted viewMatrix texture =
                     mesh
                     { view = viewMatrix
                     , texture = texture
-                    , highlightColor0 =
-                        userPressHighlighted
-                            |> Maybe.map (User.color >> ColorHelper.colorToVec3)
-                            |> Maybe.withDefault (Math.Vector3.vec3 0 0 0)
                     , highlightedUser0 =
                         userPressHighlighted
                             |> Maybe.map (User.rawId >> toFloat)
                             |> Maybe.withDefault -2
-                    , highlightColor1 =
-                        hover
-                            |> Maybe.map (User.color >> ColorHelper.colorToVec3)
-                            |> Maybe.withDefault (Math.Vector3.vec3 0 0 0)
                     , highlightedUser1 =
                         hover
                             |> Maybe.map (User.rawId >> toFloat)
@@ -1896,7 +1888,7 @@ subscriptions model =
         ]
 
 
-vertexShader : Shader Grid.Vertex { u | view : Mat4, highlightedUser0 : Float, highlightedUser1 : Float } { vcoord : Vec2, highlight : Float }
+vertexShader : Shader Grid.Vertex { u | view : Mat4, highlightedUser0 : Float, highlightedUser1 : Float } { vcoord : Vec2, vcolor : Vec4 }
 vertexShader =
     [glsl|
 
@@ -1904,40 +1896,52 @@ attribute vec2 position;
 attribute vec2 texturePosition;
 attribute float userId;
 uniform mat4 view;
-uniform float highlightedUser0;
-uniform float highlightedUser1;
+uniform mediump float highlightedUser0;
+uniform mediump float highlightedUser1;
 varying vec2 vcoord;
-varying float highlight;
+varying vec4 vcolor;
 
 void main () {
     gl_Position = view * vec4(position, 0.0, 1.0);
     vcoord = texturePosition;
-    highlight = float(userId == highlightedUser0) + float(userId == highlightedUser1) * 2.0;
+
+    float userIdFloat = userId + 6.0;
+    float hueDegrees = mod(userIdFloat * 33.0, 360.0);
+    float saturation = mod(userIdFloat * 1.92, 0.8) + 0.2;
+    float value = mod(userIdFloat * 1.61, 0.5) + 0.5;
+
+    float c = value * saturation;
+    float x = c *  (1.0 - abs((mod(hueDegrees / 60.0,  2.0) + (-1.0))));
+    float m = value - c;
+    
+    vec3 rgbColor = 
+        (float(hueDegrees < 60.0) * vec3(c, x, 0.0))
+            + (float(hueDegrees >= 60.0 && hueDegrees < 120.0) * vec3(x, c, 0.0))
+            + (float(hueDegrees >= 120.0 && hueDegrees < 180.0) * vec3(0.0, c, x))
+            + (float(hueDegrees >= 180.0 && hueDegrees < 240.0) * vec3(0.0, x, c))
+            + (float(hueDegrees >= 240.0 && hueDegrees < 300.0) * vec3(x, 0.0, c))
+            + (float(hueDegrees >= 300.0) * vec3(c, 0.0, x))
+            + vec3(m,m,m);
+
+    vcolor = float(userId == -1.0) * vec4(0.0,0.0,0.0,0.0)
+        + float(userId != -1.0) * vec4(rgbColor, 1.0);
 }
 
 |]
 
 
-fragmentShader : Shader {} { u | texture : Texture, highlightColor0 : Vec3, highlightColor1 : Vec3 } { vcoord : Vec2, highlight : Float }
+fragmentShader : Shader {} { u | texture : Texture } { vcoord : Vec2, vcolor : Vec4 }
 fragmentShader =
     [glsl|
         precision mediump float;
         uniform sampler2D texture;
-        uniform vec3 highlightColor0;
-        uniform vec3 highlightColor1;
         varying vec2 vcoord;
-        varying float highlight;
+        varying vec4 vcolor;
         void main () {
             vec4 textureColor = texture2D(texture, vcoord);
 
-            vec4 textColor =
-                float(highlight == 0.0) * vec4(0.0,0.0,0.0,1.0)
-                    + float(highlight == 1.0) * vec4(highlightColor0 / 2.0,1.0)
-                    + float(highlight == 2.0) * vec4(highlightColor1 / 2.0,1.0);
-            vec4 backColor =
-                float(highlight == 0.0) * vec4(0.0,0.0,0.0,0.0)
-                    + float(highlight == 1.0) * vec4(highlightColor0,1.0)
-                    + float(highlight == 2.0) * vec4(highlightColor1,1.0);
+            vec4 textColor = vec4(vcolor.xyz * 0.4,1.0);
+            vec4 backColor = vcolor;
 
             gl_FragColor =
                 float(textureColor.x == 1.0) * textColor
