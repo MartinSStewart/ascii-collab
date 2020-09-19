@@ -6,15 +6,6 @@ import Element
 import Math.Vector3
 
 
-colorToVec3 : Element.Color -> Math.Vector3.Vec3
-colorToVec3 color =
-    let
-        { red, green, blue } =
-            Element.toRgb color
-    in
-    Math.Vector3.vec3 red green blue
-
-
 type alias Hsv =
     { hue : Angle, saturation : Float, value : Float }
 

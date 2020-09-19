@@ -1,13 +1,13 @@
 module Cursor exposing (Cursor, bounds, draw, fragmentShader, mesh, moveCursor, newLine, position, selection, setCursor, toMesh, updateMesh, vertexShader)
 
 import Ascii
-import ColorHelper
 import Element
 import Helper exposing (Coord)
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
 import Quantity exposing (Quantity(..))
+import Shaders
 import Units
 import WebGL exposing (Shader)
 import WebGL.Settings
@@ -170,14 +170,13 @@ draw viewMatrix color model =
             bounds model.cursor
     in
     WebGL.entityWith
-        [ WebGL.Settings.cullFace WebGL.Settings.back
-        ]
+        [ WebGL.Settings.cullFace WebGL.Settings.back ]
         vertexShader
         fragmentShader
         model.cursorMesh
         { view = viewMatrix
         , offset = bounds_.min |> Units.asciiToWorld |> Helper.coordToVec
-        , color = ColorHelper.colorToVec3 color
+        , color = Shaders.colorToVec3 color
         }
 
 

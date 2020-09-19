@@ -1,11 +1,5 @@
 module User exposing (RawUserId, UserId(..), rawId, userId)
 
-import Angle
-import Basics.Extra as Basics
-import ColorHelper
-import Element
-import Random
-
 
 type UserId
     = UserId Int
