@@ -35,12 +35,10 @@ import List.Nonempty exposing (Nonempty)
 import LocalGrid
 import LocalModel
 import Math.Matrix4 as Mat4 exposing (Mat4)
-import Math.Vector2 exposing (Vec2)
-import Math.Vector3 exposing (Vec3)
-import Math.Vector4 exposing (Vec4)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
+import Shaders
 import Task
 import Time
 import Types exposing (..)
@@ -1295,7 +1293,7 @@ userListView model =
                 , Element.Border.rounded 2
                 , Element.Border.width 1
                 , Element.Border.color UiColors.colorSquareBorder
-                , Element.Background.color <| User.color userId
+                , Element.Background.color <| Shaders.userColor userId
                 ]
                 (if isAdmin model then
                     Element.paragraph
@@ -1778,7 +1776,7 @@ canvasView model =
                     0
 
         color =
-            LocalGrid.localModel model.localModel |> .user |> User.color
+            LocalGrid.localModel model.localModel |> .user |> Shaders.userColor
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False, WebGL.antialias ]
@@ -1805,16 +1803,19 @@ canvasView model =
                             )
                             model.meshes
                         )
-                        model.userPressHighlighted
-                        (case ( model.tool, model.userHoverHighlighted ) of
-                            ( _, Just userId ) ->
-                                Just userId
-
-                            ( HideUserTool (Just ( userId, _ )), _ ) ->
+                        (case model.tool of
+                            HideUserTool (Just ( userId, _ )) ->
                                 Just userId
 
                             _ ->
-                                Nothing
+                                model.userPressHighlighted
+                        )
+                        (case model.tool of
+                            HideUserTool _ ->
+                                True
+
+                            _ ->
+                                False
                         )
                         viewMatrix
                     )
@@ -1827,19 +1828,11 @@ canvasView model =
 drawText :
     Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex)
     -> Maybe UserId
-    -> Maybe UserId
+    -> Bool
     -> Mat4
     -> Texture
     -> List WebGL.Entity
-drawText meshes userPressHighlighted userHoverHighlighted viewMatrix texture =
-    let
-        hover =
-            if userPressHighlighted == userHoverHighlighted then
-                Nothing
-
-            else
-                userHoverHighlighted
-    in
+drawText meshes userHighlighted showColors viewMatrix texture =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -1847,19 +1840,21 @@ drawText meshes userPressHighlighted userHoverHighlighted viewMatrix texture =
                     [ WebGL.Settings.cullFace WebGL.Settings.back
                     , Blend.add Blend.one Blend.oneMinusSrcAlpha
                     ]
-                    vertexShader
-                    fragmentShader
+                    Shaders.vertexShader
+                    Shaders.fragmentShader
                     mesh
                     { view = viewMatrix
                     , texture = texture
-                    , highlightedUser0 =
-                        userPressHighlighted
+                    , highlightedUser =
+                        userHighlighted
                             |> Maybe.map (User.rawId >> toFloat)
                             |> Maybe.withDefault -2
-                    , highlightedUser1 =
-                        hover
-                            |> Maybe.map (User.rawId >> toFloat)
-                            |> Maybe.withDefault -2
+                    , showColors =
+                        if showColors then
+                            1
+
+                        else
+                            0
                     }
             )
 
@@ -1886,65 +1881,3 @@ subscriptions model =
                         Sub.none
                     ]
         ]
-
-
-vertexShader : Shader Grid.Vertex { u | view : Mat4, highlightedUser0 : Float, highlightedUser1 : Float } { vcoord : Vec2, vcolor : Vec4 }
-vertexShader =
-    [glsl|
-
-attribute vec2 position;
-attribute vec2 texturePosition;
-attribute float userId;
-uniform mat4 view;
-uniform mediump float highlightedUser0;
-uniform mediump float highlightedUser1;
-varying vec2 vcoord;
-varying vec4 vcolor;
-
-void main () {
-    gl_Position = view * vec4(position, 0.0, 1.0);
-    vcoord = texturePosition;
-
-    float userIdFloat = userId + 6.0;
-    float hueDegrees = mod(userIdFloat * 33.0, 360.0);
-    float saturation = mod(userIdFloat * 1.92, 0.8) + 0.2;
-    float value = mod(userIdFloat * 1.61, 0.5) + 0.5;
-
-    float c = value * saturation;
-    float x = c *  (1.0 - abs((mod(hueDegrees / 60.0,  2.0) + (-1.0))));
-    float m = value - c;
-    
-    vec3 rgbColor = 
-        (float(hueDegrees < 60.0) * vec3(c, x, 0.0))
-            + (float(hueDegrees >= 60.0 && hueDegrees < 120.0) * vec3(x, c, 0.0))
-            + (float(hueDegrees >= 120.0 && hueDegrees < 180.0) * vec3(0.0, c, x))
-            + (float(hueDegrees >= 180.0 && hueDegrees < 240.0) * vec3(0.0, x, c))
-            + (float(hueDegrees >= 240.0 && hueDegrees < 300.0) * vec3(x, 0.0, c))
-            + (float(hueDegrees >= 300.0) * vec3(c, 0.0, x))
-            + vec3(m,m,m);
-
-    vcolor = float(userId == -1.0) * vec4(0.0,0.0,0.0,0.0)
-        + float(userId != -1.0) * vec4(rgbColor, 1.0);
-}
-
-|]
-
-
-fragmentShader : Shader {} { u | texture : Texture } { vcoord : Vec2, vcolor : Vec4 }
-fragmentShader =
-    [glsl|
-        precision mediump float;
-        uniform sampler2D texture;
-        varying vec2 vcoord;
-        varying vec4 vcolor;
-        void main () {
-            vec4 textureColor = texture2D(texture, vcoord);
-
-            vec4 textColor = vec4(vcolor.xyz * 0.4,1.0);
-            vec4 backColor = vcolor;
-
-            gl_FragColor =
-                float(textureColor.x == 1.0) * textColor
-                    + float(textureColor.x == 0.0) * backColor;
-        }
-    |]
