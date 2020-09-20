@@ -84,7 +84,6 @@ type alias FrontendLoaded =
     , undoAddLast : Time.Posix
     , time : Time.Posix
     , lastTouchMove : Maybe Time.Posix
-    , userPressHighlighted : Maybe UserId
     , userHoverHighlighted : Maybe UserId
     , highlightContextMenu : Maybe { userId : UserId, hidePoint : Coord AsciiUnit }
     , adminEnabled : Bool
@@ -147,7 +146,6 @@ type FrontendMsg
     | CopyPressed
     | CutPressed
     | UnhideUserPressed UserId
-    | UserColorSquarePressed UserId
     | UserTagMouseEntered UserId
     | UserTagMouseExited UserId
     | HideForAllTogglePressed UserId

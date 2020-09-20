@@ -103,7 +103,6 @@ loadedInit loading loadingData =
             , undoAddLast = Time.millisToPosix 0
             , time = loading.time
             , lastTouchMove = Nothing
-            , userPressHighlighted = Nothing
             , userHoverHighlighted = Nothing
             , highlightContextMenu = Nothing
             , adminEnabled = False
@@ -466,42 +465,13 @@ updateLoaded msg model =
             ( updateLocalModel
                 (Change.LocalUnhideUser userToUnhide)
                 { model
-                    | userPressHighlighted =
-                        if Just userToUnhide == model.userPressHighlighted then
-                            Nothing
-
-                        else
-                            model.userPressHighlighted
-                    , userHoverHighlighted =
+                    | userHoverHighlighted =
                         if Just userToUnhide == model.userHoverHighlighted then
                             Nothing
 
                         else
                             model.userHoverHighlighted
                 }
-            , Cmd.none
-            )
-
-        UserColorSquarePressed userId ->
-            ( { model
-                | userPressHighlighted =
-                    case model.userPressHighlighted of
-                        Just userId_ ->
-                            if userId_ == userId then
-                                Nothing
-
-                            else
-                                Just userId
-
-                        Nothing ->
-                            Just userId
-                , userHoverHighlighted =
-                    if Just userId == model.userHoverHighlighted then
-                        Nothing
-
-                    else
-                        model.userHoverHighlighted
-              }
             , Cmd.none
             )
 
@@ -941,11 +911,11 @@ updateMeshes oldModel newModel =
         oldCells =
             LocalGrid.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
 
-        showHighlighted : { a | userHoverHighlighted : Maybe b, userPressHighlighted : Maybe b } -> EverySet b -> EverySet b
+        showHighlighted : { a | userHoverHighlighted : Maybe b } -> EverySet b -> EverySet b
         showHighlighted model hidden =
             EverySet.diff
                 hidden
-                ([ model.userHoverHighlighted, model.userPressHighlighted ]
+                ([ model.userHoverHighlighted ]
                     |> List.filterMap identity
                     |> EverySet.fromList
                 )
@@ -1311,7 +1281,7 @@ userListView model =
             LocalGrid.localModel model.localModel
 
         colorSquare isFirst isLast userId =
-            Element.Input.button
+            Element.el
                 (Element.padding 4
                     :: Element.Border.widthEach
                         { left = 0
@@ -1333,9 +1303,7 @@ userListView model =
                     :: Element.Events.onMouseLeave (UserTagMouseExited userId)
                     :: buttonAttributes (isActive userId)
                 )
-                { onPress = Just (UserColorSquarePressed userId)
-                , label = colorSquareInner userId
-                }
+                (colorSquareInner userId)
 
         colorSquareInner : UserId -> Element FrontendMsg
         colorSquareInner userId =
@@ -1495,8 +1463,7 @@ userListView model =
 
         isActive : UserId -> Bool
         isActive userId =
-            (model.userPressHighlighted == Just userId)
-                || (model.userHoverHighlighted == Just userId)
+            (model.userHoverHighlighted == Just userId)
                 || (case model.tool of
                         HighlightTool (Just ( hideUserId, _ )) ->
                             hideUserId == userId
@@ -1857,12 +1824,17 @@ canvasView model =
                             )
                             model.meshes
                         )
-                        (case model.tool of
-                            HighlightTool (Just ( userId, _ )) ->
+                        (case model.highlightContextMenu of
+                            Just { userId } ->
                                 Just userId
 
-                            _ ->
-                                model.userPressHighlighted
+                            Nothing ->
+                                case model.tool of
+                                    HighlightTool (Just ( hoverUserId, _ )) ->
+                                        Just hoverUserId
+
+                                    _ ->
+                                        model.userHoverHighlighted
                         )
                         (case model.tool of
                             HighlightTool _ ->

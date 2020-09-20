@@ -75,7 +75,11 @@ void main () {
     float hue = userIdFloat * 101.93;
     vec3 rgbColor = lch2rgb(userId == highlightedUser ? luminance + 20.0 : luminance, chroma, hue);
 
-    vcolor = float(userId != -1.0 && showColors == 1.0) * vec4(rgbColor, 1.0);
+    vcolor = userId != -1.0 && showColors == 1.0
+        ? vec4(rgbColor, 1.0)
+        : userId == highlightedUser
+            ? vec4(rgbColor, 1.0)
+            : vec4(0.0,0.0,0.0,0.0);
 }
 
 |]
