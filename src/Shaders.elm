@@ -70,8 +70,8 @@ void main () {
     vcoord = texturePosition;
 
     float userIdFloat = userId + 125.0;
-    float luminance = mod(userIdFloat * 0.5219, 1.0) * 35.0 + 65.0;
-    float chroma = mod(userIdFloat * 0.4237, 1.0) * 110.0 + 20.0;
+    float luminance = mod(userIdFloat * 0.5219, 1.0) * 65.0 + 45.0;
+    float chroma = mod(userIdFloat * 0.4237, 1.0) * 110.0 + -50.0;
     float hue = userIdFloat * 101.93;
     vec3 rgbColor = lch2rgb(userId == highlightedUser ? luminance + 20.0 : luminance, chroma, hue);
 
