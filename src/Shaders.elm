@@ -24,9 +24,6 @@ colorToVec3 color =
 vertexShader : Shader Grid.Vertex { u | view : Mat4, highlightedUser : Float, showColors : Float } { vcoord : Vec2, vcolor : Vec4 }
 vertexShader =
     [glsl|
-
-precision highp float;
-
 attribute vec2 position;
 attribute vec2 texturePosition;
 attribute float userId;
@@ -72,11 +69,11 @@ void main () {
     gl_Position = view * vec4(position, 0.0, 1.0);
     vcoord = texturePosition;
 
-    float userIdFloat = userId + 124.0;
-    float luminance = mod(userIdFloat * 0.5219, 1.0) * 50.0 + 45.0;
+    float userIdFloat = userId + 125.0;
+    float luminance = mod(userIdFloat * 0.5219, 1.0) * 45.0 + 45.0;
     float chroma = mod(userIdFloat * 0.4237, 1.0) * 110.0 + 20.0;
     float hue = userIdFloat * 101.93;
-    vec3 rgbColor = lch2rgb(luminance, chroma, hue);
+    vec3 rgbColor = lch2rgb(userId == highlightedUser ? luminance + 20.0 : luminance, chroma, hue);
 
     vcolor = float(userId != -1.0 && showColors == 1.0) * vec4(rgbColor, 1.0);
 }
@@ -84,14 +81,25 @@ void main () {
 |]
 
 
-userColor : UserId -> Element.Color
-userColor userId =
+userColor : Bool -> UserId -> Element.Color
+userColor highlight userId =
     let
         userIdFloat =
-            toFloat (User.rawId userId + 124)
+            toFloat (User.rawId userId + 125)
     in
     lch2rgb
-        { luminance = userIdFloat * 0.5219 |> Basics.fractionalModBy 1 |> (*) 50 |> (+) 45
+        { luminance =
+            (userIdFloat * 0.5219)
+                |> Basics.fractionalModBy 1
+                |> (*) 45
+                |> (+) 45
+                |> (+)
+                    (if highlight then
+                        20
+
+                     else
+                        0
+                    )
         , chroma = userIdFloat * 0.4237 |> Basics.fractionalModBy 1 |> (*) 110 |> (+) 20
         , hue = userIdFloat * 101.93
         }
@@ -200,7 +208,7 @@ fragmentShader =
         void main () {
             vec4 textureColor = texture2D(texture, vcoord);
 
-            vec4 textColor = vec4(vcolor.xyz * 0.4,1.0);
+            vec4 textColor = vec4(vcolor.xyz * 0.3,1.0);
             vec4 backColor = vcolor;
 
             gl_FragColor =

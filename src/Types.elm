@@ -86,6 +86,7 @@ type alias FrontendLoaded =
     , lastTouchMove : Maybe Time.Posix
     , userPressHighlighted : Maybe UserId
     , userHoverHighlighted : Maybe UserId
+    , highlightContextMenu : Maybe { userId : UserId, hidePoint : Coord AsciiUnit }
     , adminEnabled : Bool
     }
 
@@ -93,7 +94,7 @@ type alias FrontendLoaded =
 type ToolType
     = DragTool
     | SelectTool
-    | HideUserTool (Maybe ( UserId, Coord AsciiUnit ))
+    | HighlightTool (Maybe ( UserId, Coord AsciiUnit ))
 
 
 type MouseButtonState
@@ -151,6 +152,7 @@ type FrontendMsg
     | UserTagMouseExited UserId
     | HideForAllTogglePressed UserId
     | ToggleAdminEnabledPressed
+    | HideUserPressed { userId : UserId, hidePoint : Coord AsciiUnit }
 
 
 type ToBackend

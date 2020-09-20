@@ -105,6 +105,7 @@ loadedInit loading loadingData =
             , lastTouchMove = Nothing
             , userPressHighlighted = Nothing
             , userHoverHighlighted = Nothing
+            , highlightContextMenu = Nothing
             , adminEnabled = False
             }
     in
@@ -331,7 +332,7 @@ updateLoaded msg model =
                                 model.cursor
                     , tool =
                         case model.tool of
-                            HideUserTool _ ->
+                            HighlightTool _ ->
                                 let
                                     localModel =
                                         LocalGrid.localModel model.localModel
@@ -347,7 +348,7 @@ updateLoaded msg model =
                                             localModel.adminHiddenUsers
                                             localModel.grid
                                 in
-                                hideUserId |> Maybe.map (\a -> ( a, position )) |> HideUserTool
+                                hideUserId |> Maybe.map (\a -> ( a, position )) |> HighlightTool
 
                             _ ->
                                 model.tool
@@ -522,11 +523,17 @@ updateLoaded msg model =
             , Cmd.none
             )
 
+        HideUserPressed { userId, hidePoint } ->
+            ( { model | highlightContextMenu = Nothing }
+                |> updateLocalModel (Change.LocalHideUser userId hidePoint)
+            , Cmd.none
+            )
+
 
 cursorEnabled : FrontendLoaded -> Bool
 cursorEnabled model =
     case model.tool of
-        HideUserTool _ ->
+        HighlightTool _ ->
             False
 
         _ ->
@@ -684,7 +691,7 @@ mouseUp mousePosition mouseState model =
                         ( MouseButtonUp, DragTool ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
-                        ( MouseButtonUp, HideUserTool _ ) ->
+                        ( MouseButtonUp, HighlightTool _ ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
                         _ ->
@@ -698,12 +705,13 @@ mouseUp mousePosition mouseState model =
 
                     else
                         model.cursor
+                , highlightContextMenu = Nothing
             }
     in
     case model_.tool of
-        HideUserTool (Just ( userId, hidePoint )) ->
+        HighlightTool (Just ( userId, hidePoint )) ->
             if isSmallDistance then
-                updateLocalModel (Change.LocalHideUser userId hidePoint) model_
+                { model_ | highlightContextMenu = Just { userId = userId, hidePoint = hidePoint } }
 
             else
                 model_
@@ -789,6 +797,18 @@ screenToWorld model =
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
         >> Point2d.at (Quantity.divideBy (toFloat model.zoomFactor) model.devicePixelRatio)
         >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
+
+
+worldToScreen : FrontendLoaded -> Point2d WorldPixel WorldCoordinate -> Point2d Pixels ScreenCoordinate
+worldToScreen model =
+    let
+        ( w, h ) =
+            model.windowSize
+    in
+    Point2d.translateBy
+        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
+        << Point2d.at_ (Quantity.divideBy (toFloat model.zoomFactor) model.devicePixelRatio)
+        << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
 
 
 selectionToString : { min : Coord AsciiUnit, max : Coord AsciiUnit } -> EverySet UserId -> EverySet UserId -> Grid -> String
@@ -1054,7 +1074,7 @@ actualViewPoint model =
                 DragTool ->
                     offsetViewPoint model start current
 
-                HideUserTool _ ->
+                HighlightTool _ ->
                     offsetViewPoint model start current
 
                 SelectTool ->
@@ -1188,31 +1208,63 @@ view model =
                                 ( _, MouseButtonDown _, _ ) ->
                                     mouseAttributes
 
-                                ( _, _, HideUserTool _ ) ->
+                                ( _, _, HighlightTool _ ) ->
                                     mouseAttributes
 
                                 _ ->
                                     []
                            )
                         ++ (case loadedModel.tool of
-                                HideUserTool (Just ( hideUserId, _ )) ->
-                                    if
-                                        LocalGrid.localModel loadedModel.localModel
-                                            |> .user
-                                            |> (==) hideUserId
-                                    then
-                                        []
-
-                                    else
-                                        [ Element.pointer ]
+                                HighlightTool (Just _) ->
+                                    [ Element.pointer ]
 
                                 _ ->
+                                    []
+                           )
+                        ++ (case loadedModel.highlightContextMenu of
+                                Just hideUser ->
+                                    [ contextMenuView hideUser loadedModel |> Element.inFront ]
+
+                                Nothing ->
                                     []
                            )
                     )
                     (Element.html (canvasView loadedModel))
         ]
     }
+
+
+contextMenuView : { userId : UserId, hidePoint : Coord AsciiUnit } -> FrontendLoaded -> Element FrontendMsg
+contextMenuView { userId, hidePoint } loadedModel =
+    let
+        { x, y } =
+            Helper.addTuple ( Units.asciiUnit 1, Units.asciiUnit 1 ) hidePoint
+                |> Units.asciiToWorld
+                |> Helper.coordToPoint
+                |> worldToScreen loadedModel
+                |> Point2d.unwrap
+
+        attributes =
+            [ Element.padding 8
+            , Element.moveRight x
+            , Element.moveDown y
+            , Element.Border.roundEach { topLeft = 0, topRight = 4, bottomLeft = 4, bottomRight = 4 }
+            , Element.Border.width 1
+            , Element.Border.color UiColors.border
+            ]
+    in
+    if userId == currentUserId loadedModel then
+        Element.el (Element.Background.color UiColors.background :: attributes) (Element.text "You")
+
+    else
+        Element.Input.button
+            (Element.Background.color UiColors.button
+                :: Element.mouseOver [ Element.Background.color UiColors.buttonActive ]
+                :: attributes
+            )
+            { onPress = Just (HideUserPressed { userId = userId, hidePoint = hidePoint })
+            , label = Element.text "Hide user"
+            }
 
 
 offlineWarningView : Element msg
@@ -1293,7 +1345,7 @@ userListView model =
                 , Element.Border.rounded 2
                 , Element.Border.width 1
                 , Element.Border.color UiColors.colorSquareBorder
-                , Element.Background.color <| Shaders.userColor userId
+                , Element.Background.color <| Shaders.userColor False userId
                 ]
                 (if isAdmin model then
                     Element.paragraph
@@ -1446,7 +1498,7 @@ userListView model =
             (model.userPressHighlighted == Just userId)
                 || (model.userHoverHighlighted == Just userId)
                 || (case model.tool of
-                        HideUserTool (Just ( hideUserId, _ )) ->
+                        HighlightTool (Just ( hideUserId, _ )) ->
                             hideUserId == userId
 
                         _ ->
@@ -1656,15 +1708,17 @@ tools =
             ]
             Element.none
       )
-    , ( HideUserTool Nothing
+    , ( HighlightTool Nothing
       , \tool ->
             case tool of
-                HideUserTool _ ->
+                HighlightTool _ ->
                     True
 
                 _ ->
                     False
-      , Element.el [ Element.Font.size 24, Element.moveDown 1 ] (Element.text "🙈")
+      , Element.image
+            [ Element.width (Element.px 22) ]
+            { src = "highlight.svg", description = "Highlight tool" }
       )
     ]
 
@@ -1776,7 +1830,7 @@ canvasView model =
                     0
 
         color =
-            LocalGrid.localModel model.localModel |> .user |> Shaders.userColor
+            LocalGrid.localModel model.localModel |> .user |> Shaders.userColor False
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False, WebGL.antialias ]
@@ -1804,14 +1858,14 @@ canvasView model =
                             model.meshes
                         )
                         (case model.tool of
-                            HideUserTool (Just ( userId, _ )) ->
+                            HighlightTool (Just ( userId, _ )) ->
                                 Just userId
 
                             _ ->
                                 model.userPressHighlighted
                         )
                         (case model.tool of
-                            HideUserTool _ ->
+                            HighlightTool _ ->
                                 True
 
                             _ ->
