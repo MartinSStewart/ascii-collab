@@ -70,7 +70,7 @@ void main () {
     vcoord = texturePosition;
 
     float userIdFloat = userId + 125.0;
-    float luminance = mod(userIdFloat * 0.5219, 1.0) * 15.0 + 85.0;
+    float luminance = mod(userIdFloat * 0.5219, 1.0) * 35.0 + 65.0;
     float chroma = mod(userIdFloat * 0.4237, 1.0) * 110.0 + 20.0;
     float hue = userIdFloat * 101.93;
     vec3 rgbColor = lch2rgb(userId == highlightedUser ? luminance + 20.0 : luminance, chroma, hue);
@@ -95,8 +95,8 @@ userColor highlight userId =
         { luminance =
             (userIdFloat * 0.5219)
                 |> Basics.fractionalModBy 1
-                |> (*) 15
-                |> (+) 85
+                |> (*) 65
+                |> (+) 45
                 |> (+)
                     (if highlight then
                         20
@@ -104,7 +104,7 @@ userColor highlight userId =
                      else
                         0
                     )
-        , chroma = userIdFloat * 0.4237 |> Basics.fractionalModBy 1 |> (*) 110 |> (+) 20
+        , chroma = userIdFloat * 0.4237 |> Basics.fractionalModBy 1 |> (*) 110 |> (+) -50
         , hue = userIdFloat * 101.93
         }
 
