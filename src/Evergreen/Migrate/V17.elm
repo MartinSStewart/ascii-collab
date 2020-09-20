@@ -16,7 +16,7 @@ import Evergreen.V17.User
 import EverySet
 import Lamdera.Migrations exposing (..)
 import List.Nonempty
-import Quantity exposing (Quantity)
+import Quantity exposing (Quantity(..))
 
 
 migrateUserId : Evergreen.V14.User.UserId -> Evergreen.V17.User.UserId
