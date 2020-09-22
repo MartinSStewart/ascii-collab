@@ -21,6 +21,7 @@ import Browser.Navigation
 import Change exposing (Change, ServerChange)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
+import Duration exposing (Duration)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import Helper exposing (Coord, RawCellCoord)
@@ -87,6 +88,7 @@ type alias FrontendLoaded =
     , userHoverHighlighted : Maybe UserId
     , highlightContextMenu : Maybe { userId : UserId, hidePoint : Coord AsciiUnit }
     , adminEnabled : Bool
+    , animationElapsedTime : Duration
     }
 
 

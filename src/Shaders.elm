@@ -1,4 +1,4 @@
-module Shaders exposing (colorToVec3, fragmentShader, userColor, vertexShader)
+module Shaders exposing (colorToVec3, fragmentShader, lch2rgb, userColor, vertexShader)
 
 import Basics.Extra as Basics
 import Element
@@ -86,28 +86,20 @@ void main () {
 |]
 
 
-userColor : Bool -> UserId -> Element.Color
-userColor highlight userId =
+userColor : UserId -> { luminance : Float, chroma : Float, hue : Float }
+userColor userId =
     let
         userIdFloat =
             toFloat (User.rawId userId + 125)
     in
-    lch2rgb
-        { luminance =
-            (userIdFloat * 0.5219)
-                |> Basics.fractionalModBy 1
-                |> (*) 20
-                |> (+) 75
-                |> (+)
-                    (if highlight then
-                        20
-
-                     else
-                        0
-                    )
-        , chroma = userIdFloat * 0.4237 |> Basics.fractionalModBy 1 |> (*) 60 |> (+) 0
-        , hue = userIdFloat * 101.93
-        }
+    { luminance =
+        (userIdFloat * 0.5219)
+            |> Basics.fractionalModBy 1
+            |> (*) 20
+            |> (+) 75
+    , chroma = userIdFloat * 0.4237 |> Basics.fractionalModBy 1 |> (*) 60 |> (+) 0
+    , hue = userIdFloat * 101.93
+    }
 
 
 lab2rgb : { lightness : Float, labA : Float, labB : Float } -> Element.Color

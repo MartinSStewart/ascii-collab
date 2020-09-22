@@ -2,6 +2,7 @@ port module Frontend exposing (app, init, update, updateFromBackend, view)
 
 import Array
 import Ascii exposing (Ascii)
+import Basics.Extra as Basics
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds
 import Browser exposing (UrlRequest(..))
@@ -11,7 +12,7 @@ import Browser.Navigation
 import Change exposing (Change(..))
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
-import Duration
+import Duration exposing (Duration)
 import Element exposing (Element)
 import Element.Background
 import Element.Border
@@ -106,6 +107,7 @@ loadedInit loading loadingData =
             , userHoverHighlighted = Nothing
             , highlightContextMenu = Nothing
             , adminEnabled = False
+            , animationElapsedTime = Duration.seconds 0
             }
     in
     ( updateMeshes model model
@@ -523,7 +525,12 @@ updateLoaded msg model =
             )
 
         AnimationFrame time ->
-            ( { model | time = time }, Cmd.none )
+            ( { model
+                | time = time
+                , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
+              }
+            , Cmd.none
+            )
 
 
 cursorEnabled : FrontendLoaded -> Bool
@@ -732,6 +739,9 @@ highlightUser highlightUserId highlightPoint model =
 
                 Nothing ->
                     Just { userId = highlightUserId, hidePoint = highlightPoint }
+
+        -- We add some delay because there's usually lag before the animation starts
+        , animationElapsedTime = Duration.milliseconds -300
     }
 
 
@@ -1358,7 +1368,7 @@ userListView model =
                 , Element.Border.rounded 2
                 , Element.Border.width 1
                 , Element.Border.color UiColors.colorSquareBorder
-                , Element.Background.color <| Shaders.userColor False userId
+                , Element.Background.color <| Shaders.lch2rgb <| Shaders.userColor userId
                 ]
                 (if isAdmin model then
                     Element.paragraph
@@ -1842,7 +1852,7 @@ canvasView model =
                     0
 
         color =
-            LocalGrid.localModel model.localModel |> .user |> Shaders.userColor False
+            LocalGrid.localModel model.localModel |> .user |> Shaders.userColor |> Shaders.lch2rgb
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False, WebGL.antialias ]
@@ -1859,7 +1869,7 @@ canvasView model =
          )
             ++ (Maybe.map
                     (drawText
-                        model.time
+                        model.animationElapsedTime
                         (Dict.filter
                             (\key _ ->
                                 Helper.fromRawCoord key
@@ -1897,14 +1907,14 @@ getHighlight model =
 
 
 drawText :
-    Time.Posix
+    Duration
     -> Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex)
     -> Maybe UserId
     -> Bool
     -> Mat4
     -> Texture
     -> List WebGL.Entity
-drawText time meshes userHighlighted showColors viewMatrix texture =
+drawText animationElapsedTime meshes userHighlighted showColors viewMatrix texture =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -1928,17 +1938,27 @@ drawText time meshes userHighlighted showColors viewMatrix texture =
                         else
                             0
                     , highlightIntensity =
-                        let
-                            duration =
-                                1500
-                        in
-                        Time.posixToMillis time
-                            |> modBy duration
-                            |> toFloat
-                            |> (*) (2 * pi / duration)
-                            |> sin
-                            |> (*) 8
-                            |> (+) -3
+                        case userHighlighted of
+                            Just userId ->
+                                let
+                                    duration =
+                                        1500
+                                in
+                                Duration.inMilliseconds animationElapsedTime
+                                    |> max 0
+                                    |> (*) (2 * pi / duration)
+                                    |> cos
+                                    |> (+) -1
+                                    |> (*)
+                                        (if (Shaders.userColor userId).luminance > 80 then
+                                            10
+
+                                         else
+                                            -10
+                                        )
+
+                            Nothing ->
+                                0
                     }
             )
 
