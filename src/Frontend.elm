@@ -499,6 +499,9 @@ updateLoaded msg model =
             , Cmd.none
             )
 
+        AnimationFrame time ->
+            ( { model | time = time }, Cmd.none )
+
 
 cursorEnabled : FrontendLoaded -> Bool
 cursorEnabled model =
@@ -1814,6 +1817,7 @@ canvasView model =
          )
             ++ (Maybe.map
                     (drawText
+                        model.time
                         (Dict.filter
                             (\key _ ->
                                 Helper.fromRawCoord key
@@ -1824,18 +1828,7 @@ canvasView model =
                             )
                             model.meshes
                         )
-                        (case model.highlightContextMenu of
-                            Just { userId } ->
-                                Just userId
-
-                            Nothing ->
-                                case model.tool of
-                                    HighlightTool (Just ( hoverUserId, _ )) ->
-                                        Just hoverUserId
-
-                                    _ ->
-                                        model.userHoverHighlighted
-                        )
+                        (getHighlight model)
                         (case model.tool of
                             HighlightTool _ ->
                                 True
@@ -1851,14 +1844,30 @@ canvasView model =
         )
 
 
+getHighlight : FrontendLoaded -> Maybe UserId
+getHighlight model =
+    case model.highlightContextMenu of
+        Just { userId } ->
+            Just userId
+
+        Nothing ->
+            case model.tool of
+                HighlightTool (Just ( hoverUserId, _ )) ->
+                    Just hoverUserId
+
+                _ ->
+                    model.userHoverHighlighted
+
+
 drawText :
-    Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex)
+    Time.Posix
+    -> Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex)
     -> Maybe UserId
     -> Bool
     -> Mat4
     -> Texture
     -> List WebGL.Entity
-drawText meshes userHighlighted showColors viewMatrix texture =
+drawText time meshes userHighlighted showColors viewMatrix texture =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -1881,6 +1890,13 @@ drawText meshes userHighlighted showColors viewMatrix texture =
 
                         else
                             0
+                    , highlightIntensity =
+                        Time.posixToMillis time
+                            |> modBy 1000
+                            |> toFloat
+                            |> (*) (2 * pi / 1000)
+                            |> sin
+                            |> (*) 15
                     }
             )
 
@@ -1902,6 +1918,11 @@ subscriptions model =
                     , Time.every 1000 ShortIntervalElapsed
                     , if loadedModel.mouseLeft /= MouseButtonUp && isTouchDevice loadedModel then
                         Time.every 100 VeryShortIntervalElapsed
+
+                      else
+                        Sub.none
+                    , if getHighlight loadedModel /= Nothing then
+                        Browser.Events.onAnimationFrame AnimationFrame
 
                       else
                         Sub.none

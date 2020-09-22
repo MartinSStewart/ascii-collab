@@ -151,6 +151,7 @@ type FrontendMsg
     | HideForAllTogglePressed UserId
     | ToggleAdminEnabledPressed
     | HideUserPressed { userId : UserId, hidePoint : Coord AsciiUnit }
+    | AnimationFrame Time.Posix
 
 
 type ToBackend

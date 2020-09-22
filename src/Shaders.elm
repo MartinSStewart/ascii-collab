@@ -21,7 +21,7 @@ colorToVec3 color =
     Math.Vector3.vec3 red green blue
 
 
-vertexShader : Shader Grid.Vertex { u | view : Mat4, highlightedUser : Float, showColors : Float } { vcoord : Vec2, vcolor : Vec4 }
+vertexShader : Shader Grid.Vertex { u | view : Mat4, highlightedUser : Float, showColors : Float, highlightIntensity : Float } { vcoord : Vec2, vcolor : Vec4 }
 vertexShader =
     [glsl|
 attribute vec2 position;
@@ -30,6 +30,7 @@ attribute float userId;
 uniform mat4 view;
 uniform float highlightedUser;
 uniform float showColors;
+uniform float highlightIntensity;
 varying vec2 vcoord;
 varying vec4 vcolor;
 
@@ -73,7 +74,7 @@ void main () {
     float luminance = mod(userIdFloat * 0.5219, 1.0) * 20.0 + 75.0;
     float chroma = mod(userIdFloat * 0.4237, 1.0) * 60.0 + 0.0;
     float hue = userIdFloat * 101.93;
-    vec3 rgbColor = lch2rgb(userId == highlightedUser ? luminance + 20.0 : luminance, chroma, hue);
+    vec3 rgbColor = lch2rgb(userId == highlightedUser ? luminance + highlightIntensity : luminance, chroma, hue);
 
     vcolor = userId != -1.0 && showColors == 1.0
         ? vec4(rgbColor, 1.0)
