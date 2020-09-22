@@ -1851,12 +1851,7 @@ getHighlight model =
             Just userId
 
         Nothing ->
-            case model.tool of
-                HighlightTool (Just ( hoverUserId, _ )) ->
-                    Just hoverUserId
-
-                _ ->
-                    model.userHoverHighlighted
+            model.userHoverHighlighted
 
 
 drawText :
@@ -1896,7 +1891,8 @@ drawText time meshes userHighlighted showColors viewMatrix texture =
                             |> toFloat
                             |> (*) (2 * pi / 1000)
                             |> sin
-                            |> (*) 15
+                            |> (*) 10
+                            |> (+) -5
                     }
             )
 
