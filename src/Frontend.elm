@@ -279,6 +279,29 @@ updateLoaded msg model =
                             { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
                 }
 
+              else if button == SecondButton then
+                let
+                    localModel =
+                        LocalGrid.localModel model.localModel
+
+                    position : Coord AsciiUnit
+                    position =
+                        screenToWorld model mousePosition |> Units.worldToAscii
+
+                    ( maybeUserId, _ ) =
+                        selectionPoint
+                            position
+                            localModel.hiddenUsers
+                            localModel.adminHiddenUsers
+                            localModel.grid
+                in
+                case maybeUserId of
+                    Just userId ->
+                        highlightUser userId position model_
+
+                    Nothing ->
+                        { model_ | highlightContextMenu = Nothing }
+
               else
                 model_
             , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
@@ -678,19 +701,38 @@ mouseUp mousePosition mouseState model =
 
                     else
                         model.cursor
-                , highlightContextMenu = Nothing
             }
     in
     case model_.tool of
         HighlightTool (Just ( userId, hidePoint )) ->
             if isSmallDistance then
-                { model_ | highlightContextMenu = Just { userId = userId, hidePoint = hidePoint } }
+                highlightUser userId hidePoint model_
 
             else
                 model_
 
+        HighlightTool Nothing ->
+            { model_ | highlightContextMenu = Nothing }
+
         _ ->
             model_
+
+
+highlightUser : UserId -> Coord AsciiUnit -> FrontendLoaded -> FrontendLoaded
+highlightUser highlightUserId highlightPoint model =
+    { model
+        | highlightContextMenu =
+            case model.highlightContextMenu of
+                Just { userId } ->
+                    if highlightUserId == userId then
+                        Nothing
+
+                    else
+                        Just { userId = highlightUserId, hidePoint = highlightPoint }
+
+                Nothing ->
+                    Just { userId = highlightUserId, hidePoint = highlightPoint }
+    }
 
 
 resetTouchMove : FrontendLoaded -> FrontendLoaded
@@ -1174,6 +1216,7 @@ view model =
                         :: textarea loadedModel
                         :: Element.inFront (toolbarView loadedModel)
                         :: Element.inFront (userListView loadedModel)
+                        :: Element.htmlAttribute (Html.Events.Extra.Mouse.onContextMenu (\_ -> NoOpFrontendMsg))
                         :: (case ( loadedModel.mouseLeft, loadedModel.mouseMiddle, loadedModel.tool ) of
                                 ( MouseButtonDown _, _, _ ) ->
                                     mouseAttributes
@@ -1258,13 +1301,12 @@ mouseAttributes =
         (\{ clientPos } ->
             MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
         )
-        |> Element.htmlAttribute
     , Html.Events.Extra.Mouse.onUp
         (\{ clientPos, button } ->
             MouseUp button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
         )
-        |> Element.htmlAttribute
     ]
+        |> List.map Element.htmlAttribute
 
 
 isAdmin : FrontendLoaded -> Bool
