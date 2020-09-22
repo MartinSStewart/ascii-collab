@@ -1928,13 +1928,17 @@ drawText time meshes userHighlighted showColors viewMatrix texture =
                         else
                             0
                     , highlightIntensity =
+                        let
+                            duration =
+                                1500
+                        in
                         Time.posixToMillis time
-                            |> modBy 1000
+                            |> modBy duration
                             |> toFloat
-                            |> (*) (2 * pi / 1000)
+                            |> (*) (2 * pi / duration)
                             |> sin
-                            |> (*) 10
-                            |> (+) -5
+                            |> (*) 8
+                            |> (+) -3
                     }
             )
 
