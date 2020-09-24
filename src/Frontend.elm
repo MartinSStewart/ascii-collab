@@ -708,6 +708,12 @@ mouseUp mousePosition mouseState model =
 
                     else
                         model.cursor
+                , highlightContextMenu =
+                    if isSmallDistance then
+                        Nothing
+
+                    else
+                        model.highlightContextMenu
             }
     in
     case model_.tool of
@@ -717,9 +723,6 @@ mouseUp mousePosition mouseState model =
 
             else
                 model_
-
-        HighlightTool Nothing ->
-            { model_ | highlightContextMenu = Nothing }
 
         _ ->
             model_
