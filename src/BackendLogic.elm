@@ -1,39 +1,46 @@
 module BackendLogic exposing (Effect(..), init, update, updateFromFrontend)
 
+import Array
+import Ascii exposing (Ascii)
 import Bounds exposing (Bounds)
 import Change exposing (ClientChange(..), ServerChange(..))
 import Dict
 import Env
 import EverySet exposing (EverySet)
-import Grid
-import Helper
+import Grid exposing (Grid)
+import GridCell
+import Helper exposing (Coord)
 import List.Extra as List
-import List.Nonempty exposing (Nonempty)
+import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
+import NonemptyExtra as Nonempty
+import Quantity exposing (Quantity(..))
 import SendGrid
 import String.Nonempty
 import Types exposing (..)
 import Undo
-import Units exposing (CellUnit)
+import Units exposing (AsciiUnit, CellUnit)
 import UrlHelper
 import User exposing (UserId)
 
 
 type Effect
-    = Effect ClientId ToFrontend
+    = SendToFrontend ClientId ToFrontend
+    | SendEmail (Result SendGrid.Error () -> BackendMsg) (SendGrid.Email ())
 
 
 init : BackendModel
 init =
     { grid = Grid.empty
     , userSessions = Dict.empty
-    , users = Dict.empty
+    , users =
+        Dict.empty
     , usersHiddenRecently = []
     , userChangesRecently = Dict.empty
     }
 
 
-update : BackendMsg -> BackendModel -> ( BackendModel, Cmd BackendMsg )
+update : BackendMsg -> BackendModel -> ( BackendModel, List Effect )
 update msg model =
     case msg of
         UserDisconnected sessionId clientId ->
@@ -49,78 +56,256 @@ update msg model =
                         )
                         model.userSessions
               }
-            , Cmd.none
+            , []
             )
 
         NotifyAdminTimeElapsed _ ->
             let
-                idToString =
-                    User.rawId >> String.fromInt
+                ( newModel, cmd ) =
+                    notifyAdmin model
 
-                fullUrl point =
-                    Env.domain ++ "/" ++ UrlHelper.encodeUrl point
+                ( newModel3, cmd3 ) =
+                    case Dict.get (User.rawId backendUserId) newModel.users of
+                        Just userData ->
+                            drawStatistics ( backendUserId, userData ) newModel
 
-                changes =
-                    Dict.toList model.userChangesRecently
-                        |> List.gatherEqualsBy (\( ( userId, _ ), _ ) -> userId)
-                        |> List.map
-                            (\( ( ( userId, _ ), _ ) as head, rest ) ->
-                                List.map
-                                    (\( ( _, cellCoord ), localPos ) ->
-                                        Grid.cellAndLocalCoordToAscii ( Helper.fromRawCoord cellCoord, localPos )
-                                            |> fullUrl
-                                            |> (++) "\n    "
-                                    )
-                                    (head :: rest)
-                                    |> String.concat
-                                    |> (++) ("User " ++ String.fromInt userId ++ " made changes at ")
-                            )
-                        |> String.join "\n"
-
-                hidden =
-                    List.map
-                        (\{ reporter, hiddenUser, hidePoint } ->
-                            "User "
-                                ++ idToString reporter
-                                ++ " hid user "
-                                ++ idToString hiddenUser
-                                ++ "'s text at "
-                                ++ fullUrl hidePoint
-                        )
-                        model.usersHiddenRecently
-                        |> String.join "\n"
+                        Nothing ->
+                            let
+                                ( newModel2, userData ) =
+                                    createUser backendUserId newModel
+                            in
+                            drawStatistics ( backendUserId, userData ) newModel2
             in
-            case
-                ( List.isEmpty model.usersHiddenRecently && Dict.isEmpty model.userChangesRecently
-                , String.Nonempty.fromString (changes ++ "\n\n" ++ hidden)
-                )
-            of
-                ( False, Just content ) ->
-                    ( { model | usersHiddenRecently = [], userChangesRecently = Dict.empty }
-                    , SendGrid.sendEmail
-                        (always NotifyAdminEmailSent)
-                        Env.sendGridKey
-                        { subject =
-                            String.Nonempty.append_
-                                (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
-                                (" users hidden & "
-                                    ++ String.fromInt (Dict.size model.userChangesRecently)
-                                    ++ " cells changed"
-                                )
-                        , content = SendGrid.textContent content
-                        , to = List.Nonempty.fromElement Env.adminEmail
-                        , cc = []
-                        , bcc = []
-                        , nameOfSender = "ascii-collab"
-                        , emailAddressOfSender = "ascii-collab@lamdera.app"
-                        }
-                    )
-
-                _ ->
-                    ( model, Cmd.none )
+            ( newModel3
+            , cmd ++ cmd3
+            )
 
         NotifyAdminEmailSent ->
-            ( model, Cmd.none )
+            ( model, [] )
+
+
+notifyAdmin : BackendModel -> ( BackendModel, List Effect )
+notifyAdmin model =
+    let
+        idToString =
+            User.rawId >> String.fromInt
+
+        fullUrl point =
+            Env.domain ++ "/" ++ UrlHelper.encodeUrl point
+
+        changes =
+            Dict.toList model.userChangesRecently
+                |> List.gatherEqualsBy (\( ( userId, _ ), _ ) -> userId)
+                |> List.map
+                    (\( ( ( userId, _ ), _ ) as head, rest ) ->
+                        List.map
+                            (\( ( _, cellCoord ), localPos ) ->
+                                Grid.cellAndLocalCoordToAscii ( Helper.fromRawCoord cellCoord, localPos )
+                                    |> fullUrl
+                                    |> (++) "\n    "
+                            )
+                            (head :: rest)
+                            |> String.concat
+                            |> (++) ("User " ++ String.fromInt userId ++ " made changes at ")
+                    )
+                |> String.join "\n"
+
+        hidden =
+            List.map
+                (\{ reporter, hiddenUser, hidePoint } ->
+                    "User "
+                        ++ idToString reporter
+                        ++ " hid user "
+                        ++ idToString hiddenUser
+                        ++ "'s text at "
+                        ++ fullUrl hidePoint
+                )
+                model.usersHiddenRecently
+                |> String.join "\n"
+    in
+    case
+        ( List.isEmpty model.usersHiddenRecently && Dict.isEmpty model.userChangesRecently
+        , String.Nonempty.fromString (changes ++ "\n\n" ++ hidden)
+        )
+    of
+        ( False, Just content ) ->
+            ( { model | usersHiddenRecently = [], userChangesRecently = Dict.empty }
+            , [ SendEmail
+                    (always NotifyAdminEmailSent)
+                    { subject =
+                        String.Nonempty.append_
+                            (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
+                            (" users hidden & "
+                                ++ String.fromInt (Dict.size model.userChangesRecently)
+                                ++ " cells changed"
+                            )
+                    , content = SendGrid.textContent content
+                    , to = Nonempty.fromElement Env.adminEmail
+                    , cc = []
+                    , bcc = []
+                    , nameOfSender = "ascii-collab"
+                    , emailAddressOfSender = "ascii-collab@lamdera.app"
+                    }
+              ]
+            )
+
+        _ ->
+            ( model, [] )
+
+
+statisticsBounds : Bounds AsciiUnit
+statisticsBounds =
+    Bounds.bounds (Helper.fromRawCoord ( 49, 7 )) (Helper.fromRawCoord ( 49, 7 ))
+
+
+statisticsDrawAt : Coord AsciiUnit
+statisticsDrawAt =
+    Helper.fromRawCoord ( 32, 0 )
+
+
+backendUserId : UserId
+backendUserId =
+    User.userId -1
+
+
+drawStatistics : ( UserId, BackendUserData ) -> BackendModel -> ( BackendModel, List Effect )
+drawStatistics ( userId, userData ) model =
+    let
+        stats : Nonempty ( Ascii, Int )
+        stats =
+            statistics (hiddenUsers userId model) statisticsBounds model.grid
+
+        statText : Nonempty (List Ascii)
+        statText =
+            stats
+                |> Nonempty.sortWith
+                    (\( asciiA, totalA ) ( asciiB, totalB ) ->
+                        case compare totalA totalB of
+                            GT ->
+                                GT
+
+                            LT ->
+                                LT
+
+                            EQ ->
+                                compare (Ascii.toChar asciiB) (Ascii.toChar asciiA)
+                    )
+                |> Nonempty.reverse
+                |> Nonempty.greedyGroupsOf 32
+                |> Nonempty.map
+                    (Nonempty.map
+                        (\( ascii, total ) ->
+                            let
+                                number : List (Maybe Ascii)
+                                number =
+                                    String.fromInt total
+                                        |> String.padRight 7 ' '
+                                        |> String.toList
+                                        |> List.map Ascii.fromChar
+                            in
+                            [ Just ascii, Ascii.fromChar '=' ]
+                                ++ number
+                                |> List.filterMap identity
+                        )
+                    )
+                -- We need to make sure our list of lists is rectangular before we do a transpose
+                |> Nonempty.map
+                    (\list ->
+                        let
+                            length =
+                                Nonempty.length list
+                        in
+                        case List.repeat (32 - length) [] |> Nonempty.fromList of
+                            Just padding ->
+                                Nonempty.append list padding
+
+                            Nothing ->
+                                list
+                    )
+                |> Nonempty.transpose
+                |> Nonempty.map (Nonempty.toList >> List.concat)
+    in
+    Grid.textToChange statisticsDrawAt statText
+        |> Nonempty.map Change.LocalGridChange
+        -- Remove previous statistics so the undo history doesn't get really long
+        |> Nonempty.append (Nonempty Change.LocalUndo [ Change.LocalAddUndo ])
+        |> (\a -> broadcastLocalChange ( userId, userData ) a model)
+
+
+statistics : EverySet UserId -> Bounds AsciiUnit -> Grid -> Nonempty ( Ascii, Int )
+statistics hiddenUsers_ bounds grid =
+    let
+        cells =
+            Grid.allCellsDict grid
+
+        charsPerCell =
+            GridCell.cellSize * GridCell.cellSize
+
+        adjustedBounds =
+            Bounds.convert
+                (\( Quantity x, Quantity y ) ->
+                    ( Quantity <| x // GridCell.cellSize, Quantity <| y // GridCell.cellSize )
+                )
+                bounds
+
+        isOnEdge : Coord CellUnit -> Bool
+        isOnEdge coord =
+            let
+                ( minX, minY ) =
+                    Bounds.minimum adjustedBounds |> Helper.toRawCoord
+
+                ( maxX, maxY ) =
+                    Bounds.maximum adjustedBounds |> Helper.toRawCoord
+
+                ( x, y ) =
+                    Helper.toRawCoord coord
+            in
+            x == minX || x == maxX || y == minY || y == maxY
+
+        countCell : Coord CellUnit -> GridCell.Cell -> Nonempty ( Ascii, Int ) -> Nonempty ( Ascii, Int )
+        countCell coord cell acc =
+            GridCell.flatten EverySet.empty hiddenUsers_ cell
+                |> Array.foldl
+                    (\( _, value ) ( acc_, index ) ->
+                        ( if Bounds.contains (Grid.cellAndLocalCoordToAscii ( coord, index )) bounds then
+                            Nonempty.updateIf (Tuple.first >> (==) value) (Tuple.mapSecond ((+) 1)) acc_
+
+                          else
+                            acc_
+                        , index + 1
+                        )
+                    )
+                    ( acc, 0 )
+                |> Tuple.first
+    in
+    Bounds.coordRangeFold
+        (\coord acc ->
+            case Dict.get (Helper.toRawCoord coord) cells of
+                Just cell ->
+                    if isOnEdge coord |> Debug.log "" then
+                        countCell coord cell acc
+
+                    else
+                        GridCell.flatten EverySet.empty hiddenUsers_ cell
+                            |> Array.foldl
+                                (\( _, value ) acc_ ->
+                                    Nonempty.updateIf (Tuple.first >> (==) value) (Tuple.mapSecond ((+) 1)) acc_
+                                )
+                                acc
+
+                Nothing ->
+                    if isOnEdge coord then
+                        countCell coord GridCell.empty acc
+
+                    else
+                        Nonempty.updateIf
+                            (Tuple.first >> (==) Ascii.default)
+                            (Tuple.mapSecond ((+) charsPerCell))
+                            acc
+        )
+        identity
+        adjustedBounds
+        (Nonempty.map (\a -> ( a, 0 )) Ascii.asciis)
 
 
 getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, BackendUserData )
@@ -146,7 +331,7 @@ broadcastLocalChange :
 broadcastLocalChange userIdAndUser changes model =
     let
         ( newModel, serverChanges ) =
-            List.Nonempty.foldl
+            Nonempty.foldl
                 (\change ( model_, serverChanges_ ) ->
                     updateLocalChange userIdAndUser change model_
                         |> Tuple.mapSecond (\serverChange -> serverChange :: serverChanges_)
@@ -161,7 +346,7 @@ broadcastLocalChange userIdAndUser changes model =
             case getUserFromSessionId sessionId_ model of
                 Just ( userId_, _ ) ->
                     if Tuple.first userIdAndUser == userId_ then
-                        List.Nonempty.map Change.LocalChange changes |> ChangeBroadcast |> Just
+                        Nonempty.map Change.LocalChange changes |> ChangeBroadcast |> Just
 
                     else
                         List.filterMap
@@ -179,7 +364,7 @@ broadcastLocalChange userIdAndUser changes model =
                                         Change.ServerChange serverChange |> Just
                             )
                             serverChanges
-                            |> List.Nonempty.fromList
+                            |> Nonempty.fromList
                             |> Maybe.map ChangeBroadcast
 
                 Nothing ->
@@ -243,9 +428,9 @@ updateFromFrontend sessionId clientId msg model =
                       }
                     , ViewBoundsChange bounds newCells
                         |> Change.ClientChange
-                        |> List.Nonempty.fromElement
+                        |> Nonempty.fromElement
                         |> ChangeBroadcast
-                        |> Effect clientId
+                        |> SendToFrontend clientId
                         |> List.singleton
                     )
 
@@ -429,7 +614,7 @@ requestDataUpdate sessionId clientId viewBounds model =
                         )
                         model.userSessions
               }
-            , [ Effect clientId (LoadingData (loadingData ( userId, user ))) ]
+            , [ SendToFrontend clientId (LoadingData (loadingData ( userId, user ))) ]
             )
 
         Nothing ->
@@ -437,28 +622,37 @@ requestDataUpdate sessionId clientId viewBounds model =
                 userId =
                     Dict.size model.users |> User.userId
 
-                userBackendData : BackendUserData
-                userBackendData =
-                    { hiddenUsers = EverySet.empty
-                    , hiddenForAll = False
-                    , undoHistory = []
-                    , redoHistory = []
-                    , undoCurrent = Dict.empty
+                ( newModel, userData ) =
+                    { model
+                        | userSessions =
+                            Dict.insert
+                                sessionId
+                                { clientIds = Dict.singleton clientId viewBounds, userId = userId }
+                                model.userSessions
                     }
+                        |> createUser userId
             in
-            ( { model
-                | userSessions =
-                    Dict.insert
-                        sessionId
-                        { clientIds = Dict.singleton clientId viewBounds, userId = userId }
-                        model.userSessions
-                , users = Dict.insert (User.rawId userId) userBackendData model.users
-              }
-            , [ Effect
+            ( newModel
+            , [ SendToFrontend
                     clientId
-                    (LoadingData (loadingData ( userId, userBackendData )))
+                    (LoadingData (loadingData ( userId, userData )))
               ]
             )
+
+
+createUser : UserId -> BackendModel -> ( BackendModel, BackendUserData )
+createUser userId model =
+    let
+        userBackendData : BackendUserData
+        userBackendData =
+            { hiddenUsers = EverySet.empty
+            , hiddenForAll = False
+            , undoHistory = []
+            , redoHistory = []
+            , undoCurrent = Dict.empty
+            }
+    in
+    ( { model | users = Dict.insert (User.rawId userId) userBackendData model.users }, userBackendData )
 
 
 broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> List Effect
@@ -466,4 +660,4 @@ broadcast msgFunc model =
     model.userSessions
         |> Dict.toList
         |> List.concatMap (\( sessionId, { clientIds } ) -> Dict.keys clientIds |> List.map (Tuple.pair sessionId))
-        |> List.filterMap (\( sessionId, clientId ) -> msgFunc sessionId clientId |> Maybe.map (Effect clientId))
+        |> List.filterMap (\( sessionId, clientId ) -> msgFunc sessionId clientId |> Maybe.map (SendToFrontend clientId))
