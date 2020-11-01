@@ -1,4 +1,4 @@
-module BackendLogic exposing (Effect(..), init, update, updateFromFrontend)
+module BackendLogic exposing (Effect(..), init, statistics, update, updateFromFrontend)
 
 import Array
 import Ascii exposing (Ascii)
@@ -155,7 +155,7 @@ notifyAdmin model =
 
 statisticsBounds : Bounds AsciiUnit
 statisticsBounds =
-    Bounds.bounds (Helper.fromRawCoord ( 49, 7 )) (Helper.fromRawCoord ( 49, 7 ))
+    Bounds.bounds (Helper.fromRawCoord ( -48, -37 )) (Helper.fromRawCoord ( 70, -4 ))
 
 
 statisticsDrawAt : Coord AsciiUnit
@@ -241,11 +241,10 @@ statistics hiddenUsers_ bounds grid =
         charsPerCell =
             GridCell.cellSize * GridCell.cellSize
 
+        adjustedBounds : Bounds CellUnit
         adjustedBounds =
             Bounds.convert
-                (\( Quantity x, Quantity y ) ->
-                    ( Quantity <| x // GridCell.cellSize, Quantity <| y // GridCell.cellSize )
-                )
+                (Grid.asciiToCellAndLocalCoord >> Tuple.first)
                 bounds
 
         isOnEdge : Coord CellUnit -> Bool
@@ -282,7 +281,7 @@ statistics hiddenUsers_ bounds grid =
         (\coord acc ->
             case Dict.get (Helper.toRawCoord coord) cells of
                 Just cell ->
-                    if isOnEdge coord |> Debug.log "" then
+                    if isOnEdge coord then
                         countCell coord cell acc
 
                     else

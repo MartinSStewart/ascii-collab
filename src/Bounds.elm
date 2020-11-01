@@ -53,7 +53,7 @@ contains ( Quantity x, Quantity y ) (Bounds bounds_) =
         ( Quantity maxX, Quantity maxY ) =
             bounds_.max
     in
-    minX <= x && x < maxX && minY <= y && y < maxY
+    minX <= x && x <= maxX && minY <= y && y <= maxY
 
 
 containsBounds : Bounds unit -> Bounds unit -> Bool

@@ -48,5 +48,4 @@ cellBounds (View view_) =
             |> Helper.fromRawCoord
             |> Grid.asciiToCellAndLocalCoord
             |> Tuple.first
-            |> Helper.addTuple ( Units.cellUnit 1, Units.cellUnit 1 )
     }

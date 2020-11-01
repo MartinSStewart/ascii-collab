@@ -1,4 +1,4 @@
-module NonemptyExtra exposing (greedyGroupsOf, transpose, updateIf)
+module NonemptyExtra exposing (find, greedyGroupsOf, transpose, updateIf)
 
 import List.Extra as List
 import List.Nonempty exposing (Nonempty)
@@ -60,11 +60,13 @@ transpose nonempty =
         |> Maybe.withDefault nonempty
 
 
+{-| Find the first element that satisfies a predicate and return
+Just that element. If none match, return Nothing.
 
---List.Nonempty.tail nonempty
---    |> List.map List.Nonempty.toList
---    |> List.transpose
---    |> List.zip (List.Nonempty.head nonempty |> List.Nonempty.toList)
---    |> List.map (\( head, rest ) -> List.Nonempty.Nonempty head rest)
---    |> List.Nonempty.fromList
---    |> Maybe.withDefault nonempty
+    find (\num -> num > 5) [ 2, 4, 6, 8 ]
+    --> Just 6
+
+-}
+find : (a -> Bool) -> Nonempty a -> Maybe a
+find predicate list =
+    List.Nonempty.toList list |> List.find predicate
