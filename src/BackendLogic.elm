@@ -153,16 +153,6 @@ notifyAdmin model =
             ( model, [] )
 
 
-statisticsBounds : Bounds AsciiUnit
-statisticsBounds =
-    Bounds.bounds (Helper.fromRawCoord ( -48, -37 )) (Helper.fromRawCoord ( 70, -4 ))
-
-
-statisticsDrawAt : Coord AsciiUnit
-statisticsDrawAt =
-    Helper.fromRawCoord ( 32, 0 )
-
-
 backendUserId : UserId
 backendUserId =
     User.userId -1
@@ -173,7 +163,7 @@ drawStatistics ( userId, userData ) model =
     let
         stats : Nonempty ( Ascii, Int )
         stats =
-            statistics (hiddenUsers userId model) statisticsBounds model.grid
+            statistics (hiddenUsers userId model) Env.statisticsBounds model.grid
 
         statText : Nonempty (List Ascii)
         statText =
@@ -225,7 +215,7 @@ drawStatistics ( userId, userData ) model =
                 |> Nonempty.transpose
                 |> Nonempty.map (Nonempty.toList >> List.concat)
     in
-    Grid.textToChange statisticsDrawAt statText
+    Grid.textToChange Env.statisticsDrawAt statText
         |> Nonempty.map Change.LocalGridChange
         -- Remove previous statistics so the undo history doesn't get really long
         |> Nonempty.append (Nonempty Change.LocalUndo [ Change.LocalAddUndo ])
@@ -267,7 +257,7 @@ statistics hiddenUsers_ bounds grid =
                 |> Array.foldl
                     (\( _, value ) ( acc_, index ) ->
                         ( if Bounds.contains (Grid.cellAndLocalCoordToAscii ( coord, index )) bounds then
-                            Nonempty.updateIf (Tuple.first >> (==) value) (Tuple.mapSecond ((+) 1)) acc_
+                            Nonempty.updateFirst (Tuple.first >> (==) value) (Tuple.mapSecond ((+) 1)) acc_
 
                           else
                             acc_
@@ -276,6 +266,14 @@ statistics hiddenUsers_ bounds grid =
                     )
                     ( acc, 0 )
                 |> Tuple.first
+
+        initialCount : Nonempty ( Ascii, Int )
+        initialCount =
+            Ascii.asciis
+                |> Nonempty.toList
+                |> List.remove Ascii.default
+                |> Nonempty Ascii.default
+                |> Nonempty.map (\a -> ( a, 0 ))
     in
     Bounds.coordRangeFold
         (\coord acc ->
@@ -288,7 +286,7 @@ statistics hiddenUsers_ bounds grid =
                         GridCell.flatten EverySet.empty hiddenUsers_ cell
                             |> Array.foldl
                                 (\( _, value ) acc_ ->
-                                    Nonempty.updateIf (Tuple.first >> (==) value) (Tuple.mapSecond ((+) 1)) acc_
+                                    Nonempty.updateFirst (Tuple.first >> (==) value) (Tuple.mapSecond ((+) 1)) acc_
                                 )
                                 acc
 
@@ -304,7 +302,7 @@ statistics hiddenUsers_ bounds grid =
         )
         identity
         adjustedBounds
-        (Nonempty.map (\a -> ( a, 0 )) Ascii.asciis)
+        initialCount
 
 
 getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, BackendUserData )
@@ -470,7 +468,7 @@ updateLocalChange ( userId, _ ) change model =
                     ( { model
                         | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
                         , userChangesRecently =
-                            if Just userId == Env.adminUserId then
+                            if Just userId == Env.adminUserId || userId == backendUserId then
                                 model.userChangesRecently
 
                             else

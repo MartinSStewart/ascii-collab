@@ -1,4 +1,4 @@
-module NonemptyExtra exposing (find, greedyGroupsOf, transpose, updateIf)
+module NonemptyExtra exposing (find, greedyGroupsOf, transpose, updateFirst, updateIf)
 
 import List.Extra as List
 import List.Nonempty exposing (Nonempty)
@@ -15,6 +15,28 @@ updateIf predicate update_ nonempty =
                 item
         )
         nonempty
+
+
+updateFirst : (a -> Bool) -> (a -> a) -> Nonempty a -> Nonempty a
+updateFirst predicate update_ nonempty =
+    List.Nonempty.toList nonempty
+        |> updateFirstHelper predicate update_
+        |> List.Nonempty.fromList
+        |> Maybe.withDefault nonempty
+
+
+updateFirstHelper : (a -> Bool) -> (a -> a) -> List a -> List a
+updateFirstHelper predicate update_ list =
+    case list of
+        head :: rest ->
+            if predicate head then
+                update_ head :: rest
+
+            else
+                head :: updateFirstHelper predicate update_ rest
+
+        [] ->
+            []
 
 
 {-| Greedily split list into groups of length `size`. The last group of
