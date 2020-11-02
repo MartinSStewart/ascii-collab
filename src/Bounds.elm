@@ -1,4 +1,4 @@
-module Bounds exposing (Bounds, bounds, boundsToBounds2d, center, contains, containsBounds, convert, coordRangeFold, coordRangeFoldReverse, expand, translate)
+module Bounds exposing (Bounds, bounds, boundsToBounds2d, center, contains, containsBounds, convert, coordRangeFold, coordRangeFoldReverse, expand, maximum, minimum, translate)
 
 import BoundingBox2d exposing (BoundingBox2d)
 import Helper exposing (Coord)
@@ -8,6 +8,16 @@ import Quantity exposing (Quantity(..))
 
 type Bounds unit
     = Bounds { min : Coord unit, max : Coord unit }
+
+
+minimum : Bounds unit -> Coord unit
+minimum (Bounds bounds_) =
+    bounds_.min
+
+
+maximum : Bounds unit -> Coord unit
+maximum (Bounds bounds_) =
+    bounds_.min
 
 
 bounds : Coord unit -> Coord unit -> Bounds unit
@@ -43,7 +53,7 @@ contains ( Quantity x, Quantity y ) (Bounds bounds_) =
         ( Quantity maxX, Quantity maxY ) =
             bounds_.max
     in
-    minX <= x && x < maxX && minY <= y && y < maxY
+    minX <= x && x <= maxX && minY <= y && y <= maxY
 
 
 containsBounds : Bounds unit -> Bounds unit -> Bool
@@ -116,20 +126,20 @@ coordRangeFoldHelper foldFunc rowChangeFunc minX maxX minY maxY x y value =
             maxX
             minY
             maxY
-            (if x > maxX then
+            (if x >= maxX then
                 minX
 
              else
                 x + 1
             )
-            (if x > maxX then
+            (if x >= maxX then
                 y + 1
 
              else
                 y
             )
             (foldFunc ( Quantity x, Quantity y ) value
-                |> (if x > maxX && y < maxY then
+                |> (if x >= maxX && y < maxY then
                         rowChangeFunc
 
                     else

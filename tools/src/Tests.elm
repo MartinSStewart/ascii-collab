@@ -13,9 +13,12 @@ import Grid
 import GridCell
 import Helper exposing (Coord)
 import Html exposing (Html)
-import List.Nonempty as Nonempty
+import List.Extra as List
+import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import LocalModel
+import NonemptyExtra as Nonempty
+import Quantity exposing (Quantity(..))
 import Time
 import Types exposing (BackendModel, ClientId, FrontendModel, SessionId, ToBackend(..), ToFrontend(..))
 import Units exposing (CellUnit)
@@ -44,12 +47,12 @@ main =
                     _ :: _ :: _ ->
                         Failed "Too many responses sent"
 
-                    (Effect clientId head) :: [] ->
+                    (SendToFrontend clientId head) :: [] ->
                         if clientId == "client0" then
                             case head of
                                 LoadingData loadingData ->
                                     let
-                                        ( userId, _ ) =
+                                        userId =
                                             loadingData.user
                                     in
                                     case Dict.get (User.rawId userId) model.users of
@@ -64,14 +67,16 @@ main =
 
                         else
                             Failed "Response sent to wrong client"
+
+                    (SendEmail _ _) :: [] ->
+                        Failed "Wrong effect"
                  )
                     |> testSingle
                 )
             , test "Test undo"
                 (LocalGrid.init
-                    { user = User.newUser 0
+                    { user = User.userId 0
                     , grid = Grid.empty
-                    , otherUsers = []
                     , hiddenUsers = EverySet.empty
                     , adminHiddenUsers = EverySet.empty
                     , undoHistory = []
@@ -97,9 +102,8 @@ main =
                 )
             , test "Test undo multiple"
                 (LocalGrid.init
-                    { user = User.newUser 0
+                    { user = User.userId 0
                     , grid = Grid.empty
-                    , otherUsers = []
                     , hiddenUsers = EverySet.empty
                     , adminHiddenUsers = EverySet.empty
                     , undoHistory = []
@@ -150,9 +154,8 @@ main =
                 )
             , test "Don't show changes outside of view bounds"
                 (LocalGrid.init
-                    { user = User.newUser 0
+                    { user = User.userId 0
                     , grid = Grid.empty
-                    , otherUsers = []
                     , hiddenUsers = EverySet.empty
                     , adminHiddenUsers = EverySet.empty
                     , undoHistory = []
@@ -170,7 +173,174 @@ main =
                         )
                     |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) Nothing)
                 )
+            , boundsTest "Bounds fold 0x0"
+                [ Helper.fromRawCoord ( 0, 0 ) ]
+                (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 0, 0 )))
+            , boundsTest "Bounds fold 2x1"
+                (List.reverse [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 2, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ), ( Quantity 2, Quantity 1 ) ])
+                (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 2, 1 )))
+            , boundsTest "Bounds fold 1x2"
+                (List.reverse [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ), ( Quantity 0, Quantity 2 ), ( Quantity 1, Quantity 2 ) ])
+                (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 1, 2 )))
+            , boundsTest "Bounds fold 1x1"
+                (List.reverse [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ) ])
+                (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 1, 1 )))
+            , boundsReverseTest "Bounds reverse fold 0x0"
+                [ Helper.fromRawCoord ( 0, 0 ) ]
+                (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 0, 0 )))
+            , boundsReverseTest "Bounds reverse fold 2x1"
+                [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 2, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ), ( Quantity 2, Quantity 1 ) ]
+                (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 2, 1 )))
+            , boundsReverseTest "Bounds reverse fold 1x2"
+                [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ), ( Quantity 0, Quantity 2 ), ( Quantity 1, Quantity 2 ) ]
+                (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 1, 2 )))
+            , boundsReverseTest "Bounds reverse fold 1x1"
+                [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ) ]
+                (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 1, 1 )))
+            , test "statistics empty 1x1" <|
+                (BackendLogic.statistics
+                    EverySet.empty
+                    (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity 1, Quantity 1 ))
+                    Grid.empty
+                    |> (\a ->
+                            if Nonempty.find (Tuple.first >> (==) Ascii.default) a == Just ( Ascii.default, 4 ) then
+                                Passed
+
+                            else
+                                Failed "Expected 4 spaces"
+                       )
+                    |> testSingle
+                )
+            , test "statistics single a" <|
+                (BackendLogic.statistics
+                    EverySet.empty
+                    (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -15, Quantity -15 ))
+                    (Grid.empty
+                        |> Grid.addChange
+                            { cellPosition = Helper.fromRawCoord ( 0, 0 )
+                            , localPosition = 0
+                            , change = Nonempty asciiA []
+                            , userId = User.userId 0
+                            }
+                    )
+                    |> (\a ->
+                            if Nonempty.find (Tuple.first >> (==) asciiA) a == Just ( asciiA, 1 ) then
+                                Passed
+
+                            else
+                                Failed "Expected single a"
+                       )
+                    |> testSingle
+                )
+            , test "statistics single a at min coord" <|
+                let
+                    ( cell, local ) =
+                        Grid.asciiToCellAndLocalCoord ( Quantity -16, Quantity -16 )
+                in
+                BackendLogic.statistics
+                    EverySet.empty
+                    (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -16, Quantity -16 ))
+                    (Grid.empty
+                        |> Grid.addChange
+                            { cellPosition = cell
+                            , localPosition = local
+                            , change = Nonempty asciiA []
+                            , userId = User.userId 0
+                            }
+                    )
+                    |> (\a ->
+                            if Nonempty.find (Tuple.first >> (==) asciiA) a == Just ( asciiA, 1 ) then
+                                Passed
+
+                            else
+                                Failed "Expected single a"
+                       )
+                    |> testSingle
+            , test "statistics single a at min coord, not aligned vertically" <|
+                let
+                    ( cell, local ) =
+                        Grid.asciiToCellAndLocalCoord ( Quantity -16, Quantity -15 )
+                in
+                BackendLogic.statistics
+                    EverySet.empty
+                    (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -16, Quantity -15 ))
+                    (Grid.empty
+                        |> Grid.addChange
+                            { cellPosition = cell
+                            , localPosition = local
+                            , change = Nonempty asciiA []
+                            , userId = User.userId 0
+                            }
+                    )
+                    |> (\a ->
+                            if Nonempty.find (Tuple.first >> (==) asciiA) a == Just ( asciiA, 1 ) then
+                                Passed
+
+                            else
+                                Failed "Expected single a"
+                       )
+                    |> testSingle
+            , test "statistics single a at min coord, not aligned horziontally" <|
+                let
+                    ( cell, local ) =
+                        Grid.asciiToCellAndLocalCoord ( Quantity -15, Quantity -16 )
+                in
+                BackendLogic.statistics
+                    EverySet.empty
+                    (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -15, Quantity -16 ))
+                    (Grid.empty
+                        |> Grid.addChange
+                            { cellPosition = cell
+                            , localPosition = local
+                            , change = Nonempty asciiA []
+                            , userId = User.userId 0
+                            }
+                    )
+                    |> (\a ->
+                            if Nonempty.find (Tuple.first >> (==) asciiA) a == Just ( asciiA, 1 ) then
+                                Passed
+
+                            else
+                                Failed "Expected single a"
+                       )
+                    |> testSingle
             ]
+
+
+boundsTest : String -> List (Coord unit) -> Bounds unit -> Element msg
+boundsTest name expected bounds =
+    Bounds.coordRangeFold
+        (::)
+        identity
+        bounds
+        []
+        |> (\a ->
+                if a == expected then
+                    Passed
+
+                else
+                    Failed (Debug.toString a ++ " is incorrect. Expected " ++ Debug.toString expected)
+           )
+        |> testSingle
+        |> test name
+
+
+boundsReverseTest : String -> List (Coord unit) -> Bounds unit -> Element msg
+boundsReverseTest name expected bounds =
+    Bounds.coordRangeFoldReverse
+        (::)
+        identity
+        bounds
+        []
+        |> (\a ->
+                if a == expected then
+                    Passed
+
+                else
+                    Failed (Debug.toString a ++ " is incorrect. Expected " ++ Debug.toString expected)
+           )
+        |> testSingle
+        |> test name
 
 
 test : String -> Test model -> Element msg

@@ -1,7 +1,8 @@
-module Ascii exposing (Ascii(..), ascii, asciiChars, charsPerRow, default, fromChar, size, textureData, texturePosition, toChar)
+module Ascii exposing (Ascii(..), asciiChars, asciis, charsPerRow, default, fromChar, fromInt, size, textureData, texturePosition, toChar)
 
 import Dict exposing (Dict)
 import List.Extra as List
+import List.Nonempty exposing (Nonempty)
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Quantity exposing (Quantity)
@@ -13,6 +14,13 @@ asciiChars =
         |> List.map Char.fromCode
         |> (++) [ '░', '▒', '▓', '█' ]
         |> (++) [ '│', '┤', '╡', '╢', '╖', '╕', '╣', '║', '╗', '╝', '╜', '╛', '┐', '└', '┴', '┬', '├', '─', '┼', '╞', '╟', '╚', '╔', '╩', '╦', '╠', '═', '╬', '╧', '╨', '╤', '╥', '╙', '╘', '╒', '╓', '╫', '╪', '┘', '┌' ]
+
+
+asciis : Nonempty Ascii
+asciis =
+    List.filterMap fromChar asciiChars
+        |> List.Nonempty.fromList
+        |> Maybe.withDefault (List.Nonempty.fromElement default)
 
 
 charToAscii : Dict Char Ascii
@@ -69,8 +77,8 @@ type Ascii
     = Ascii Int
 
 
-ascii : Int -> Maybe Ascii
-ascii value =
+fromInt : Int -> Maybe Ascii
+fromInt value =
     if value >= 0 && value < asciiCharCount then
         Ascii value |> Just
 
