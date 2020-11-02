@@ -265,7 +265,9 @@ mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
                             )
                             v
                     , texturePosition = uv
-                    , userId = userId |> Maybe.map User.rawId |> Maybe.withDefault -1 |> toFloat
+
+                    -- This -9 default value must equal the -9 in Shaders.vertexShader
+                    , userId = userId |> Maybe.map User.rawId |> Maybe.withDefault -9 |> toFloat
                     }
                 )
                 box
