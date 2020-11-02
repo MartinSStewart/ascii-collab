@@ -272,6 +272,7 @@ statistics hiddenUsers_ bounds grid =
             Ascii.asciis
                 |> Nonempty.toList
                 |> List.remove Ascii.default
+                -- We make sure the default character comes first because we are going to encounter it a lot
                 |> Nonempty Ascii.default
                 |> Nonempty.map (\a -> ( a, 0 ))
     in

@@ -38,5 +38,5 @@ subscriptions : BackendModel -> Sub BackendMsg
 subscriptions _ =
     Sub.batch
         [ Lamdera.onDisconnect UserDisconnected
-        , Time.every (Duration.seconds 3 |> Duration.inMilliseconds) NotifyAdminTimeElapsed
+        , Time.every (Duration.hours 3 |> Duration.inMilliseconds) NotifyAdminTimeElapsed
         ]
