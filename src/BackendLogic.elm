@@ -199,7 +199,7 @@ drawStatistics ( userId, userData ) model =
                         >> (\column ->
                                 let
                                     maxWidth =
-                                        Nonempty.maximumBy List.length column |> List.length |> (+) 2
+                                        Nonempty.maximumBy List.length column |> List.length |> max 5 |> (+) 2
                                 in
                                 Nonempty.map
                                     (\chars -> chars ++ List.repeat (maxWidth - List.length chars) Ascii.default)
