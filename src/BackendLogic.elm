@@ -189,7 +189,6 @@ drawStatistics ( userId, userData ) model =
                                 number : List (Maybe Ascii)
                                 number =
                                     String.fromInt total
-                                        |> String.padRight 7 ' '
                                         |> String.toList
                                         |> List.map Ascii.fromChar
                             in
@@ -197,6 +196,15 @@ drawStatistics ( userId, userData ) model =
                                 ++ number
                                 |> List.filterMap identity
                         )
+                        >> (\column ->
+                                let
+                                    maxWidth =
+                                        Nonempty.maximumBy List.length column |> List.length |> (+) 2
+                                in
+                                Nonempty.map
+                                    (\chars -> chars ++ List.repeat (maxWidth - List.length chars) Ascii.default)
+                                    column
+                           )
                     )
                 -- We need to make sure our list of lists is rectangular before we do a transpose
                 |> Nonempty.map
