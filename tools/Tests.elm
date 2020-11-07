@@ -185,6 +185,9 @@ main =
             , boundsTest "Bounds fold 1x1"
                 (List.reverse [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ) ])
                 (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 1, 1 )))
+            , boundsTest "Bounds fold 1x1 offset"
+                [ ( Quantity 0, Quantity -1 ), ( Quantity -1, Quantity -1 ), ( Quantity 0, Quantity -2 ), ( Quantity -1, Quantity -2 ) ]
+                (Bounds.bounds (Helper.fromRawCoord ( -1, -2 )) (Helper.fromRawCoord ( 0, -1 )))
             , boundsReverseTest "Bounds reverse fold 0x0"
                 [ Helper.fromRawCoord ( 0, 0 ) ]
                 (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 0, 0 )))
@@ -280,7 +283,7 @@ main =
                                 Failed "Expected single a"
                        )
                     |> testSingle
-            , test "statistics single a at min coord, not aligned horziontally" <|
+            , test "statistics single a at min coord, not aligned horizontally" <|
                 let
                     ( cell, local ) =
                         Grid.asciiToCellAndLocalCoord ( Quantity -15, Quantity -16 )
@@ -302,6 +305,54 @@ main =
 
                             else
                                 Failed "Expected single a"
+                       )
+                    |> testSingle
+            , test "statistics single a outside below" <|
+                let
+                    ( cell, local ) =
+                        Grid.asciiToCellAndLocalCoord ( Quantity 1, Quantity 0 )
+                in
+                BackendLogic.statistics
+                    EverySet.empty
+                    (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -15, Quantity -16 ))
+                    (Grid.empty
+                        |> Grid.addChange
+                            { cellPosition = cell
+                            , localPosition = local
+                            , change = Nonempty asciiA []
+                            , userId = User.userId 0
+                            }
+                    )
+                    |> (\a ->
+                            if Nonempty.find (Tuple.first >> (==) asciiA) a == Just ( asciiA, 0 ) then
+                                Passed
+
+                            else
+                                Failed "Expected no a"
+                       )
+                    |> testSingle
+            , test "statistics single a outside to the right" <|
+                let
+                    ( cell, local ) =
+                        Grid.asciiToCellAndLocalCoord ( Quantity 0, Quantity 1 )
+                in
+                BackendLogic.statistics
+                    EverySet.empty
+                    (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -1, Quantity -1 ))
+                    (Grid.empty
+                        |> Grid.addChange
+                            { cellPosition = cell
+                            , localPosition = local
+                            , change = Nonempty asciiA []
+                            , userId = User.userId 0
+                            }
+                    )
+                    |> (\a ->
+                            if Nonempty.find (Tuple.first >> (==) asciiA) a == Just ( asciiA, 0 ) then
+                                Passed
+
+                            else
+                                Failed "Expected no a"
                        )
                     |> testSingle
             ]

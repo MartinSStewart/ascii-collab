@@ -17,7 +17,7 @@ minimum (Bounds bounds_) =
 
 maximum : Bounds unit -> Coord unit
 maximum (Bounds bounds_) =
-    bounds_.min
+    bounds_.max
 
 
 bounds : Coord unit -> Coord unit -> Bounds unit
