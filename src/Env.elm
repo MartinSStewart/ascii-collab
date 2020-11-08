@@ -122,6 +122,6 @@ mapDrawAt : Coord AsciiUnit
 mapDrawAt =
     Maybe.map2
         (\x y -> Helper.fromRawCoord ( x, y ))
-        (String.toInt statisticsDrawAtX)
-        (String.toInt statisticsDrawAtY)
-        |> Maybe.withDefault (Helper.fromRawCoord ( 32, 0 ))
+        (String.toInt mapDrawAtX)
+        (String.toInt mapDrawAtY)
+        |> Maybe.withDefault (Helper.fromRawCoord ( 32, 100 ))

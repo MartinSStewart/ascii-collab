@@ -165,12 +165,13 @@ drawStatistics ( userId, userData ) model =
         stats =
             statistics (hiddenUsers userId model) Env.statisticsBounds model.grid
 
-        --map : Nonempty (List Ascii)
-        --map =
-        --    generateMap
-        --        (hiddenUsers userId model)
-        --        (Bounds.convert (Grid.asciiToCellAndLocalCoord >> Tuple.first) Env.statisticsBounds)
-        --        model.grid
+        map : Nonempty (List Ascii)
+        map =
+            generateMap
+                (hiddenUsers userId model)
+                (Bounds.convert (Grid.asciiToCellAndLocalCoord >> Tuple.first) Env.statisticsBounds)
+                model.grid
+
         statText : Nonempty (List Ascii)
         statText =
             stats
@@ -230,6 +231,7 @@ drawStatistics ( userId, userData ) model =
                 |> Nonempty.map (Nonempty.toList >> List.concat)
     in
     Grid.textToChange Env.statisticsDrawAt statText
+        |> Nonempty.append (Grid.textToChange Env.mapDrawAt map)
         |> Nonempty.map Change.LocalGridChange
         -- Remove previous statistics so the undo history doesn't get really long
         |> Nonempty.append (Nonempty Change.LocalUndo [ Change.LocalAddUndo ])
@@ -330,10 +332,10 @@ generateMap hiddenUsers_ bounds grid =
             GridCell.cellSize * GridCell.cellSize
 
         chars =
-            [ ( 0.1, Ascii.fromChar '░' )
-            , ( 0.2, Ascii.fromChar '▒' )
-            , ( 0.3, Ascii.fromChar '▓' )
-            , ( 0.4, Ascii.fromChar '█' )
+            [ ( 0.01, Ascii.fromChar '░' )
+            , ( 0.05, Ascii.fromChar '▒' )
+            , ( 0.1, Ascii.fromChar '▓' )
+            , ( 0.15, Ascii.fromChar '█' )
             ]
                 |> List.map (Tuple.mapSecond (Maybe.withDefault Ascii.default))
     in
@@ -347,7 +349,12 @@ generateMap hiddenUsers_ bounds grid =
                             GridCell.flatten EverySet.empty hiddenUsers_ cell
                                 |> Array.foldl
                                     (\( _, ascii ) totalIntensity ->
-                                        Ascii.intensity ascii + totalIntensity
+                                        if ascii == Ascii.default then
+                                            totalIntensity
+
+                                        else
+                                            180 + totalIntensity
+                                     --Ascii.intensity ascii + totalIntensity
                                     )
                                     0
                                 |> toFloat
@@ -355,7 +362,7 @@ generateMap hiddenUsers_ bounds grid =
                     in
                     Nonempty.replaceHead
                         ((List.takeWhile (\( threshold, _ ) -> intensity >= threshold) chars
-                            |> List.head
+                            |> List.last
                             |> Maybe.map Tuple.second
                             |> Maybe.withDefault Ascii.default
                          )
@@ -366,9 +373,10 @@ generateMap hiddenUsers_ bounds grid =
                 Nothing ->
                     Nonempty.replaceHead (Ascii.default :: Nonempty.head acc) acc
         )
-        identity
+        (Nonempty.cons [])
         bounds
         (Nonempty.fromElement [])
+        |> Nonempty.map List.reverse
 
 
 getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, BackendUserData )
