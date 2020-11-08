@@ -380,13 +380,12 @@ generateMap hiddenUsers_ bounds grid =
                                                 totalIntensity
 
                                             else
-                                                180 + totalIntensity
-                                         --Ascii.intensity ascii + totalIntensity
+                                                1 + totalIntensity
                                         )
                                         0
                                         list
                                         |> toFloat
-                                        |> (*) (1 / toFloat (Helper.area Ascii.size * charsPerCell))
+                                        |> (*) (1 / toFloat charsPerCell)
                             in
                             [ ( ( x * 2, y * 2 ), listToAscii topLeft )
                             , ( ( x * 2 + 1, y * 2 ), listToAscii topRight )
