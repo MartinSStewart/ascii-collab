@@ -165,6 +165,12 @@ drawStatistics ( userId, userData ) model =
         stats =
             statistics (hiddenUsers userId model) Env.statisticsBounds model.grid
 
+        --map : Nonempty (List Ascii)
+        --map =
+        --    generateMap
+        --        (hiddenUsers userId model)
+        --        (Bounds.convert (Grid.asciiToCellAndLocalCoord >> Tuple.first) Env.statisticsBounds)
+        --        model.grid
         statText : Nonempty (List Ascii)
         statText =
             stats
@@ -312,6 +318,57 @@ statistics hiddenUsers_ bounds grid =
         identity
         adjustedBounds
         initialCount
+
+
+generateMap : EverySet UserId -> Bounds CellUnit -> Grid -> Nonempty (List Ascii)
+generateMap hiddenUsers_ bounds grid =
+    let
+        cells =
+            Grid.allCellsDict grid
+
+        charsPerCell =
+            GridCell.cellSize * GridCell.cellSize
+
+        chars =
+            [ ( 0.1, Ascii.fromChar '░' )
+            , ( 0.2, Ascii.fromChar '▒' )
+            , ( 0.3, Ascii.fromChar '▓' )
+            , ( 0.4, Ascii.fromChar '█' )
+            ]
+                |> List.map (Tuple.mapSecond (Maybe.withDefault Ascii.default))
+    in
+    Bounds.coordRangeFold
+        (\coord acc ->
+            case Dict.get (Helper.toRawCoord coord) cells of
+                Just cell ->
+                    let
+                        intensity : Float
+                        intensity =
+                            GridCell.flatten EverySet.empty hiddenUsers_ cell
+                                |> Array.foldl
+                                    (\( _, ascii ) totalIntensity ->
+                                        Ascii.intensity ascii + totalIntensity
+                                    )
+                                    0
+                                |> toFloat
+                                |> (*) (1 / toFloat (Helper.area Ascii.size * charsPerCell))
+                    in
+                    Nonempty.replaceHead
+                        ((List.takeWhile (\( threshold, _ ) -> intensity >= threshold) chars
+                            |> List.head
+                            |> Maybe.map Tuple.second
+                            |> Maybe.withDefault Ascii.default
+                         )
+                            :: Nonempty.head acc
+                        )
+                        acc
+
+                Nothing ->
+                    Nonempty.replaceHead (Ascii.default :: Nonempty.head acc) acc
+        )
+        identity
+        bounds
+        (Nonempty.fromElement [])
 
 
 getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, BackendUserData )

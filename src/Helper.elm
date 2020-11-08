@@ -3,6 +3,7 @@ module Helper exposing
     , RawCellCoord
     , absTuple
     , addTuple
+    , area
     , coordToPoint
     , coordToVec
     , coordToVector2d
@@ -25,6 +26,15 @@ import Vector2d exposing (Vector2d)
 
 type alias RawCellCoord =
     ( Int, Int )
+
+
+area : Coord unit -> Int
+area coord =
+    let
+        ( x, y ) =
+            toRawCoord coord
+    in
+    x * y
 
 
 addTuple : Coord unit -> Coord unit -> Coord unit
