@@ -60,22 +60,22 @@ domain =
 
 statisticsX0 : String
 statisticsX0 =
-    "-48"
+    "-258"
 
 
 statisticsY0 : String
 statisticsY0 =
-    "-37"
+    "-78"
 
 
 statisticsX1 : String
 statisticsX1 =
-    "725"
+    "1136"
 
 
 statisticsY1 : String
 statisticsY1 =
-    "179"
+    "209"
 
 
 statisticsBounds : Bounds AsciiUnit
@@ -110,12 +110,12 @@ statisticsDrawAt =
 
 mapDrawAtX : String
 mapDrawAtX =
-    "32"
+    "759"
 
 
 mapDrawAtY : String
 mapDrawAtY =
-    "100"
+    "-71"
 
 
 mapDrawAt : Coord AsciiUnit

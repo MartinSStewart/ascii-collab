@@ -327,6 +327,77 @@ generateMap hiddenUsers_ bounds grid =
     let
         cells =
             Grid.allCellsDict grid
+                |> Dict.toList
+                |> List.concatMap
+                    (\( ( x, y ), cell ) ->
+                        if Bounds.contains (Helper.fromRawCoord ( x, y )) bounds then
+                            let
+                                flattened =
+                                    GridCell.flatten EverySet.empty hiddenUsers_ cell |> Array.toList
+
+                                halfCell =
+                                    GridCell.cellSize // 2
+
+                                splitRow list =
+                                    list
+                                        |> List.splitAt halfCell
+                                        |> (\( firstList, rest ) ->
+                                                let
+                                                    ( secondList, rest2 ) =
+                                                        List.splitAt halfCell rest
+                                                in
+                                                { firstList = firstList, secondList = secondList, rest = rest2 }
+                                           )
+
+                                ( topLeft, topRight, remaining ) =
+                                    List.repeat halfCell ()
+                                        |> List.foldl
+                                            (\() ( topLeft_, topRight_, list ) ->
+                                                let
+                                                    { firstList, secondList, rest } =
+                                                        splitRow list
+                                                in
+                                                ( topLeft_ ++ firstList, topRight_ ++ secondList, rest )
+                                            )
+                                            ( [], [], flattened )
+
+                                ( bottomLeft, bottomRight, _ ) =
+                                    List.repeat 8 ()
+                                        |> List.foldl
+                                            (\() ( bottomLeft_, bottomRight_, list ) ->
+                                                let
+                                                    { firstList, secondList, rest } =
+                                                        splitRow list
+                                                in
+                                                ( bottomLeft_ ++ firstList, bottomRight_ ++ secondList, rest )
+                                            )
+                                            ( [], [], remaining )
+
+                                listToAscii list =
+                                    List.foldl
+                                        (\( _, ascii ) totalIntensity ->
+                                            if ascii == Ascii.default then
+                                                totalIntensity
+
+                                            else
+                                                180 + totalIntensity
+                                         --Ascii.intensity ascii + totalIntensity
+                                        )
+                                        0
+                                        list
+                                        |> toFloat
+                                        |> (*) (1 / toFloat (Helper.area Ascii.size * charsPerCell))
+                            in
+                            [ ( ( x * 2, y * 2 ), listToAscii topLeft )
+                            , ( ( x * 2 + 1, y * 2 ), listToAscii topRight )
+                            , ( ( x * 2, y * 2 + 1 ), listToAscii bottomLeft )
+                            , ( ( x * 2 + 1, y * 2 + 1 ), listToAscii bottomRight )
+                            ]
+
+                        else
+                            []
+                    )
+                |> Dict.fromList
 
         charsPerCell =
             GridCell.cellSize * GridCell.cellSize
@@ -342,24 +413,7 @@ generateMap hiddenUsers_ bounds grid =
     Bounds.coordRangeFold
         (\coord acc ->
             case Dict.get (Helper.toRawCoord coord) cells of
-                Just cell ->
-                    let
-                        intensity : Float
-                        intensity =
-                            GridCell.flatten EverySet.empty hiddenUsers_ cell
-                                |> Array.foldl
-                                    (\( _, ascii ) totalIntensity ->
-                                        if ascii == Ascii.default then
-                                            totalIntensity
-
-                                        else
-                                            180 + totalIntensity
-                                     --Ascii.intensity ascii + totalIntensity
-                                    )
-                                    0
-                                |> toFloat
-                                |> (*) (1 / toFloat (Helper.area Ascii.size * charsPerCell))
-                    in
+                Just intensity ->
                     Nonempty.replaceHead
                         ((List.takeWhile (\( threshold, _ ) -> intensity >= threshold) chars
                             |> List.last
@@ -374,9 +428,10 @@ generateMap hiddenUsers_ bounds grid =
                     Nonempty.replaceHead (Ascii.default :: Nonempty.head acc) acc
         )
         (Nonempty.cons [])
-        bounds
+        (Bounds.multiplyBy 2 bounds)
         (Nonempty.fromElement [])
         |> Nonempty.map List.reverse
+        |> Nonempty.reverse
 
 
 getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, BackendUserData )
