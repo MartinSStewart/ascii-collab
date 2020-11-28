@@ -5,7 +5,7 @@
         "packages/elm-geometry/3.6.0/src",
         "tools"
     ],
-    "elm-version": "0.19.0",
+    "elm-version": "0.19.1",
     "dependencies": {
         "direct": {
             "Gizra/elm-all-set": "1.0.1",
