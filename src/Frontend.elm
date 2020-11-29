@@ -1,8 +1,7 @@
 port module Frontend exposing (app, init, update, updateFromBackend, view)
 
-import Array
+import Array exposing (Array)
 import Ascii exposing (Ascii)
-import Basics.Extra as Basics
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds
 import Browser exposing (UrlRequest(..))
@@ -29,11 +28,13 @@ import Html.Attributes
 import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Touch
+import Hyperlink
+import Icons
 import Keyboard
 import Lamdera
 import List.Extra as List
-import List.Nonempty exposing (Nonempty)
-import LocalGrid
+import List.Nonempty exposing (Nonempty(..))
+import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Pixels exposing (Pixels)
@@ -966,6 +967,7 @@ keyDown key { pressedKeys } =
 updateMeshes : FrontendLoaded -> FrontendLoaded -> FrontendLoaded
 updateMeshes oldModel newModel =
     let
+        oldCells : Dict ( Int, Int ) GridCell.Cell
         oldCells =
             LocalGrid.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
 
@@ -978,29 +980,64 @@ updateMeshes oldModel newModel =
                     |> EverySet.fromList
                 )
 
+        oldHidden : EverySet UserId
         oldHidden =
             LocalGrid.localModel oldModel.localModel |> .hiddenUsers |> showHighlighted oldModel
 
+        oldHiddenForAll : EverySet UserId
         oldHiddenForAll =
             LocalGrid.localModel oldModel.localModel |> .adminHiddenUsers |> showHighlighted oldModel
 
+        newCells : Dict ( Int, Int ) GridCell.Cell
         newCells =
             LocalGrid.localModel newModel.localModel |> .grid |> Grid.allCellsDict
 
+        newHidden : EverySet UserId
         newHidden =
             LocalGrid.localModel newModel.localModel |> .hiddenUsers |> showHighlighted newModel
 
+        newHiddenForAll : EverySet UserId
         newHiddenForAll =
             LocalGrid.localModel newModel.localModel |> .adminHiddenUsers |> showHighlighted newModel
 
+        hyperlinks =
+            Dict.toList newCells
+                |> List.gatherEqualsBy (Tuple.first >> Tuple.second >> Quantity.unwrap)
+                |> List.map
+                    (\( first, rest ) ->
+                        let
+                            sorted =
+                                Nonempty first rest
+                                    |> List.Nonempty.sortBy (Tuple.first >> Tuple.first)
+
+                            firstCoord =
+                                List.Nonempty.head sorted |> Tuple.first
+                        in
+                        sorted
+                            |> List.Nonempty.foldl
+                                (\( ( x, y ), cell ) ( currentX, list ) ->
+                                    ( x, cell :: List.repeat (x - (currentX + 1)) Nothing ++ list )
+                                )
+                                ( Tuple.first firstCoord, [] )
+                            |> Tuple.second
+                            |> List.reverse
+                            |> Hyperlink.hyperlinks firstCoord
+                    )
+
+        newMesh : GridCell.Cell -> ( Int, Int ) -> WebGL.Mesh Grid.Vertex
         newMesh newCell coord =
             Grid.mesh
                 (Helper.fromRawCoord coord)
-                (GridCell.flatten newHidden newHiddenForAll newCell |> Array.toList)
+                (GridCell.flatten newHidden newHiddenForAll newCell
+                    |> Array.toList
+                    |> List.map (\( a, b ) -> ( a, b, True ))
+                )
 
+        hiddenUnchanged : Bool
         hiddenUnchanged =
             oldHidden == newHidden && oldHiddenForAll == newHiddenForAll
 
+        hiddenChanges : List UserId
         hiddenChanges =
             EverySet.union (EverySet.diff newHidden oldHidden) (EverySet.diff oldHidden newHidden)
                 |> EverySet.union (EverySet.diff newHiddenForAll oldHiddenForAll)
@@ -1107,6 +1144,9 @@ actualViewPoint model =
 
                 SelectTool ->
                     model.viewPoint
+
+                HyperlinkTool ->
+                    offsetViewPoint model start current
 
         _ ->
             model.viewPoint
@@ -1717,12 +1757,7 @@ toolbarView model =
 
 tools : List ( ToolType, ToolType -> Bool, Element msg )
 tools =
-    [ ( DragTool
-      , (==) DragTool
-      , Element.image
-            [ Element.width (Element.px 22) ]
-            { src = "4-direction-arrows.svg", description = "Drag tool" }
-      )
+    [ ( DragTool, (==) DragTool, Icons.dragTool )
     , ( SelectTool
       , (==) SelectTool
       , Element.el
@@ -1741,10 +1776,9 @@ tools =
 
                 _ ->
                     False
-      , Element.image
-            [ Element.width (Element.px 22) ]
-            { src = "highlight.svg", description = "Highlight tool" }
+      , Icons.highlightTool
       )
+    , ( HyperlinkTool, (==) HyperlinkTool, Icons.hyperlinkTool )
     ]
 
 

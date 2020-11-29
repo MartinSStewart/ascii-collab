@@ -96,6 +96,7 @@ type ToolType
     = DragTool
     | SelectTool
     | HighlightTool (Maybe ( UserId, Coord AsciiUnit ))
+    | HyperlinkTool
 
 
 type MouseButtonState

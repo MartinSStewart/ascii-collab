@@ -1,4 +1,4 @@
-module Tests exposing (..)
+module Tests exposing (Test(..), TestResult(..), asciiA, boundsReverseTest, boundsTest, checkGridValue, main, newUserState, smallViewBounds, test, testAssert, testInit, testMap, testSingle, time)
 
 import Array
 import Ascii exposing (Ascii)
@@ -9,15 +9,18 @@ import Dict
 import Element exposing (Element)
 import Element.Background
 import EverySet
+import Frontend
 import Grid
 import GridCell
 import Helper exposing (Coord)
 import Html exposing (Html)
+import Hyperlink
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import LocalModel
 import NonemptyExtra as Nonempty
+import Parser
 import Quantity exposing (Quantity(..))
 import Time
 import Types exposing (BackendModel, ClientId, FrontendModel, SessionId, ToBackend(..), ToFrontend(..))
@@ -355,7 +358,36 @@ main =
                                 Failed "Expected no a"
                        )
                     |> testSingle
+            , test "Parse no hyperlink" <| parseHyperlinkTest "test" []
+            , test "Parse coordinate hyperlink" <|
+                parseHyperlinkTest "testx=-5&y=99"
+                    [ { position = ( Quantity 5, Quantity.zero )
+                      , length = String.length "x=-5&y=99"
+                      , url = "?x=-5&y=99"
+                      }
+                    ]
+            , test "Parse white listed url" <|
+                parseHyperlinkTest "testro-box.netlify.appzxc"
+                    [ { position = ( Quantity 5, Quantity.zero )
+                      , length = String.length "ro-box.netlify.app"
+                      , url = "ro-box.netlify.app"
+                      }
+                    ]
             ]
+
+
+parseHyperlinkTest input expected =
+    let
+        actual =
+            Parser.run (Hyperlink.urlsParser Quantity.zero) input
+    in
+    (if actual == Ok expected then
+        Passed
+
+     else
+        Failed <| "Expected " ++ Debug.toString expected ++ " but got " ++ Debug.toString actual
+    )
+        |> testSingle
 
 
 boundsTest : String -> List (Coord unit) -> Bounds unit -> Element msg

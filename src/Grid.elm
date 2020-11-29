@@ -25,6 +25,7 @@ import Bounds exposing (Bounds)
 import Dict exposing (Dict)
 import GridCell exposing (Cell)
 import Helper exposing (Coord, RawCellCoord)
+import Hyperlink exposing (Hyperlink)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
@@ -241,13 +242,16 @@ asciiBox offsetX offsetY indexOffset =
 
 
 type alias Vertex =
-    { position : Vec2, texturePosition : Vec2, userId : Float }
+    { position : Vec2, texturePosition : Vec2, userId : Float, isHyperlink : Float }
 
 
-mesh : Coord Units.CellUnit -> List ( Maybe UserId, Ascii ) -> WebGL.Mesh Vertex
+mesh :
+    Coord Units.CellUnit
+    -> List ( Maybe UserId, Ascii, Bool )
+    -> WebGL.Mesh Vertex
 mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
     List.map2
-        (\( userId, ascii ) box ->
+        (\( userId, ascii, isHyperlink ) box ->
             let
                 { topLeft, bottomRight } =
                     Ascii.texturePosition ascii
@@ -268,6 +272,12 @@ mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
 
                     -- This -9 default value must equal the -9 in Shaders.vertexShader
                     , userId = userId |> Maybe.map User.rawId |> Maybe.withDefault -9 |> toFloat
+                    , isHyperlink =
+                        if isHyperlink then
+                            1
+
+                        else
+                            0
                     }
                 )
                 box
