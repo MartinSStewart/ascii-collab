@@ -379,7 +379,7 @@ main =
 parseHyperlinkTest input expected =
     let
         actual =
-            Parser.run (Hyperlink.urlsParser Quantity.zero) input
+            Parser.run (Hyperlink.urlsParser (Helper.fromRawCoord ( 0, 0 ))) input
     in
     (if actual == Ok expected then
         Passed

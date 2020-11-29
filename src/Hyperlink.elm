@@ -16,7 +16,7 @@ type alias Hyperlink =
 
 
 hyperlinks : Coord Units.AsciiUnit -> List (Maybe (Array ( Maybe UserId, Ascii ))) -> List Hyperlink
-hyperlinks minPoint flattenedCellRow =
+hyperlinks offset flattenedCellRow =
     List.range 0 (GridCell.cellSize - 1)
         |> List.map
             (\index ->
@@ -37,7 +37,7 @@ hyperlinks minPoint flattenedCellRow =
                     )
                     flattenedCellRow
                     |> String.concat
-                    |> Parser.run (urlsParser (Helper.addTuple minPoint ( Quantity.zero, Quantity index )))
+                    |> Parser.run (urlsParser (Helper.addTuple offset ( Quantity.zero, Quantity index )))
                     |> Result.toMaybe
                     |> Maybe.withDefault []
             )
@@ -91,7 +91,7 @@ urlParser : Coord Units.AsciiUnit -> Parser Hyperlink
 urlParser offset =
     Parser.succeed
         (\start url end ->
-            { position = Helper.addTuple offset ( Quantity start, Quantity.zero )
+            { position = Helper.addTuple offset ( Quantity (start - 1), Quantity.zero )
             , length = end - start
             , url = url
             }

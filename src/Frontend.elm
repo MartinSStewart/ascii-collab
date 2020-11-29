@@ -28,7 +28,7 @@ import Html.Attributes
 import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Touch
-import Hyperlink
+import Hyperlink exposing (Hyperlink)
 import Icons
 import Keyboard
 import Lamdera
@@ -1000,9 +1000,10 @@ updateMeshes oldModel newModel =
         newHiddenForAll =
             LocalGrid.localModel newModel.localModel |> .adminHiddenUsers |> showHighlighted newModel
 
+        hyperlinks : List Hyperlink
         hyperlinks =
             Dict.toList newCells
-                |> List.gatherEqualsBy (Tuple.first >> Tuple.second >> Quantity.unwrap)
+                |> List.gatherEqualsBy (Tuple.first >> Tuple.second)
                 |> List.map
                     (\( first, rest ) ->
                         let
@@ -1010,27 +1011,55 @@ updateMeshes oldModel newModel =
                                 Nonempty first rest
                                     |> List.Nonempty.sortBy (Tuple.first >> Tuple.first)
 
+                            firstCoord : ( Int, Int )
                             firstCoord =
                                 List.Nonempty.head sorted |> Tuple.first
                         in
                         sorted
                             |> List.Nonempty.foldl
-                                (\( ( x, y ), cell ) ( currentX, list ) ->
-                                    ( x, cell :: List.repeat (x - (currentX + 1)) Nothing ++ list )
+                                (\( ( x, _ ), cell ) ( currentX, list ) ->
+                                    ( x
+                                    , Just (GridCell.flatten newHidden newHiddenForAll cell)
+                                        :: List.repeat (x - (currentX + 1)) Nothing
+                                        ++ list
+                                    )
                                 )
                                 ( Tuple.first firstCoord, [] )
                             |> Tuple.second
                             |> List.reverse
-                            |> Hyperlink.hyperlinks firstCoord
+                            |> Hyperlink.hyperlinks (Helper.fromRawCoord firstCoord |> Units.cellToAscii)
                     )
+                |> List.concat
 
         newMesh : GridCell.Cell -> ( Int, Int ) -> WebGL.Mesh Grid.Vertex
-        newMesh newCell coord =
+        newMesh newCell rawCoord =
+            let
+                coord =
+                    Helper.fromRawCoord rawCoord
+            in
             Grid.mesh
-                (Helper.fromRawCoord coord)
+                coord
                 (GridCell.flatten newHidden newHiddenForAll newCell
                     |> Array.toList
-                    |> List.map (\( a, b ) -> ( a, b, True ))
+                    |> List.indexedMap
+                        (\index ( a, b ) ->
+                            ( a
+                            , b
+                            , List.any
+                                (\{ position, length } ->
+                                    let
+                                        ( x, y ) =
+                                            Grid.cellAndLocalCoordToAscii ( coord, index )
+                                                |> Helper.toRawCoord
+
+                                        ( linkX, linkY ) =
+                                            Helper.toRawCoord position
+                                    in
+                                    y == linkY && x >= linkX && x < linkX + length
+                                )
+                                hyperlinks
+                            )
+                        )
                 )
 
         hiddenUnchanged : Bool
