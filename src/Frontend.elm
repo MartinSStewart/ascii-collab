@@ -1038,6 +1038,10 @@ updateMeshes oldModel newModel =
     }
 
 
+temp =
+    0
+
+
 viewBoundsUpdate : ( FrontendLoaded, Cmd FrontendMsg ) -> ( FrontendLoaded, Cmd FrontendMsg )
 viewBoundsUpdate ( model, cmd ) =
     let
