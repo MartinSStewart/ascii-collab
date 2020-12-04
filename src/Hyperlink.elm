@@ -15,8 +15,12 @@ type alias Hyperlink =
     { position : Coord Units.AsciiUnit, length : Int, url : String }
 
 
-hyperlinks : Coord Units.AsciiUnit -> List (Maybe (Array ( Maybe UserId, Ascii ))) -> List Hyperlink
+hyperlinks : Coord Units.CellUnit -> List (Maybe (Array ( Maybe UserId, Ascii ))) -> List Hyperlink
 hyperlinks offset flattenedCellRow =
+    let
+        asciiOffset =
+            Units.cellToAscii offset
+    in
     List.range 0 (GridCell.cellSize - 1)
         |> List.map
             (\index ->
@@ -37,7 +41,7 @@ hyperlinks offset flattenedCellRow =
                     )
                     flattenedCellRow
                     |> String.concat
-                    |> Parser.run (urlsParser (Helper.addTuple offset ( Quantity.zero, Quantity index )))
+                    |> Parser.run (urlsParser (Helper.addTuple asciiOffset ( Quantity.zero, Quantity index )))
                     |> Result.toMaybe
                     |> Maybe.withDefault []
             )

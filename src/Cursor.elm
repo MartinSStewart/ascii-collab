@@ -1,6 +1,7 @@
 module Cursor exposing (Cursor, bounds, draw, fragmentShader, mesh, moveCursor, newLine, position, selection, setCursor, toMesh, updateMesh, vertexShader)
 
 import Ascii
+import Bounds exposing (Bounds)
 import Element
 import Helper exposing (Coord)
 import Math.Matrix4 exposing (Mat4)
@@ -149,7 +150,7 @@ selection start end =
         |> Cursor
 
 
-bounds : Cursor -> { min : Coord Units.AsciiUnit, max : Coord Units.AsciiUnit }
+bounds : Cursor -> Bounds Units.AsciiUnit
 bounds (Cursor cursor) =
     let
         pos0 =
@@ -158,9 +159,9 @@ bounds (Cursor cursor) =
         pos1 =
             Helper.addTuple cursor.position cursor.size
     in
-    { min = Helper.minTuple pos0 pos1
-    , max = Helper.maxTuple pos0 pos1 |> Helper.addTuple ( Units.asciiUnit 1, Units.asciiUnit 1 )
-    }
+    Bounds.bounds
+        (Helper.minTuple pos0 pos1)
+        (Helper.maxTuple pos0 pos1 |> Helper.addTuple ( Units.asciiUnit 1, Units.asciiUnit 1 ))
 
 
 draw : Mat4 -> Element.Color -> { a | cursor : Cursor, cursorMesh : WebGL.Mesh { position : Vec2 } } -> WebGL.Entity

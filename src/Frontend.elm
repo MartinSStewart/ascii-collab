@@ -3,7 +3,7 @@ port module Frontend exposing (app, init, update, updateFromBackend, view)
 import Array exposing (Array)
 import Ascii exposing (Ascii)
 import BoundingBox2d exposing (BoundingBox2d)
-import Bounds
+import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest(..))
 import Browser.Dom
 import Browser.Events
@@ -806,12 +806,13 @@ updateLocalModel msg model =
     }
 
 
+clearTextSelection : Bounds AsciiUnit -> FrontendLoaded -> FrontendLoaded
 clearTextSelection bounds model =
     let
         ( w, h ) =
-            bounds.max |> Helper.minusTuple bounds.min |> Helper.toRawCoord
+            Bounds.maximum bounds |> Helper.minusTuple (Bounds.minimum bounds) |> Helper.toRawCoord
     in
-    { model | cursor = Cursor.setCursor bounds.min }
+    { model | cursor = Cursor.setCursor (Bounds.minimum bounds) }
         |> changeText (String.repeat w " " |> List.repeat h |> String.join "\n")
         |> (\m -> { m | cursor = model.cursor })
 
@@ -840,14 +841,14 @@ worldToScreen model =
         << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
 
 
-selectionToString : { min : Coord AsciiUnit, max : Coord AsciiUnit } -> EverySet UserId -> EverySet UserId -> Grid -> String
+selectionToString : Bounds AsciiUnit -> EverySet UserId -> EverySet UserId -> Grid -> String
 selectionToString bounds hiddenUsers hiddenUsersForAll grid =
     let
         minCell =
-            Grid.asciiToCellAndLocalCoord bounds.min |> Tuple.first
+            Bounds.minimum bounds |> Grid.asciiToCellAndLocalCoord |> Tuple.first
 
         maxCell =
-            Grid.asciiToCellAndLocalCoord bounds.max |> Tuple.first
+            Bounds.maximum bounds |> Grid.asciiToCellAndLocalCoord |> Tuple.first
 
         flattenedCells =
             Bounds.coordRangeFold
@@ -881,8 +882,8 @@ selectionToString bounds hiddenUsers hiddenUsersForAll grid =
         )
         ((::) '\n')
         (Bounds.bounds
-            bounds.min
-            (bounds.max |> Helper.minusTuple ( Units.asciiUnit 1, Units.asciiUnit 1 ))
+            (Bounds.minimum bounds)
+            (Bounds.maximum bounds |> Helper.minusTuple ( Units.asciiUnit 1, Units.asciiUnit 1 ))
         )
         []
         |> String.fromList
@@ -1000,42 +1001,27 @@ updateMeshes oldModel newModel =
         newHiddenForAll =
             LocalGrid.localModel newModel.localModel |> .adminHiddenUsers |> showHighlighted newModel
 
-        hyperlinks : List Hyperlink
         hyperlinks =
-            Dict.toList newCells
-                |> List.gatherEqualsBy (Tuple.first >> Tuple.second)
-                |> List.map
-                    (\( first, rest ) ->
-                        let
-                            sorted =
-                                Nonempty first rest
-                                    |> List.Nonempty.sortBy (Tuple.first >> Tuple.first)
+            Hyperlink.atPosition newModel.mouseLeft
 
-                            firstCoord : ( Int, Int )
-                            firstCoord =
-                                List.Nonempty.head sorted |> Tuple.first
-                        in
-                        sorted
-                            |> List.Nonempty.foldl
-                                (\( ( x, _ ), cell ) ( currentX, list ) ->
-                                    ( x
-                                    , Just (GridCell.flatten newHidden newHiddenForAll cell)
-                                        :: List.repeat (x - (currentX + 1)) Nothing
-                                        ++ list
-                                    )
-                                )
-                                ( Tuple.first firstCoord, [] )
-                            |> Tuple.second
-                            |> List.reverse
-                            |> Hyperlink.hyperlinks (Helper.fromRawCoord firstCoord |> Units.cellToAscii)
-                    )
-                |> List.concat
-
+        --hyperlinks : Coord CellUnit -> List Hyperlink
+        --hyperlinks (( Quantity x, Quantity y ) as coord) =
+        --    List.range -2 2
+        --        |> List.map
+        --            (\xOffset ->
+        --                Dict.get ( x + xOffset, y ) newCells
+        --                    |> Maybe.map (GridCell.flatten newHidden newHiddenForAll)
+        --            )
+        --        |> Hyperlink.hyperlinks (Helper.addTuple coord ( Quantity -2, Quantity.zero ))
         newMesh : GridCell.Cell -> ( Int, Int ) -> WebGL.Mesh Grid.Vertex
         newMesh newCell rawCoord =
             let
+                coord : Coord CellUnit
                 coord =
                     Helper.fromRawCoord rawCoord
+
+                hyperlink =
+                    hyperlinks coord
             in
             Grid.mesh
                 coord
@@ -1057,7 +1043,7 @@ updateMeshes oldModel newModel =
                                     in
                                     y == linkY && x >= linkX && x < linkX + length
                                 )
-                                hyperlinks
+                                hyperlink
                             )
                         )
                 )
@@ -1102,6 +1088,15 @@ updateMeshes oldModel newModel =
                 )
                 newCells
     }
+
+
+hyperlinkAtPosition : Coord Units.AsciiUnit -> Maybe Hyperlink
+hyperlinkAtPosition coord =
+    let
+        offset =
+            Helper.fromRawCoord ( 20, 0 )
+    in
+    selectionToString (Bounds.bounds (coord |> Helper.minusTuple offset) (coord |> Helper.addTuple offset))
 
 
 viewBoundsUpdate : ( FrontendLoaded, Cmd FrontendMsg ) -> ( FrontendLoaded, Cmd FrontendMsg )
