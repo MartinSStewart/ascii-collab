@@ -1,9 +1,10 @@
-module Hyperlink exposing (Hyperlink, hyperlinks, urlsParser)
+module Hyperlink exposing (Hyperlink, contains, hyperlinks, urlsParser)
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
 import GridCell
 import Helper exposing (Coord)
+import List.Extra as List
 import Parser exposing ((|.), (|=), Parser, Step(..))
 import Quantity exposing (Quantity(..))
 import Units exposing (AsciiUnit)
@@ -53,6 +54,7 @@ hyperlinkWhitelist =
     [ "www.patorjk.com/software/taag"
     , "ro-box.netlify.app"
     , "the-best-color.lamdera.app"
+    , "agirg.com"
     ]
 
 
@@ -69,7 +71,9 @@ hyperlinkFirstChar =
     hyperlinkWhitelist
         ++ urlPrefixes
         |> List.filterMap (String.uncons >> Maybe.map Tuple.first)
-        |> (::) 'x'
+        -- Possible starting chars for coordinate urls
+        |> (++) [ 'x', 'a' ]
+        |> List.unique
 
 
 urlsParser : Coord Units.AsciiUnit -> Parser (List Hyperlink)
@@ -87,8 +91,21 @@ urlsParserHelper offset links =
             |> Parser.backtrackable
         , Parser.succeed (Loop links)
             |. Parser.chompIf (\_ -> True)
-            |. Parser.chompWhile (\char -> List.all ((/=) char) hyperlinkFirstChar)
+
+        --|. Parser.chompWhile (\char -> List.all ((/=) char) hyperlinkFirstChar)
         ]
+
+
+contains : Coord Units.AsciiUnit -> Hyperlink -> Bool
+contains coord hyperlink =
+    let
+        ( x, y ) =
+            Helper.toRawCoord hyperlink.position
+
+        ( cx, cy ) =
+            Helper.toRawCoord coord
+    in
+    y == cy && x <= cx && cx < x + hyperlink.length
 
 
 urlParser : Coord Units.AsciiUnit -> Parser Hyperlink
@@ -103,22 +120,33 @@ urlParser offset =
         |= Parser.getCol
         |= Parser.oneOf
             [ Parser.succeed (\a b c -> a ++ b ++ c)
-                |= Parser.oneOf
-                    (List.map (Parser.token >> Parser.getChompedString) urlPrefixes)
+                |= parseHttp
                 |= Parser.oneOf
                     (List.map (Parser.token >> Parser.getChompedString) hyperlinkWhitelist)
                 |= Parser.oneOf
                     [ Parser.chompIf ((==) '/') |> Parser.getChompedString
                     , Parser.succeed ""
                     ]
+                |> Parser.backtrackable
             , Parser.succeed
                 (\x y -> UrlHelper.encodeUrl (Helper.fromRawCoord ( x, y )))
+                |. Parser.oneOf
+                    [ Parser.succeed ()
+                        |. parseHttp
+                        |. Parser.token "ascii-collab.lamdera.app/?"
+                    , Parser.succeed ()
+                    ]
                 |. Parser.token "x="
                 |= parseInt
                 |. Parser.symbol "&y="
                 |= parseInt
             ]
         |= Parser.getCol
+
+
+parseHttp =
+    Parser.oneOf
+        (List.map (Parser.token >> Parser.getChompedString) urlPrefixes)
 
 
 parseInt : Parser Int

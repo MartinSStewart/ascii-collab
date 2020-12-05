@@ -207,7 +207,7 @@ setCell ( Quantity x, Quantity y ) value (Grid grid) =
     Dict.insert ( x, y ) value grid |> Grid
 
 
-baseMesh : { boxes : List (List Vec2), indices : List ( Int, Int, Int ) }
+baseMesh : { boxes : List { box : List Vec2, boxCenter : Vec2 }, indices : List ( Int, Int, Int ) }
 baseMesh =
     let
         ( Quantity w, Quantity h ) =
@@ -217,10 +217,23 @@ baseMesh =
         |> List.foldl
             (\index { boxes, indices } ->
                 let
+                    offsetX : Int
+                    offsetX =
+                        modBy GridCell.cellSize index |> (*) w
+
+                    offsetY : Int
+                    offsetY =
+                        index // GridCell.cellSize |> (*) h
+
                     box =
-                        asciiBox (modBy GridCell.cellSize index |> (*) w) (index // GridCell.cellSize |> (*) h) (index * 4)
+                        asciiBox offsetX offsetY (index * 4)
+
+                    boxCenter =
+                        Math.Vector2.vec2 (toFloat offsetX + toFloat w / 2) (toFloat offsetY + toFloat h / 2)
                 in
-                { boxes = boxes ++ [ box.vertices ], indices = indices ++ box.indices }
+                { boxes = boxes ++ [ { box = box.vertices, boxCenter = boxCenter } ]
+                , indices = indices ++ box.indices
+                }
             )
             { boxes = [], indices = [] }
 
@@ -242,16 +255,16 @@ asciiBox offsetX offsetY indexOffset =
 
 
 type alias Vertex =
-    { position : Vec2, texturePosition : Vec2, userId : Float, isHyperlink : Float }
+    { position : Vec2, texturePosition : Vec2, quadPosition : Vec2, userId : Float }
 
 
 mesh :
     Coord Units.CellUnit
-    -> List ( Maybe UserId, Ascii, Bool )
+    -> List ( Maybe UserId, Ascii )
     -> WebGL.Mesh Vertex
 mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
     List.map2
-        (\( userId, ascii, isHyperlink ) box ->
+        (\( userId, ascii ) { box, boxCenter } ->
             let
                 { topLeft, bottomRight } =
                     Ascii.texturePosition ascii
@@ -261,23 +274,18 @@ mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
             in
             List.map2
                 (\v uv ->
-                    { position =
-                        Math.Vector2.add
-                            (Math.Vector2.vec2
+                    let
+                        offset =
+                            Math.Vector2.vec2
                                 (x * GridCell.cellSize * Pixels.inPixels w |> toFloat)
                                 (y * GridCell.cellSize * Pixels.inPixels h |> toFloat)
-                            )
-                            v
+                    in
+                    { position = Math.Vector2.add offset v
                     , texturePosition = uv
+                    , quadPosition = Math.Vector2.add offset boxCenter
 
                     -- This -9 default value must equal the -9 in Shaders.vertexShader
                     , userId = userId |> Maybe.map User.rawId |> Maybe.withDefault -9 |> toFloat
-                    , isHyperlink =
-                        if isHyperlink then
-                            1
-
-                        else
-                            0
                     }
                 )
                 box

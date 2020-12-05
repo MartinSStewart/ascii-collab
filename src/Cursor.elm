@@ -166,17 +166,13 @@ bounds (Cursor cursor) =
 
 draw : Mat4 -> Element.Color -> { a | cursor : Cursor, cursorMesh : WebGL.Mesh { position : Vec2 } } -> WebGL.Entity
 draw viewMatrix color model =
-    let
-        bounds_ =
-            bounds model.cursor
-    in
     WebGL.entityWith
         [ WebGL.Settings.cullFace WebGL.Settings.back ]
         vertexShader
         fragmentShader
         model.cursorMesh
         { view = viewMatrix
-        , offset = bounds_.min |> Units.asciiToWorld |> Helper.coordToVec
+        , offset = bounds model.cursor |> Bounds.minimum |> Units.asciiToWorld |> Helper.coordToVec
         , color = Shaders.colorToVec3 color
         }
 

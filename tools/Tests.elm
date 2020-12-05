@@ -23,7 +23,7 @@ import NonemptyExtra as Nonempty
 import Parser
 import Quantity exposing (Quantity(..))
 import Time
-import Types exposing (BackendModel, ClientId, FrontendModel, SessionId, ToBackend(..), ToFrontend(..))
+import Types exposing (BackendModel, FrontendModel, ToBackend(..), ToFrontend(..))
 import Units exposing (CellUnit)
 import User
 
@@ -361,18 +361,36 @@ main =
             , test "Parse no hyperlink" <| parseHyperlinkTest "test" []
             , test "Parse coordinate hyperlink" <|
                 parseHyperlinkTest "testx=-5&y=99"
-                    [ { position = ( Quantity 5, Quantity.zero )
+                    [ { position = ( Quantity 4, Quantity.zero )
                       , length = String.length "x=-5&y=99"
+                      , url = "?x=-5&y=99"
+                      }
+                    ]
+            , test "Parse coordinate hyperlink" <|
+                parseHyperlinkTest "http://ascii-collab.lamdera.app/?x=-5&y=99"
+                    [ { position = ( Quantity 0, Quantity.zero )
+                      , length = String.length "http://ascii-collab.lamdera.app/?x=-5&y=99"
                       , url = "?x=-5&y=99"
                       }
                     ]
             , test "Parse white listed url" <|
                 parseHyperlinkTest "testro-box.netlify.appzxc"
-                    [ { position = ( Quantity 5, Quantity.zero )
+                    [ { position = ( Quantity 4, Quantity.zero )
                       , length = String.length "ro-box.netlify.app"
                       , url = "ro-box.netlify.app"
                       }
                     ]
+
+            --, test "Selection test" <|
+            --    (Grid.empty
+            --        |> Grid.addChange
+            --            { cellPosition = Helper.fromRawCoord ( 0, 0 )
+            --            , localPosition = 0
+            --            , change = Nonempty asciiA (List.repeat GridCell.cellSize asciiA)
+            --            , userId = User.userId 0
+            --            }
+            --        |> Frontend.selectionToString
+            --    )
             ]
 
 

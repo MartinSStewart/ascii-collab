@@ -10,6 +10,7 @@ import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord)
+import Lamdera exposing (ClientId, SessionId)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid

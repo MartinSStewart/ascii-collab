@@ -1,4 +1,4 @@
-port module Frontend exposing (app, init, update, updateFromBackend, view)
+port module Frontend exposing (app, init, selectionToString, update, updateFromBackend, view)
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
@@ -37,6 +37,8 @@ import List.Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel
 import Math.Matrix4 as Mat4 exposing (Mat4)
+import Math.Vector2
+import Parser
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -98,8 +100,8 @@ loadedInit loading loadingData =
             , windowSize = loading.windowSize
             , devicePixelRatio = loading.devicePixelRatio
             , zoomFactor = loading.zoomFactor
-            , mouseLeft = MouseButtonUp
-            , mouseMiddle = MouseButtonUp
+            , mouseLeft = MouseButtonUp { current = loading.mousePosition }
+            , mouseMiddle = MouseButtonUp { current = loading.mousePosition }
             , pendingChanges = []
             , tool = DragTool
             , undoAddLast = Time.millisToPosix 0
@@ -163,6 +165,7 @@ init url key =
         , zoomFactor = 1
         , time = Time.millisToPosix 0
         , viewPoint = viewPoint
+        , mousePosition = Point2d.origin
         }
     , Cmd.batch
         [ Lamdera.sendToBackend (RequestData bounds)
@@ -317,7 +320,7 @@ updateLoaded msg model =
 
                 ( MiddleButton, _, MouseButtonDown mouseState ) ->
                     ( { model
-                        | mouseMiddle = MouseButtonUp
+                        | mouseMiddle = MouseButtonUp { current = mousePosition }
                         , viewPoint = offsetViewPoint model mouseState.start mousePosition
                       }
                     , Cmd.none
@@ -337,15 +340,15 @@ updateLoaded msg model =
                             MouseButtonDown mouseState ->
                                 MouseButtonDown { mouseState | current = mousePosition }
 
-                            MouseButtonUp ->
-                                MouseButtonUp
+                            MouseButtonUp _ ->
+                                MouseButtonUp { current = mousePosition }
                     , mouseMiddle =
                         case model.mouseMiddle of
                             MouseButtonDown mouseState ->
                                 MouseButtonDown { mouseState | current = mousePosition }
 
-                            MouseButtonUp ->
-                                MouseButtonUp
+                            MouseButtonUp _ ->
+                                MouseButtonUp { current = mousePosition }
                     , cursor =
                         case ( model.mouseLeft, model.tool ) of
                             ( MouseButtonDown mouseState, SelectTool ) ->
@@ -479,7 +482,7 @@ updateLoaded msg model =
                             , lastTouchMove = Just model.time
                         }
 
-                MouseButtonUp ->
+                MouseButtonUp _ ->
                     mouseDown model
             , Cmd.none
             )
@@ -689,13 +692,13 @@ mouseUp mousePosition mouseState model =
 
         model_ =
             { model
-                | mouseLeft = MouseButtonUp
+                | mouseLeft = MouseButtonUp { current = mousePosition }
                 , viewPoint =
                     case ( model.mouseMiddle, model.tool ) of
-                        ( MouseButtonUp, DragTool ) ->
+                        ( MouseButtonUp _, DragTool ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
-                        ( MouseButtonUp, HighlightTool _ ) ->
+                        ( MouseButtonUp _, HighlightTool _ ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
                         _ ->
@@ -752,7 +755,7 @@ highlightUser highlightUserId highlightPoint model =
 resetTouchMove : FrontendLoaded -> FrontendLoaded
 resetTouchMove model =
     case model.mouseLeft of
-        MouseButtonUp ->
+        MouseButtonUp _ ->
             model
 
         MouseButtonDown mouseState ->
@@ -1001,9 +1004,6 @@ updateMeshes oldModel newModel =
         newHiddenForAll =
             LocalGrid.localModel newModel.localModel |> .adminHiddenUsers |> showHighlighted newModel
 
-        hyperlinks =
-            Hyperlink.atPosition newModel.mouseLeft
-
         --hyperlinks : Coord CellUnit -> List Hyperlink
         --hyperlinks (( Quantity x, Quantity y ) as coord) =
         --    List.range -2 2
@@ -1019,34 +1019,10 @@ updateMeshes oldModel newModel =
                 coord : Coord CellUnit
                 coord =
                     Helper.fromRawCoord rawCoord
-
-                hyperlink =
-                    hyperlinks coord
             in
             Grid.mesh
                 coord
-                (GridCell.flatten newHidden newHiddenForAll newCell
-                    |> Array.toList
-                    |> List.indexedMap
-                        (\index ( a, b ) ->
-                            ( a
-                            , b
-                            , List.any
-                                (\{ position, length } ->
-                                    let
-                                        ( x, y ) =
-                                            Grid.cellAndLocalCoordToAscii ( coord, index )
-                                                |> Helper.toRawCoord
-
-                                        ( linkX, linkY ) =
-                                            Helper.toRawCoord position
-                                    in
-                                    y == linkY && x >= linkX && x < linkX + length
-                                )
-                                hyperlink
-                            )
-                        )
-                )
+                (GridCell.flatten newHidden newHiddenForAll newCell |> Array.toList)
 
         hiddenUnchanged : Bool
         hiddenUnchanged =
@@ -1090,13 +1066,26 @@ updateMeshes oldModel newModel =
     }
 
 
-hyperlinkAtPosition : Coord Units.AsciiUnit -> Maybe Hyperlink
-hyperlinkAtPosition coord =
+hyperlinkAtPosition : Coord Units.AsciiUnit -> LocalGrid_ -> Maybe Hyperlink
+hyperlinkAtPosition coord model =
     let
         offset =
-            Helper.fromRawCoord ( 20, 0 )
+            Helper.fromRawCoord ( 40, 0 )
+
+        start =
+            coord |> Helper.minusTuple offset
     in
-    selectionToString (Bounds.bounds (coord |> Helper.minusTuple offset) (coord |> Helper.addTuple offset))
+    selectionToString
+        (Bounds.bounds start (coord |> Helper.addTuple offset))
+        model.hiddenUsers
+        model.adminHiddenUsers
+        model.grid
+        |> Parser.run (Hyperlink.urlsParser (start |> Helper.addTuple (Helper.fromRawCoord ( 0, 0 ))))
+        |> Result.toMaybe
+        |> Maybe.withDefault []
+        |> List.filter (Hyperlink.contains coord)
+        |> List.head
+        |> Debug.log "a"
 
 
 viewBoundsUpdate : ( FrontendLoaded, Cmd FrontendMsg ) -> ( FrontendLoaded, Cmd FrontendMsg )
@@ -1294,19 +1283,7 @@ view model =
                         :: Element.inFront (toolbarView loadedModel)
                         :: Element.inFront (userListView loadedModel)
                         :: Element.htmlAttribute (Html.Events.Extra.Mouse.onContextMenu (\_ -> NoOpFrontendMsg))
-                        :: (case ( loadedModel.mouseLeft, loadedModel.mouseMiddle, loadedModel.tool ) of
-                                ( MouseButtonDown _, _, _ ) ->
-                                    mouseAttributes
-
-                                ( _, MouseButtonDown _, _ ) ->
-                                    mouseAttributes
-
-                                ( _, _, HighlightTool _ ) ->
-                                    mouseAttributes
-
-                                _ ->
-                                    []
-                           )
+                        :: mouseAttributes
                         ++ (case loadedModel.tool of
                                 HighlightTool (Just _) ->
                                     [ Element.pointer ]
@@ -1914,6 +1891,16 @@ canvasView model =
 
         color =
             LocalGrid.localModel model.localModel |> .user |> Shaders.userColor |> Shaders.lch2rgb
+
+        maybeHyperlink =
+            case model.mouseLeft of
+                MouseButtonUp { current } ->
+                    hyperlinkAtPosition
+                        (screenToWorld model current |> Units.worldToAscii)
+                        (LocalGrid.localModel model.localModel)
+
+                MouseButtonDown _ ->
+                    Nothing
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False, WebGL.antialias ]
@@ -1950,6 +1937,7 @@ canvasView model =
                                 False
                         )
                         viewMatrix
+                        maybeHyperlink
                     )
                     model.texture
                     |> Maybe.withDefault []
@@ -1973,9 +1961,10 @@ drawText :
     -> Maybe UserId
     -> Bool
     -> Mat4
+    -> Maybe Hyperlink
     -> Texture
     -> List WebGL.Entity
-drawText animationElapsedTime meshes userHighlighted showColors viewMatrix texture =
+drawText animationElapsedTime meshes userHighlighted showColors viewMatrix maybeHyperlink texture =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -2020,6 +2009,20 @@ drawText animationElapsedTime meshes userHighlighted showColors viewMatrix textu
 
                             Nothing ->
                                 0
+                    , hyperlinkMin =
+                        Maybe.map (.position >> Units.asciiToWorld >> Helper.coordToVec) maybeHyperlink
+                            |> Maybe.withDefault (Math.Vector2.vec2 1 1)
+                    , hyperlinkMax =
+                        Maybe.map
+                            (\hyperlink ->
+                                Helper.addTuple
+                                    hyperlink.position
+                                    (Helper.fromRawCoord ( hyperlink.length, 1 ))
+                                    |> Units.asciiToWorld
+                                    |> Helper.coordToVec
+                            )
+                            maybeHyperlink
+                            |> Maybe.withDefault (Math.Vector2.vec2 0 0)
                     }
             )
 
@@ -2039,11 +2042,12 @@ subscriptions model =
                     [ Sub.map KeyMsg Keyboard.subscriptions
                     , Keyboard.downs KeyDown
                     , Time.every 1000 ShortIntervalElapsed
-                    , if loadedModel.mouseLeft /= MouseButtonUp && isTouchDevice loadedModel then
-                        Time.every 100 VeryShortIntervalElapsed
+                    , case ( loadedModel.mouseLeft, isTouchDevice loadedModel ) of
+                        ( MouseButtonDown _, True ) ->
+                            Time.every 100 VeryShortIntervalElapsed
 
-                      else
-                        Sub.none
+                        _ ->
+                            Sub.none
                     , if getHighlight loadedModel /= Nothing then
                         Browser.Events.onAnimationFrame AnimationFrame
 
