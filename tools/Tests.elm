@@ -362,21 +362,21 @@ main =
                 parseHyperlinkTest "testx=-5&y=99"
                     [ { position = ( Quantity 4, Quantity.zero )
                       , length = String.length "x=-5&y=99"
-                      , url = "?x=-5&y=99"
+                      , route = Hyperlink.Internal ( Quantity -5, Quantity 99 )
                       }
                     ]
             , test "Parse coordinate hyperlink" <|
                 parseHyperlinkTest "http://ascii-collab.lamdera.app/?x=-5&y=99"
                     [ { position = ( Quantity 0, Quantity.zero )
                       , length = String.length "http://ascii-collab.lamdera.app/?x=-5&y=99"
-                      , url = "?x=-5&y=99"
+                      , route = Hyperlink.Internal ( Quantity -5, Quantity 99 )
                       }
                     ]
             , test "Parse white listed url" <|
                 parseHyperlinkTest "testro-box.netlify.appzxc"
                     [ { position = ( Quantity 4, Quantity.zero )
                       , length = String.length "ro-box.netlify.app"
-                      , url = "ro-box.netlify.app"
+                      , route = Hyperlink.External "https://ro-box.netlify.app"
                       }
                     ]
             , test "Selection test" <|
