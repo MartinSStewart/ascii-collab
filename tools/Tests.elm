@@ -1,4 +1,4 @@
-module Tests exposing (..)
+module Tests exposing (Test(..), TestResult(..), asciiA, boundsReverseTest, boundsTest, checkGridValue, main, newUserState, smallViewBounds, test, testAssert, testInit, testMap, testSingle, time)
 
 import Array
 import Ascii exposing (Ascii)
@@ -9,18 +9,20 @@ import Dict
 import Element exposing (Element)
 import Element.Background
 import EverySet
+import Frontend
 import Grid
 import GridCell
 import Helper exposing (Coord)
 import Html exposing (Html)
-import List.Extra as List
+import Hyperlink
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import LocalModel
 import NonemptyExtra as Nonempty
+import Parser
 import Quantity exposing (Quantity(..))
 import Time
-import Types exposing (BackendModel, ClientId, FrontendModel, SessionId, ToBackend(..), ToFrontend(..))
+import Types exposing (BackendModel, FrontendModel, ToBackend(..), ToFrontend(..))
 import Units exposing (CellUnit)
 import User
 
@@ -355,7 +357,68 @@ main =
                                 Failed "Expected no a"
                        )
                     |> testSingle
+            , test "Parse no hyperlink" <| parseHyperlinkTest "test" []
+            , test "Parse coordinate hyperlink" <|
+                parseHyperlinkTest "testx=-5&y=99"
+                    [ { position = ( Quantity 4, Quantity.zero )
+                      , length = String.length "x=-5&y=99"
+                      , url = "?x=-5&y=99"
+                      }
+                    ]
+            , test "Parse coordinate hyperlink" <|
+                parseHyperlinkTest "http://ascii-collab.lamdera.app/?x=-5&y=99"
+                    [ { position = ( Quantity 0, Quantity.zero )
+                      , length = String.length "http://ascii-collab.lamdera.app/?x=-5&y=99"
+                      , url = "?x=-5&y=99"
+                      }
+                    ]
+            , test "Parse white listed url" <|
+                parseHyperlinkTest "testro-box.netlify.appzxc"
+                    [ { position = ( Quantity 4, Quantity.zero )
+                      , length = String.length "ro-box.netlify.app"
+                      , url = "ro-box.netlify.app"
+                      }
+                    ]
+            , test "Selection test" <|
+                (Grid.empty
+                    |> Grid.addChange
+                        { cellPosition = Helper.fromRawCoord ( 0, 0 )
+                        , localPosition = 0
+                        , change =
+                            Nonempty asciiA
+                                (List.repeat (GridCell.cellSize - 1) asciiA
+                                    ++ List.repeat GridCell.cellSize asciiB
+                                    ++ List.repeat GridCell.cellSize asciiC
+                                )
+                        , userId = User.userId 0
+                        }
+                    |> Frontend.selectionToString
+                        (Bounds.bounds ( Quantity.zero, Quantity 1 ) ( Quantity 4, Quantity 1 ))
+                        EverySet.empty
+                        EverySet.empty
+                    |> (\a ->
+                            if a == "bbbbb" then
+                                testSingle Passed
+
+                            else
+                                testSingle <| Failed ("Expected bbbbb but got " ++ a)
+                       )
+                )
             ]
+
+
+parseHyperlinkTest input expected =
+    let
+        actual =
+            Parser.run (Hyperlink.urlsParser (Helper.fromRawCoord ( 0, 0 ))) input
+    in
+    (if actual == Ok expected then
+        Passed
+
+     else
+        Failed <| "Expected " ++ Debug.toString expected ++ " but got " ++ Debug.toString actual
+    )
+        |> testSingle
 
 
 boundsTest : String -> List (Coord unit) -> Bounds unit -> Element msg
@@ -467,6 +530,14 @@ testSingle result =
 
 asciiA =
     Ascii.fromChar 'a' |> Maybe.withDefault Ascii.default
+
+
+asciiB =
+    Ascii.fromChar 'b' |> Maybe.withDefault Ascii.default
+
+
+asciiC =
+    Ascii.fromChar 'c' |> Maybe.withDefault Ascii.default
 
 
 checkGridValue : ( Coord CellUnit, Int ) -> Maybe Ascii -> LocalModel.LocalModel a LocalGrid.LocalGrid -> TestResult

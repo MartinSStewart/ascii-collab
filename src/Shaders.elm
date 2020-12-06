@@ -21,18 +21,22 @@ colorToVec3 color =
     Math.Vector3.vec3 red green blue
 
 
-vertexShader : Shader Grid.Vertex { u | view : Mat4, highlightedUser : Float, showColors : Float, highlightIntensity : Float } { vcoord : Vec2, vcolor : Vec4 }
+vertexShader : Shader Grid.Vertex { u | view : Mat4, highlightedUser : Float, showColors : Float, highlightIntensity : Float, hyperlinkMin : Vec2, hyperlinkMax : Vec2 } { vcoord : Vec2, vcolor : Vec4, isHyperlink : Float }
 vertexShader =
     [glsl|
 attribute vec2 position;
+attribute vec2 quadPosition;
 attribute vec2 texturePosition;
 attribute float userId;
 uniform mat4 view;
 uniform float highlightedUser;
 uniform float showColors;
 uniform float highlightIntensity;
+uniform vec2 hyperlinkMin;
+uniform vec2 hyperlinkMax;
 varying vec2 vcoord;
 varying vec4 vcolor;
+varying float isHyperlink;
 
 const float kn = 18.0;
 const float xn = 0.95047;
@@ -68,7 +72,13 @@ vec3 lch2rgb( float luminance, float chroma, float hue ) {
 
 void main () {
     gl_Position = view * vec4(position, 0.0, 1.0);
-    vcoord = texturePosition;
+
+    bool insideHyperlink =
+        quadPosition.x > hyperlinkMin.x && quadPosition.x < hyperlinkMax.x &&
+            quadPosition.y > hyperlinkMin.y && quadPosition.y < hyperlinkMax.y;
+
+    vcoord = texturePosition + (insideHyperlink ? vec2(0.0, 0.5) : vec2(0.0, 0.0));
+    isHyperlink = float(insideHyperlink);
 
     float userIdFloat = userId + 125.0;
     float luminance = mod(userIdFloat * 0.5219, 1.0) * 20.0 + 75.0;
@@ -81,6 +91,8 @@ void main () {
         : userId == highlightedUser
             ? vec4(rgbColor, 1.0)
             : vec4(0.0,0.0,0.0,0.0);
+
+
 }
 
 |]
@@ -195,17 +207,22 @@ lch2rgb { luminance, chroma, hue } =
     lab2rgb { lightness = luminance, labA = cos hueInRadians * chroma, labB = sin hueInRadians * chroma }
 
 
-fragmentShader : Shader {} { u | texture : Texture } { vcoord : Vec2, vcolor : Vec4 }
+fragmentShader : Shader {} { u | texture : Texture } { vcoord : Vec2, vcolor : Vec4, isHyperlink : Float }
 fragmentShader =
     [glsl|
         precision mediump float;
         uniform sampler2D texture;
         varying vec2 vcoord;
         varying vec4 vcolor;
+        varying float isHyperlink;
+
         void main () {
             vec4 textureColor = texture2D(texture, vcoord);
 
-            vec4 textColor = vec4(vcolor.xyz * 0.3,1.0);
+            vec4 textColor =
+                isHyperlink == 1.0
+                    ? vec4(0.0, 0.0, 1.0, 1.0)
+                    : vec4(vcolor.xyz * 0.3,1.0);
             vec4 backColor = vcolor;
 
             gl_FragColor =
