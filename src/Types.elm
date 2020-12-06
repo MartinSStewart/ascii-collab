@@ -82,6 +82,7 @@ type alias FrontendLoaded =
     , highlightContextMenu : Maybe { userId : UserId, hidePoint : Coord AsciiUnit }
     , adminEnabled : Bool
     , animationElapsedTime : Duration
+    , ignoreNextUrlChanged : Bool
     }
 
 

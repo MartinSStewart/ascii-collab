@@ -112,6 +112,7 @@ loadedInit loading loadingData =
             , highlightContextMenu = Nothing
             , adminEnabled = False
             , animationElapsedTime = Duration.seconds 0
+            , ignoreNextUrlChanged = False
             }
     in
     ( updateMeshes model model
@@ -228,8 +229,22 @@ updateLoaded msg model =
                     , Browser.Navigation.load url
                     )
 
-        UrlChanged _ ->
-            ( model, Cmd.none )
+        UrlChanged url ->
+            ( if model.ignoreNextUrlChanged then
+                { model | ignoreNextUrlChanged = False }
+
+              else
+                case Url.Parser.parse UrlHelper.urlParser url of
+                    Just viewPoint ->
+                        { model
+                            | cursor = Cursor.setCursor viewPoint
+                            , viewPoint = Units.asciiToWorld viewPoint |> Helper.coordToPoint
+                        }
+
+                    Nothing ->
+                        model
+            , Cmd.none
+            )
 
         NoOpFrontendMsg ->
             ( model, Cmd.none )
@@ -390,21 +405,21 @@ updateLoaded msg model =
                 actualViewPoint_ =
                     actualViewPoint model
 
-                model_ =
+                model2 =
                     { model | time = time, viewPointLastInterval = actualViewPoint_ }
 
-                urlChange =
+                ( model3, urlChange ) =
                     if Units.worldToAscii actualViewPoint_ /= Units.worldToAscii model.viewPointLastInterval then
                         Units.worldToAscii actualViewPoint_
                             |> UrlHelper.encodeUrl
-                            |> Browser.Navigation.replaceUrl model.key
+                            |> (\a -> replaceUrl a model2)
 
                     else
-                        Cmd.none
+                        ( model2, Cmd.none )
             in
-            case List.Nonempty.fromList model_.pendingChanges of
+            case List.Nonempty.fromList model3.pendingChanges of
                 Just nonempty ->
-                    ( { model_ | pendingChanges = [] }
+                    ( { model3 | pendingChanges = [] }
                     , Cmd.batch
                         [ GridChange nonempty |> Lamdera.sendToBackend
                         , urlChange
@@ -412,7 +427,7 @@ updateLoaded msg model =
                     )
 
                 Nothing ->
-                    ( model_, urlChange )
+                    ( model3, urlChange )
 
         ZoomFactorPressed zoomFactor ->
             ( resetTouchMove model |> (\m -> { m | zoomFactor = zoomFactor }), Cmd.none )
@@ -536,6 +551,16 @@ updateLoaded msg model =
               }
             , Cmd.none
             )
+
+
+replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+replaceUrl url model =
+    ( { model | ignoreNextUrlChanged = True }, Browser.Navigation.replaceUrl model.key url )
+
+
+pushUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+pushUrl url model =
+    ( { model | ignoreNextUrlChanged = True }, Browser.Navigation.pushUrl model.key url )
 
 
 cursorEnabled : FrontendLoaded -> Bool
@@ -753,12 +778,12 @@ mainMouseButtonUp mousePosition mouseState model =
         ( Just hyperlink, _ ) ->
             case hyperlink.route of
                 Hyperlink.Internal viewPoint_ ->
-                    ( { model_
-                        | cursor = Cursor.setCursor viewPoint_
-                        , viewPoint = Units.asciiToWorld viewPoint_ |> Helper.coordToPoint
-                      }
-                    , Browser.Navigation.pushUrl model_.key (Hyperlink.routeToUrl hyperlink.route)
-                    )
+                    pushUrl
+                        (Hyperlink.routeToUrl hyperlink.route)
+                        { model_
+                            | cursor = Cursor.setCursor viewPoint_
+                            , viewPoint = Units.asciiToWorld viewPoint_ |> Helper.coordToPoint
+                        }
 
                 Hyperlink.External _ ->
                     ( model_
