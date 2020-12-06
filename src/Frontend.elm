@@ -1204,9 +1204,6 @@ actualViewPoint model =
                 SelectTool ->
                     model.viewPoint
 
-                HyperlinkTool ->
-                    offsetViewPoint model start current
-
         _ ->
             model.viewPoint
 
@@ -1842,7 +1839,6 @@ tools =
                     False
       , Icons.highlightTool
       )
-    , ( HyperlinkTool, (==) HyperlinkTool, Icons.hyperlinkTool )
     ]
 
 
