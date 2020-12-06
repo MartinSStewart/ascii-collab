@@ -14,7 +14,7 @@ import Grid
 import GridCell
 import Helper exposing (Coord)
 import Html exposing (Html)
-import Hyperlink
+import Hyperlink exposing (Hyperlink)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import LocalModel
@@ -365,6 +365,22 @@ main =
                       , route = Hyperlink.Internal ( Quantity -5, Quantity 99 )
                       }
                     ]
+            , test "Parse coordinate hyperlink edge case" <|
+                parseHyperlinkTest "testx=-5&y=99."
+                    [ { position = ( Quantity 4, Quantity.zero )
+                      , length = String.length "x=-5&y=99"
+                      , route = Hyperlink.Internal ( Quantity -5, Quantity 99 )
+                      }
+                    ]
+            , test "Parse coordinate hyperlink edge case 2" <|
+                parseHyperlinkTest "testx=-05&y=099."
+                    [ { position = ( Quantity 4, Quantity.zero )
+                      , length = String.length "x=-05&y=099"
+                      , route = Hyperlink.Internal ( Quantity -5, Quantity 99 )
+                      }
+                    ]
+            , test "Parse coordinate hyperlink edge case 3" <|
+                parseHyperlinkTest "testx=5&y=123456789" []
             , test "Parse coordinate hyperlink" <|
                 parseHyperlinkTest "http://ascii-collab.lamdera.app/?x=-5&y=99"
                     [ { position = ( Quantity 0, Quantity.zero )
@@ -407,6 +423,7 @@ main =
             ]
 
 
+parseHyperlinkTest : String -> List Hyperlink -> Test ()
 parseHyperlinkTest input expected =
     let
         actual =

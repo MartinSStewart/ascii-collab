@@ -162,10 +162,32 @@ parseHttp =
 
 parseInt : Parser Int
 parseInt =
-    Parser.oneOf
-        [ Parser.succeed negate
-            |. Parser.symbol "-"
-            |= Parser.int
-        , Parser.succeed identity
-            |= Parser.int
-        ]
+    Parser.succeed
+        (\isNegated value ->
+            if isNegated then
+                -value
+
+            else
+                value
+        )
+        |= Parser.oneOf
+            [ Parser.succeed True
+                |. Parser.token "-"
+            , Parser.succeed False
+            ]
+        |= (Parser.chompWhile Char.isDigit
+                |> Parser.getChompedString
+                |> Parser.andThen
+                    (\text ->
+                        if String.length text < 9 then
+                            case String.toInt text of
+                                Just int ->
+                                    Parser.succeed int
+
+                                Nothing ->
+                                    Parser.problem "Invalid int"
+
+                        else
+                            Parser.problem "Invalid int"
+                    )
+           )
