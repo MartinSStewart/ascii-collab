@@ -161,7 +161,7 @@ bounds (Cursor cursor) =
     in
     Bounds.bounds
         (Helper.minTuple pos0 pos1)
-        (Helper.maxTuple pos0 pos1 |> Helper.addTuple ( Units.asciiUnit 1, Units.asciiUnit 1 ))
+        (Helper.maxTuple pos0 pos1)
 
 
 draw : Mat4 -> Element.Color -> { a | cursor : Cursor, cursorMesh : WebGL.Mesh { position : Vec2 } } -> WebGL.Entity

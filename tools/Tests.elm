@@ -15,7 +15,6 @@ import GridCell
 import Helper exposing (Coord)
 import Html exposing (Html)
 import Hyperlink
-import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import LocalModel
@@ -380,17 +379,31 @@ main =
                       , url = "ro-box.netlify.app"
                       }
                     ]
+            , test "Selection test" <|
+                (Grid.empty
+                    |> Grid.addChange
+                        { cellPosition = Helper.fromRawCoord ( 0, 0 )
+                        , localPosition = 0
+                        , change =
+                            Nonempty asciiA
+                                (List.repeat (GridCell.cellSize - 1) asciiA
+                                    ++ List.repeat GridCell.cellSize asciiB
+                                    ++ List.repeat GridCell.cellSize asciiC
+                                )
+                        , userId = User.userId 0
+                        }
+                    |> Frontend.selectionToString
+                        (Bounds.bounds ( Quantity.zero, Quantity 1 ) ( Quantity 4, Quantity 1 ))
+                        EverySet.empty
+                        EverySet.empty
+                    |> (\a ->
+                            if a == "bbbbb" then
+                                testSingle Passed
 
-            --, test "Selection test" <|
-            --    (Grid.empty
-            --        |> Grid.addChange
-            --            { cellPosition = Helper.fromRawCoord ( 0, 0 )
-            --            , localPosition = 0
-            --            , change = Nonempty asciiA (List.repeat GridCell.cellSize asciiA)
-            --            , userId = User.userId 0
-            --            }
-            --        |> Frontend.selectionToString
-            --    )
+                            else
+                                testSingle <| Failed ("Expected bbbbb but got " ++ a)
+                       )
+                )
             ]
 
 
@@ -517,6 +530,14 @@ testSingle result =
 
 asciiA =
     Ascii.fromChar 'a' |> Maybe.withDefault Ascii.default
+
+
+asciiB =
+    Ascii.fromChar 'b' |> Maybe.withDefault Ascii.default
+
+
+asciiC =
+    Ascii.fromChar 'c' |> Maybe.withDefault Ascii.default
 
 
 checkGridValue : ( Coord CellUnit, Int ) -> Maybe Ascii -> LocalModel.LocalModel a LocalGrid.LocalGrid -> TestResult

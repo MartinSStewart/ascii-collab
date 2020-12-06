@@ -1,4 +1,4 @@
-module Hyperlink exposing (Hyperlink, contains, hyperlinks, urlsParser)
+module Hyperlink exposing (Hyperlink, Route(..), contains, hyperlinks, routeToUrl, urlsParser)
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
@@ -13,7 +13,22 @@ import User exposing (UserId)
 
 
 type alias Hyperlink =
-    { position : Coord Units.AsciiUnit, length : Int, url : String }
+    { position : Coord Units.AsciiUnit, length : Int, route : Route }
+
+
+type Route
+    = External String
+    | Internal (Coord AsciiUnit)
+
+
+routeToUrl : Route -> String
+routeToUrl route =
+    case route of
+        External url ->
+            url
+
+        Internal position ->
+            UrlHelper.encodeUrl position
 
 
 hyperlinks : Coord Units.CellUnit -> List (Maybe (Array ( Maybe UserId, Ascii ))) -> List Hyperlink
@@ -111,15 +126,15 @@ contains coord hyperlink =
 urlParser : Coord Units.AsciiUnit -> Parser Hyperlink
 urlParser offset =
     Parser.succeed
-        (\start url end ->
-            { position = Helper.addTuple offset ( Quantity (start - 1), Quantity.zero )
-            , length = end - start
-            , url = url
+        (\( startRow, startColumn ) route end ->
+            { position = Helper.addTuple offset ( Quantity (startColumn - 1), Quantity (startRow - 1) )
+            , length = end - startColumn
+            , route = route
             }
         )
-        |= Parser.getCol
+        |= Parser.getPosition
         |= Parser.oneOf
-            [ Parser.succeed (\a b c -> a ++ b ++ c)
+            [ Parser.succeed (\a b c -> a ++ b ++ c |> External)
                 |= parseHttp
                 |= Parser.oneOf
                     (List.map (Parser.token >> Parser.getChompedString) hyperlinkWhitelist)
@@ -129,7 +144,7 @@ urlParser offset =
                     ]
                 |> Parser.backtrackable
             , Parser.succeed
-                (\x y -> UrlHelper.encodeUrl (Helper.fromRawCoord ( x, y )))
+                (\x y -> Internal (Helper.fromRawCoord ( x, y )))
                 |. Parser.oneOf
                     [ Parser.succeed ()
                         |. parseHttp

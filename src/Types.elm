@@ -71,6 +71,7 @@ type alias FrontendLoaded =
     , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
+    , lastMouseLeftUp : Maybe ( Time.Posix, Point2d Pixels ScreenCoordinate )
     , mouseMiddle : MouseButtonState
     , pendingChanges : List Change.LocalChange
     , tool : ToolType
