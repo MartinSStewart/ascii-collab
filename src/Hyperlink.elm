@@ -73,21 +73,11 @@ hyperlinkWhitelist =
     ]
 
 
-urlPrefixes : List String
-urlPrefixes =
-    [ "http://"
-    , "https://"
-    , ""
-    ]
-
-
 hyperlinkFirstChar : List Char
 hyperlinkFirstChar =
     hyperlinkWhitelist
-        ++ urlPrefixes
         |> List.filterMap (String.uncons >> Maybe.map Tuple.first)
-        -- Possible starting chars for coordinate urls
-        |> (++) [ 'x', 'a' ]
+        |> (++) [ 'x', 'a', 'h' ]
         |> List.unique
 
 
@@ -159,9 +149,15 @@ urlParser offset =
         |= Parser.getCol
 
 
+parseHttp : Parser String
 parseHttp =
     Parser.oneOf
-        (List.map (Parser.token >> Parser.getChompedString) urlPrefixes)
+        [ Parser.succeed "http://"
+            |. Parser.token "http://"
+        , Parser.succeed "https://"
+            |. Parser.token "https://"
+        , Parser.succeed "https://"
+        ]
 
 
 parseInt : Parser Int

@@ -731,15 +731,13 @@ mainMouseButtonUp mousePosition mouseState model =
             case model.lastMouseLeftUp of
                 Just ( lastTime, lastPosition ) ->
                     if
-                        (List.any (\key -> key == Keyboard.Control || key == Keyboard.Meta) model_.pressedKeys
+                        List.any (\key -> key == Keyboard.Control || key == Keyboard.Meta) model_.pressedKeys
                             || ((Duration.from lastTime model_.time |> Quantity.lessThan Duration.second)
                                     && (Vector2d.from lastPosition mousePosition
                                             |> Vector2d.length
                                             |> Quantity.lessThan (Pixels.pixels 10)
                                        )
                                )
-                        )
-                            && isSmallDistance
                     then
                         hyperlinkAtPosition
                             (screenToWorld model_ mousePosition |> Units.worldToAscii)
@@ -753,17 +751,19 @@ mainMouseButtonUp mousePosition mouseState model =
     in
     case ( pressedHyperlink, model_.tool ) of
         ( Just hyperlink, _ ) ->
-            ( case hyperlink.route of
+            case hyperlink.route of
                 Hyperlink.Internal viewPoint_ ->
-                    { model_
+                    ( { model_
                         | cursor = Cursor.setCursor viewPoint_
                         , viewPoint = Units.asciiToWorld viewPoint_ |> Helper.coordToPoint
-                    }
+                      }
+                    , Browser.Navigation.pushUrl model_.key (Hyperlink.routeToUrl hyperlink.route)
+                    )
 
                 Hyperlink.External _ ->
-                    model_
-            , Browser.Navigation.pushUrl model_.key (Hyperlink.routeToUrl hyperlink.route)
-            )
+                    ( model_
+                    , Browser.Navigation.load (Hyperlink.routeToUrl hyperlink.route)
+                    )
 
         ( Nothing, HighlightTool (Just ( userId, hidePoint )) ) ->
             if isSmallDistance then
@@ -1117,7 +1117,7 @@ hyperlinkAtPosition : Coord Units.AsciiUnit -> LocalGrid_ -> Maybe Hyperlink
 hyperlinkAtPosition coord model =
     let
         offset =
-            Helper.fromRawCoord ( 40, 0 )
+            Helper.fromRawCoord ( 50, 0 )
 
         start =
             coord |> Helper.minusTuple offset
@@ -1132,7 +1132,6 @@ hyperlinkAtPosition coord model =
         |> Maybe.withDefault []
         |> List.filter (Hyperlink.contains coord)
         |> List.head
-        |> Debug.log "a"
 
 
 viewBoundsUpdate : ( FrontendLoaded, Cmd FrontendMsg ) -> ( FrontendLoaded, Cmd FrontendMsg )
@@ -1341,8 +1340,10 @@ view model =
                                     (screenToWorld loadedModel current |> Units.worldToAscii)
                                     (LocalGrid.localModel loadedModel.localModel)
 
-                            MouseButtonDown _ ->
-                                Nothing
+                            MouseButtonDown { current } ->
+                                hyperlinkAtPosition
+                                    (screenToWorld loadedModel current |> Units.worldToAscii)
+                                    (LocalGrid.localModel loadedModel.localModel)
                 in
                 Element.layout
                     (Element.width Element.fill
