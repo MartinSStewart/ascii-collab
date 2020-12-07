@@ -279,7 +279,7 @@ timestamp currentTime nextUpdate =
     in
     "Last updated at "
         ++ hourMinute currentTime
-        ++ ". Next update at "
+        ++ " UTC. Next update at "
         ++ hourMinute nextUpdate
         ++ "."
 
