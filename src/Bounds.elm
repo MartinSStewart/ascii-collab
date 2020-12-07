@@ -1,4 +1,21 @@
-module Bounds exposing (Bounds, bounds, boundsToBounds2d, center, contains, containsBounds, convert, coordRangeFold, coordRangeFoldReverse, expand, maximum, minimum, multiplyBy, translate)
+module Bounds exposing
+    ( Bounds
+    , bounds
+    , boundsToBounds2d
+    , center
+    , contains
+    , containsBounds
+    , convert
+    , coordRangeFold
+    , coordRangeFoldReverse
+    , expand
+    , height
+    , maximum
+    , minimum
+    , multiplyBy
+    , translate
+    , width
+    )
 
 import BoundingBox2d exposing (BoundingBox2d)
 import Helper exposing (Coord)
@@ -8,6 +25,16 @@ import Quantity exposing (Quantity(..))
 
 type Bounds unit
     = Bounds { min : Coord unit, max : Coord unit }
+
+
+width : Bounds unit -> Quantity Int unit
+width bounds_ =
+    maximum bounds_ |> Helper.minusTuple (minimum bounds_) |> Tuple.first
+
+
+height : Bounds unit -> Quantity Int unit
+height bounds_ =
+    maximum bounds_ |> Helper.minusTuple (minimum bounds_) |> Tuple.second
 
 
 minimum : Bounds unit -> Coord unit

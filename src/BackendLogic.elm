@@ -1,10 +1,11 @@
-module BackendLogic exposing (Effect(..), init, statistics, update, updateFromFrontend)
+module BackendLogic exposing (Effect(..), init, notifyAdminWait, statistics, update, updateFromFrontend)
 
 import Array
 import Ascii exposing (Ascii)
 import Bounds exposing (Bounds)
 import Change exposing (ClientChange(..), ServerChange(..))
 import Dict
+import Duration exposing (Duration)
 import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
@@ -18,6 +19,7 @@ import NonemptyExtra as Nonempty
 import Quantity exposing (Quantity(..))
 import SendGrid
 import String.Nonempty
+import Time
 import Types exposing (..)
 import Undo
 import Units exposing (AsciiUnit, CellUnit)
@@ -41,6 +43,11 @@ init =
     }
 
 
+notifyAdminWait : Duration
+notifyAdminWait =
+    String.toFloat Env.notifyAdminWaitInHours |> Maybe.map Duration.hours |> Maybe.withDefault (Duration.hours 3)
+
+
 update : BackendMsg -> BackendModel -> ( BackendModel, List Effect )
 update msg model =
     case msg of
@@ -60,7 +67,7 @@ update msg model =
             , []
             )
 
-        NotifyAdminTimeElapsed _ ->
+        NotifyAdminTimeElapsed time ->
             let
                 ( newModel, cmd ) =
                     notifyAdmin model
@@ -68,14 +75,14 @@ update msg model =
                 ( newModel3, cmd3 ) =
                     case Dict.get (User.rawId backendUserId) newModel.users of
                         Just userData ->
-                            drawStatistics ( backendUserId, userData ) newModel
+                            drawStatistics time ( backendUserId, userData ) newModel
 
                         Nothing ->
                             let
                                 ( newModel2, userData ) =
                                     createUser backendUserId newModel
                             in
-                            drawStatistics ( backendUserId, userData ) newModel2
+                            drawStatistics time ( backendUserId, userData ) newModel2
             in
             ( newModel3
             , cmd ++ cmd3
@@ -159,8 +166,8 @@ backendUserId =
     User.userId -1
 
 
-drawStatistics : ( UserId, BackendUserData ) -> BackendModel -> ( BackendModel, List Effect )
-drawStatistics ( userId, userData ) model =
+drawStatistics : Time.Posix -> ( UserId, BackendUserData ) -> BackendModel -> ( BackendModel, List Effect )
+drawStatistics currentTime ( userId, userData ) model =
     let
         stats : Nonempty ( Ascii, Int )
         stats =
@@ -172,6 +179,9 @@ drawStatistics ( userId, userData ) model =
                 (hiddenUsers userId model)
                 (Bounds.convert (Grid.asciiToCellAndLocalCoord >> Tuple.first) Env.statisticsBounds)
                 model.grid
+
+        rows =
+            32
 
         statText : Nonempty (List Ascii)
         statText =
@@ -189,7 +199,7 @@ drawStatistics ( userId, userData ) model =
                                 compare (Ascii.toChar asciiB) (Ascii.toChar asciiA)
                     )
                 |> Nonempty.reverse
-                |> Nonempty.greedyGroupsOf 32
+                |> Nonempty.greedyGroupsOf rows
                 |> Nonempty.map
                     (Nonempty.map
                         (\( ascii, total ) ->
@@ -221,7 +231,7 @@ drawStatistics ( userId, userData ) model =
                             length =
                                 Nonempty.length list
                         in
-                        case List.repeat (32 - length) [] |> Nonempty.fromList of
+                        case List.repeat (rows - length) [] |> Nonempty.fromList of
                             Just padding ->
                                 Nonempty.append list padding
 
@@ -230,13 +240,49 @@ drawStatistics ( userId, userData ) model =
                     )
                 |> Nonempty.transpose
                 |> Nonempty.map (Nonempty.toList >> List.concat)
+
+        timestamp_ : Nonempty (List Ascii)
+        timestamp_ =
+            timestamp currentTime (Duration.addTo currentTime notifyAdminWait)
+                |> String.toList
+                |> List.filterMap Ascii.fromChar
+                |> Nonempty.fromElement
+
+        mapTextPos : Coord AsciiUnit
+        mapTextPos =
+            Bounds.height Env.statisticsBounds
+                |> Quantity.toFloatQuantity
+                |> Quantity.divideBy 8
+                |> Quantity.round
+                |> Quantity.plus (Quantity 1)
+                |> Tuple.pair Quantity.zero
+                |> Helper.addTuple Env.mapDrawAt
+                |> Debug.log ""
     in
     Grid.textToChange Env.statisticsDrawAt statText
+        |> Nonempty.append
+            (Grid.textToChange (Helper.addTuple ( Quantity 0, Quantity (rows + 1) ) Env.statisticsDrawAt) timestamp_)
         |> Nonempty.append (Grid.textToChange Env.mapDrawAt map)
+        |> Nonempty.append (Grid.textToChange mapTextPos timestamp_)
         |> Nonempty.map Change.LocalGridChange
         -- Remove previous statistics so the undo history doesn't get really long
         |> Nonempty.append (Nonempty Change.LocalUndo [ Change.LocalAddUndo ])
         |> (\a -> broadcastLocalChange ( userId, userData ) a model)
+
+
+timestamp : Time.Posix -> Time.Posix -> String
+timestamp currentTime nextUpdate =
+    let
+        hourMinute time =
+            String.fromInt (Time.toHour Time.utc time)
+                ++ ":"
+                ++ String.padLeft 2 '0' (String.fromInt (Time.toMinute Time.utc time))
+    in
+    "Last updated at "
+        ++ hourMinute currentTime
+        ++ ". Next update at "
+        ++ hourMinute nextUpdate
+        ++ "."
 
 
 statistics : EverySet UserId -> Bounds AsciiUnit -> Grid -> Nonempty ( Ascii, Int )
