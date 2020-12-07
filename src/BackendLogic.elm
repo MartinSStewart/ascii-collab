@@ -257,7 +257,6 @@ drawStatistics currentTime ( userId, userData ) model =
                 |> Quantity.plus (Quantity 1)
                 |> Tuple.pair Quantity.zero
                 |> Helper.addTuple Env.mapDrawAt
-                |> Debug.log ""
     in
     Grid.textToChange Env.statisticsDrawAt statText
         |> Nonempty.append
