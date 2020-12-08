@@ -809,20 +809,16 @@ followHyperlink : Bool -> Hyperlink -> FrontendLoaded -> ( FrontendLoaded, Cmd F
 followHyperlink newTab hyperlink model =
     case hyperlink.route of
         Hyperlink.Internal viewPoint_ ->
-            let
-                newModel =
-                    { model
-                        | cursor = Cursor.setCursor viewPoint_
-                        , viewPoint = Units.asciiToWorld viewPoint_ |> Helper.coordToPoint
-                    }
-            in
             if newTab then
-                ( newModel, martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl hyperlink.route) )
+                ( model, martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl hyperlink.route) )
 
             else
                 pushUrl
                     (Hyperlink.routeToUrl hyperlink.route)
-                    newModel
+                    { model
+                        | cursor = Cursor.setCursor viewPoint_
+                        , viewPoint = Units.asciiToWorld viewPoint_ |> Helper.coordToPoint
+                    }
 
         Hyperlink.External _ ->
             ( model
