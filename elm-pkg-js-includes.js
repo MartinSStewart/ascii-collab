@@ -4,6 +4,7 @@
 
 const devicePixelRatio = require('./elm-pkg-js/devicePixelRatio.js');
 const copyToClipboard = require('./elm-pkg-js/copy-to-clipboard.js');
+const openNewTab = require('./elm-pkg-js/openNewTab.js');
 
 exports.init = async function init(app) {
   // @WARNING: this only runs for Lamdera production deploys!
@@ -11,4 +12,5 @@ exports.init = async function init(app) {
   // automatically generated in Local Development for every file in elm-pkg-js/
   devicePixelRatio.init(app);
   copyToClipboard.init(app);
+  openNewTab.init(app);
 }

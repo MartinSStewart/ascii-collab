@@ -71,6 +71,7 @@ type alias FrontendLoaded =
     , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
+    , mousePosition : Point2d Pixels ScreenCoordinate
     , lastMouseLeftUp : Maybe ( Time.Posix, Point2d Pixels ScreenCoordinate )
     , mouseMiddle : MouseButtonState
     , pendingChanges : List Change.LocalChange
@@ -93,11 +94,10 @@ type ToolType
 
 
 type MouseButtonState
-    = MouseButtonUp { current : Point2d Pixels ScreenCoordinate }
+    = MouseButtonUp
     | MouseButtonDown
         { start : Point2d Pixels ScreenCoordinate
         , start_ : Point2d WorldPixel WorldCoordinate
-        , current : Point2d Pixels ScreenCoordinate
         }
 
 

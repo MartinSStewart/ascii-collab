@@ -68,6 +68,9 @@ port martinsstewart_elm_device_pixel_ratio_to_js : () -> Cmd msg
 port supermario_copy_to_clipboard_to_js : String -> Cmd msg
 
 
+port martinsstewart_elm_open_new_tab_to_js : String -> Cmd msg
+
+
 app =
     Lamdera.frontend
         { init = init
@@ -100,8 +103,9 @@ loadedInit loading loadingData =
             , windowSize = loading.windowSize
             , devicePixelRatio = loading.devicePixelRatio
             , zoomFactor = loading.zoomFactor
-            , mouseLeft = MouseButtonUp { current = loading.mousePosition }
-            , mouseMiddle = MouseButtonUp { current = loading.mousePosition }
+            , mouseLeft = MouseButtonUp
+            , mouseMiddle = MouseButtonUp
+            , mousePosition = loading.mousePosition
             , lastMouseLeftUp = Nothing
             , pendingChanges = []
             , tool = DragTool
@@ -291,14 +295,14 @@ updateLoaded msg model =
                 { model_
                     | mouseLeft =
                         MouseButtonDown
-                            { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
+                            { start = mousePosition, start_ = screenToWorld model_ mousePosition }
                 }
 
               else if button == MiddleButton then
                 { model_
                     | mouseMiddle =
                         MouseButtonDown
-                            { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
+                            { start = mousePosition, start_ = screenToWorld model_ mousePosition }
                 }
 
               else if button == SecondButton then
@@ -335,12 +339,33 @@ updateLoaded msg model =
                     mainMouseButtonUp mousePosition mouseState model
 
                 ( MiddleButton, _, MouseButtonDown mouseState ) ->
-                    ( { model
-                        | mouseMiddle = MouseButtonUp { current = mousePosition }
-                        , viewPoint = offsetViewPoint model mouseState.start mousePosition
-                      }
-                    , Cmd.none
-                    )
+                    let
+                        isSmallDistance =
+                            Vector2d.from mouseState.start mousePosition
+                                |> Vector2d.length
+                                |> Quantity.lessThan (Pixels.pixels 5)
+
+                        maybeHyperlink =
+                            if isSmallDistance then
+                                hyperlinkAtPosition
+                                    (screenToWorld model mousePosition |> Units.worldToAscii)
+                                    (LocalGrid.localModel model.localModel)
+
+                            else
+                                Nothing
+
+                        newModel =
+                            { model
+                                | mouseMiddle = MouseButtonUp
+                                , viewPoint = offsetViewPoint model mouseState.start mousePosition
+                            }
+                    in
+                    case maybeHyperlink of
+                        Just hyperlink ->
+                            followHyperlink True hyperlink newModel
+
+                        Nothing ->
+                            ( newModel, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
@@ -351,20 +376,7 @@ updateLoaded msg model =
 
             else
                 ( { model
-                    | mouseLeft =
-                        case model.mouseLeft of
-                            MouseButtonDown mouseState ->
-                                MouseButtonDown { mouseState | current = mousePosition }
-
-                            MouseButtonUp _ ->
-                                MouseButtonUp { current = mousePosition }
-                    , mouseMiddle =
-                        case model.mouseMiddle of
-                            MouseButtonDown mouseState ->
-                                MouseButtonDown { mouseState | current = mousePosition }
-
-                            MouseButtonUp _ ->
-                                MouseButtonUp { current = mousePosition }
+                    | mousePosition = mousePosition
                     , cursor =
                         case ( model.mouseLeft, model.tool ) of
                             ( MouseButtonDown mouseState, SelectTool ) ->
@@ -455,8 +467,8 @@ updateLoaded msg model =
                             MouseButtonDown
                                 { start = touchPosition
                                 , start_ = screenToWorld model touchPosition
-                                , current = touchPosition
                                 }
+                        , mousePosition = touchPosition
                         , lastTouchMove = Just model.time
                     }
             in
@@ -476,17 +488,20 @@ updateLoaded msg model =
                             Quantity.per Duration.second (Pixels.pixels 30)
 
                         snapDistance =
-                            Pixels.pixels 50 |> Quantity.minus (Quantity.for duration rate) |> Quantity.max (Pixels.pixels 10)
+                            Pixels.pixels 50
+                                |> Quantity.minus (Quantity.for duration rate)
+                                |> Quantity.max (Pixels.pixels 10)
                     in
-                    if Point2d.distanceFrom mouseState.current touchPosition |> Quantity.greaterThan snapDistance then
-                        mainMouseButtonUp mouseState.current mouseState model
+                    if
+                        Point2d.distanceFrom model.mousePosition touchPosition
+                            |> Quantity.greaterThan snapDistance
+                    then
+                        mainMouseButtonUp model.mousePosition mouseState model
                             |> Tuple.mapFirst mouseDown
 
                     else
                         ( { model
-                            | mouseLeft =
-                                MouseButtonDown { mouseState | current = touchPosition }
-                            , cursor =
+                            | cursor =
                                 case model.tool of
                                     SelectTool ->
                                         Cursor.selection
@@ -500,7 +515,7 @@ updateLoaded msg model =
                         , Cmd.none
                         )
 
-                MouseButtonUp _ ->
+                MouseButtonUp ->
                     ( mouseDown model, Cmd.none )
 
         VeryShortIntervalElapsed time ->
@@ -722,13 +737,14 @@ mainMouseButtonUp mousePosition mouseState model =
 
         model_ =
             { model
-                | mouseLeft = MouseButtonUp { current = mousePosition }
+                | mouseLeft = MouseButtonUp
+                , mousePosition = mousePosition
                 , viewPoint =
                     case ( model.mouseMiddle, model.tool ) of
-                        ( MouseButtonUp _, DragTool ) ->
+                        ( MouseButtonUp, DragTool ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
-                        ( MouseButtonUp _, HighlightTool _ ) ->
+                        ( MouseButtonUp, HighlightTool _ ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
                         _ ->
@@ -776,19 +792,7 @@ mainMouseButtonUp mousePosition mouseState model =
     in
     case ( pressedHyperlink, model_.tool ) of
         ( Just hyperlink, _ ) ->
-            case hyperlink.route of
-                Hyperlink.Internal viewPoint_ ->
-                    pushUrl
-                        (Hyperlink.routeToUrl hyperlink.route)
-                        { model_
-                            | cursor = Cursor.setCursor viewPoint_
-                            , viewPoint = Units.asciiToWorld viewPoint_ |> Helper.coordToPoint
-                        }
-
-                Hyperlink.External _ ->
-                    ( model_
-                    , Browser.Navigation.load (Hyperlink.routeToUrl hyperlink.route)
-                    )
+            followHyperlink False hyperlink model_
 
         ( Nothing, HighlightTool (Just ( userId, hidePoint )) ) ->
             if isSmallDistance then
@@ -799,6 +803,35 @@ mainMouseButtonUp mousePosition mouseState model =
 
         ( Nothing, _ ) ->
             ( model_, Cmd.none )
+
+
+followHyperlink : Bool -> Hyperlink -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+followHyperlink newTab hyperlink model =
+    case hyperlink.route of
+        Hyperlink.Internal viewPoint_ ->
+            let
+                newModel =
+                    { model
+                        | cursor = Cursor.setCursor viewPoint_
+                        , viewPoint = Units.asciiToWorld viewPoint_ |> Helper.coordToPoint
+                    }
+            in
+            if newTab then
+                ( newModel, martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl hyperlink.route) )
+
+            else
+                pushUrl
+                    (Hyperlink.routeToUrl hyperlink.route)
+                    newModel
+
+        Hyperlink.External _ ->
+            ( model
+            , if newTab then
+                martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl hyperlink.route)
+
+              else
+                Browser.Navigation.load (Hyperlink.routeToUrl hyperlink.route)
+            )
 
 
 highlightUser : UserId -> Coord AsciiUnit -> FrontendLoaded -> FrontendLoaded
@@ -824,12 +857,12 @@ highlightUser highlightUserId highlightPoint model =
 resetTouchMove : FrontendLoaded -> FrontendLoaded
 resetTouchMove model =
     case model.mouseLeft of
-        MouseButtonUp _ ->
+        MouseButtonUp ->
             model
 
         MouseButtonDown mouseState ->
             if isTouchDevice model then
-                mainMouseButtonUp mouseState.current mouseState model |> Tuple.first
+                mainMouseButtonUp model.mousePosition mouseState model |> Tuple.first
 
             else
                 model
@@ -1215,16 +1248,16 @@ offsetViewPoint { windowSize, viewPoint, devicePixelRatio, zoomFactor } mouseSta
 actualViewPoint : FrontendLoaded -> Point2d WorldPixel WorldCoordinate
 actualViewPoint model =
     case ( model.mouseLeft, model.mouseMiddle ) of
-        ( _, MouseButtonDown { start, current } ) ->
-            offsetViewPoint model start current
+        ( _, MouseButtonDown { start } ) ->
+            offsetViewPoint model start model.mousePosition
 
-        ( MouseButtonDown { start, current }, _ ) ->
+        ( MouseButtonDown { start }, _ ) ->
             case model.tool of
                 DragTool ->
-                    offsetViewPoint model start current
+                    offsetViewPoint model start model.mousePosition
 
                 HighlightTool _ ->
-                    offsetViewPoint model start current
+                    offsetViewPoint model start model.mousePosition
 
                 SelectTool ->
                     model.viewPoint
@@ -1356,16 +1389,9 @@ view model =
             Loaded loadedModel ->
                 let
                     maybeHyperlink =
-                        case loadedModel.mouseLeft of
-                            MouseButtonUp { current } ->
-                                hyperlinkAtPosition
-                                    (screenToWorld loadedModel current |> Units.worldToAscii)
-                                    (LocalGrid.localModel loadedModel.localModel)
-
-                            MouseButtonDown { current } ->
-                                hyperlinkAtPosition
-                                    (screenToWorld loadedModel current |> Units.worldToAscii)
-                                    (LocalGrid.localModel loadedModel.localModel)
+                        hyperlinkAtPosition
+                            (screenToWorld loadedModel loadedModel.mousePosition |> Units.worldToAscii)
+                            (LocalGrid.localModel loadedModel.localModel)
                 in
                 Element.layout
                     (Element.width Element.fill
