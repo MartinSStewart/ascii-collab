@@ -96,8 +96,7 @@ urlsParserHelper offset links =
             |> Parser.backtrackable
         , Parser.succeed (Loop links)
             |. Parser.chompIf (\_ -> True)
-
-        --|. Parser.chompWhile (\char -> List.all ((/=) char) hyperlinkFirstChar)
+            |. Parser.chompWhile (\char -> List.all ((/=) char) hyperlinkFirstChar)
         ]
 
 
