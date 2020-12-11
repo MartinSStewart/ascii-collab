@@ -1,4 +1,4 @@
-module Env exposing (Mode(..), adminEmail, adminUserId, adminUserId_, domain, isProduction, isProduction_, mapDrawAt, mapDrawAtX, mapDrawAtY, mode, notifyAdminWaitInHours, sendGridKey, sendGridKey_, statisticsBounds, statisticsDrawAt, statisticsDrawAtX, statisticsDrawAtY, statisticsX0, statisticsX1, statisticsY0, statisticsY1)
+module Env exposing (Mode(..), adminEmail, adminUserId, adminUserId_, domain, hyperlinkWhitelist, isProduction, isProduction_, mapDrawAt, mapDrawAtX, mapDrawAtY, mode, notifyAdminWaitInHours, sendGridKey, sendGridKey_, statisticsBounds, statisticsDrawAt, statisticsDrawAtX, statisticsDrawAtY, statisticsX0, statisticsX1, statisticsY0, statisticsY1)
 
 -- The Env.elm file is for per-environment configuration.
 -- See https://dashboard.lamdera.app/docs/environment for more info.
@@ -131,3 +131,8 @@ mapDrawAt =
 notifyAdminWaitInHours : String
 notifyAdminWaitInHours =
     "0.005"
+
+
+hyperlinkWhitelist : String
+hyperlinkWhitelist =
+    "www.patorjk.com/software/taag, ro-box.netlify.app, the-best-color.lamdera.app, agirg.com"

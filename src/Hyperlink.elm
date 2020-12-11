@@ -2,6 +2,7 @@ module Hyperlink exposing (Hyperlink, Route(..), contains, hyperlinks, routeToUr
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
+import Env
 import GridCell
 import Helper exposing (Coord)
 import List.Extra as List
@@ -66,11 +67,7 @@ hyperlinks offset flattenedCellRow =
 
 hyperlinkWhitelist : List String
 hyperlinkWhitelist =
-    [ "www.patorjk.com/software/taag"
-    , "ro-box.netlify.app"
-    , "the-best-color.lamdera.app"
-    , "agirg.com"
-    ]
+    Env.hyperlinkWhitelist |> String.split "," |> List.map String.trim
 
 
 hyperlinkFirstChar : List Char
@@ -151,10 +148,10 @@ urlParser offset =
 parseHttp : Parser String
 parseHttp =
     Parser.oneOf
-        [ Parser.succeed "http://"
-            |. Parser.token "http://"
-        , Parser.succeed "https://"
+        [ Parser.succeed "https://"
             |. Parser.token "https://"
+        , Parser.succeed "http://"
+            |. Parser.token "http://"
         , Parser.succeed "https://"
         ]
 
