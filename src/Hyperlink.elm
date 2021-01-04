@@ -19,17 +19,21 @@ type alias Hyperlink =
 
 type Route
     = External String
-    | Internal (Coord AsciiUnit)
+    | Coordinate (Coord Units.AsciiUnit)
+    | NotifyMe
 
 
-routeToUrl : Route -> String
-routeToUrl route =
+routeToUrl : { showNotifyMe : Bool, viewPoint : Coord Units.AsciiUnit } -> Route -> String
+routeToUrl currentRoute route =
     case route of
         External url ->
             url
 
-        Internal position ->
-            UrlHelper.encodeUrl position
+        Coordinate viewPoint ->
+            UrlHelper.encodeUrl (UrlHelper.internalRoute currentRoute.showNotifyMe viewPoint)
+
+        NotifyMe ->
+            UrlHelper.encodeUrl (UrlHelper.internalRoute True currentRoute.viewPoint)
 
 
 hyperlinks : Coord Units.CellUnit -> List (Maybe (Array ( Maybe UserId, Ascii ))) -> List Hyperlink
@@ -129,18 +133,18 @@ urlParser offset =
                     , Parser.succeed ""
                     ]
                 |> Parser.backtrackable
-            , Parser.succeed
-                (\x y -> Internal (Helper.fromRawCoord ( x, y )))
-                |. Parser.oneOf
-                    [ Parser.succeed ()
-                        |. parseHttp
-                        |. Parser.token "ascii-collab.lamdera.app/?"
-                    , Parser.succeed ()
+            , Parser.succeed identity
+                |. parseHttp
+                |. Parser.token "ascii-collab.lamdera.app/"
+                |= Parser.oneOf
+                    [ Parser.succeed Coordinate
+                        |. Parser.token "?"
+                        |= parseCoordinate
+                    , Parser.succeed NotifyMe
+                        |. Parser.token UrlHelper.notifyMe
                     ]
-                |. Parser.token "x="
-                |= parseInt
-                |. Parser.symbol "&y="
-                |= parseInt
+            , Parser.succeed Coordinate
+                |= parseCoordinate
             ]
         |= Parser.getCol
 
@@ -154,6 +158,15 @@ parseHttp =
             |. Parser.token "http://"
         , Parser.succeed "https://"
         ]
+
+
+parseCoordinate : Parser (Coord units)
+parseCoordinate =
+    Parser.succeed (\x y -> Helper.fromRawCoord ( x, y ))
+        |. Parser.token "x="
+        |= parseInt
+        |. Parser.symbol "&y="
+        |= parseInt
 
 
 parseInt : Parser Int

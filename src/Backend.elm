@@ -5,6 +5,7 @@ import Duration
 import Env
 import Lamdera exposing (ClientId, SessionId)
 import SendGrid
+import Task
 import Time
 import Types exposing (..)
 
@@ -18,8 +19,7 @@ app =
                     |> Tuple.mapSecond (List.map effectToCmd >> Cmd.batch)
         , updateFromFrontend =
             \sessionId clientId msg model ->
-                BackendLogic.updateFromFrontend sessionId clientId msg model
-                    |> Tuple.mapSecond (List.map effectToCmd >> Cmd.batch)
+                ( model, Time.now |> Task.perform (UpdateFromFrontend sessionId clientId msg) )
         , subscriptions = subscriptions
         }
 

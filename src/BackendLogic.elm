@@ -4,26 +4,31 @@ import Array
 import Ascii exposing (Ascii)
 import Bounds exposing (Bounds)
 import Change exposing (ClientChange(..), ServerChange(..))
+import Crypto.Hash
 import Dict
 import Duration exposing (Duration)
+import Email
 import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord)
+import Html.String
+import Html.String.Attributes
 import Lamdera exposing (ClientId, SessionId)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import NonemptyExtra as Nonempty
+import NotifyMe
 import Quantity exposing (Quantity(..))
 import SendGrid
-import String.Nonempty
+import String.Nonempty exposing (NonemptyString(..))
 import Time
 import Types exposing (..)
 import Undo
 import Units exposing (AsciiUnit, CellUnit)
-import UrlHelper
+import UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..))
 import User exposing (UserId)
 
 
@@ -40,6 +45,8 @@ init =
         Dict.empty
     , usersHiddenRecently = []
     , userChangesRecently = Dict.empty
+    , subscribedEmails = Dict.empty
+    , secretLinkCounter = 0
     }
 
 
@@ -91,6 +98,12 @@ update msg model =
         NotifyAdminEmailSent ->
             ( model, [] )
 
+        ConfirmationEmailSent result ->
+            Debug.todo ""
+
+        UpdateFromFrontend sessionId clientId toBackendMsg time ->
+            updateFromFrontend time sessionId clientId toBackendMsg model
+
 
 notifyAdmin : BackendModel -> ( BackendModel, List Effect )
 notifyAdmin model =
@@ -99,7 +112,7 @@ notifyAdmin model =
             User.rawId >> String.fromInt
 
         fullUrl point =
-            Env.domain ++ "/" ++ UrlHelper.encodeUrl point
+            Env.domain ++ "/" ++ UrlHelper.encodeUrl (UrlHelper.internalRoute False point)
 
         changes =
             Dict.toList model.userChangesRecently
@@ -545,8 +558,8 @@ broadcastLocalChange userIdAndUser changes model =
     )
 
 
-updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, List Effect )
-updateFromFrontend sessionId clientId msg model =
+updateFromFrontend : Time.Posix -> SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, List Effect )
+updateFromFrontend currentTime sessionId clientId msg model =
     case msg of
         RequestData requestData ->
             requestDataUpdate sessionId clientId requestData model
@@ -607,6 +620,81 @@ updateFromFrontend sessionId clientId msg model =
 
                 Nothing ->
                     ( model, [] )
+
+        NotifyMeSubmitted validated ->
+            case Dict.get sessionId model.userSessions of
+                Just { userId } ->
+                    confirmationEmail validated model userId currentTime
+
+                Nothing ->
+                    ( model, [] )
+
+
+confirmationEmail : NotifyMe.Validated -> BackendModel -> UserId -> Time.Posix -> ( BackendModel, List Effect )
+confirmationEmail validated model userId time =
+    let
+        key =
+            Env.confirmationEmailKey
+                ++ String.fromInt model.secretLinkCounter
+                |> Crypto.Hash.sha256
+                |> ConfirmEmailKey
+
+        content =
+            SendGrid.htmlContent
+                (Html.String.div []
+                    [ Html.String.a
+                        [ Html.String.Attributes.href
+                            ("https://ascii-collab.lamdera.app"
+                                ++ UrlHelper.encodeUrl (EmailConfirmationRoute key)
+                            )
+                        ]
+                        [ Html.String.text "Click this link" ]
+                    , Html.String.text
+                        " to confirm you want to be notified about changes people make on ascii-collab."
+                    , Html.String.text "If this email was sent to you in error, you can safely ignore it."
+                    ]
+                )
+
+        email : SendGrid.Email a
+        email =
+            { subject = NonemptyString 'C' "onfirm ascii-collab notifications"
+            , content = content
+            , to = Nonempty.fromElement (Email.toString validated.email)
+            , cc = []
+            , bcc = []
+            , nameOfSender = "ascii-collab"
+            , emailAddressOfSender = "ascii-collab@lamdera.app"
+            }
+    in
+    ( { model
+        | subscribedEmails =
+            Dict.update
+                (User.rawId userId)
+                (\maybeSubscribe ->
+                    case maybeSubscribe of
+                        Just subscribe ->
+                            if subscribe.status == ConfirmationEmailConfirmed then
+                                maybeSubscribe
+
+                            else
+                                Just
+                                    { email = validated.email
+                                    , frequency = validated.frequency
+                                    , status = WaitingOnConfirmation { creationTime = time, key = key }
+                                    }
+
+                        Nothing ->
+                            Just
+                                { email = validated.email
+                                , frequency = validated.frequency
+                                , status = WaitingOnConfirmation { creationTime = time, key = key }
+                                }
+                )
+                model.subscribedEmails
+        , secretLinkCounter = model.secretLinkCounter + 1
+      }
+    , SendEmail ConfirmationEmailSent email |> List.singleton
+    )
 
 
 updateLocalChange :

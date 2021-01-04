@@ -37,13 +37,16 @@
             "ianmackenzie/elm-units": "2.7.0",
             "ianmackenzie/elm-units-interval": "1.1.0",
             "justgook/elm-image": "4.0.0",
+            "ktonon/elm-crypto": "1.1.2",
             "lamdera/codecs": "1.0.0",
             "lamdera/core": "1.0.0",
             "mdgriffith/elm-ui": "1.1.8",
             "mgold/elm-nonempty-list": "4.1.0",
             "mpizenberg/elm-pointer-events": "4.0.2",
             "ohanhi/keyboard": "2.0.1",
-            "pzp1997/assoc-list": "1.0.0"
+            "pzp1997/assoc-list": "1.0.0",
+            "tricycle/elm-email": "1.0.4",
+            "zwilias/elm-html-string": "2.0.2"
         },
         "indirect": {
             "NoRedInk/elm-string-conversions": "1.0.1",
@@ -54,7 +57,8 @@
             "elm/virtual-dom": "1.0.2",
             "folkertdev/elm-flate": "2.0.4",
             "ianmackenzie/elm-geometry": "3.6.0",
-            "zwilias/elm-html-string": "2.0.2"
+            "icidasset/elm-binary": "2.1.0",
+            "ktonon/elm-word": "2.1.2"
         }
     },
     "test-dependencies": {

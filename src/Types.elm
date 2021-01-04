@@ -8,6 +8,7 @@ module Types exposing
     , FrontendMsg(..)
     , LoadingData_
     , MouseButtonState(..)
+    , NotifyMeStatus(..)
     , ToBackend(..)
     , ToFrontend(..)
     , ToolType(..)
@@ -20,6 +21,7 @@ import Change exposing (Change, ServerChange)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
+import Email
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import Helper exposing (Coord, RawCellCoord)
@@ -30,12 +32,15 @@ import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import Math.Vector2 exposing (Vec2)
+import NotifyMe
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
+import SendGrid
 import Time
 import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
+import UrlHelper exposing (ConfirmEmailKey)
 import User exposing (RawUserId, UserId)
 import WebGL
 import WebGL.Texture exposing (Texture)
@@ -54,6 +59,8 @@ type alias FrontendLoading =
     , time : Time.Posix
     , viewPoint : Coord AsciiUnit
     , mousePosition : Point2d Pixels ScreenCoordinate
+    , showNotifyMe : Bool
+    , notifyMeModel : NotifyMe.Model
     }
 
 
@@ -83,6 +90,8 @@ type alias FrontendLoaded =
     , adminEnabled : Bool
     , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
+    , showNotifyMe : Bool
+    , notifyMeModel : NotifyMe.Model
     }
 
 
@@ -107,7 +116,19 @@ type alias BackendModel =
     , users : Dict RawUserId BackendUserData
     , usersHiddenRecently : List { reporter : UserId, hiddenUser : UserId, hidePoint : Coord AsciiUnit }
     , userChangesRecently : Dict ( RawUserId, RawCellCoord ) Int
+    , subscribedEmails :
+        Dict RawUserId
+            { email : Email.Email
+            , frequency : NotifyMe.Frequency
+            , status : NotifyMeStatus
+            }
+    , secretLinkCounter : Int
     }
+
+
+type NotifyMeStatus
+    = WaitingOnConfirmation { creationTime : Time.Posix, key : ConfirmEmailKey }
+    | ConfirmationEmailConfirmed
 
 
 type alias BackendUserData =
@@ -148,23 +169,32 @@ type FrontendMsg
     | ToggleAdminEnabledPressed
     | HideUserPressed { userId : UserId, hidePoint : Coord AsciiUnit }
     | AnimationFrame Time.Posix
+    | PressedCancelNotifyMe
+    | PressedSubmitNotifyMe NotifyMe.Validated
+    | NotifyMeModelChanged NotifyMe.Model
 
 
 type ToBackend
     = RequestData (Bounds CellUnit)
     | GridChange (Nonempty Change.LocalChange)
     | ChangeViewBounds (Bounds CellUnit)
+    | NotifyMeSubmitted NotifyMe.Validated
+    | ConfirmationEmailConfirmed_ ConfirmEmailKey
 
 
 type BackendMsg
     = UserDisconnected SessionId ClientId
     | NotifyAdminTimeElapsed Time.Posix
     | NotifyAdminEmailSent
+    | ConfirmationEmailSent (Result SendGrid.Error ())
+    | UpdateFromFrontend SessionId ClientId ToBackend Time.Posix
 
 
 type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (Nonempty Change)
+    | NotifyMeEmailSent
+    | NotifyMeConfirmed
 
 
 type alias LoadingData_ =

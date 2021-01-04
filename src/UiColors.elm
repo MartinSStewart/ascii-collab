@@ -1,4 +1,4 @@
-module UiColors exposing (adminText, background, border, button, buttonActive, colorSquareBorder, text, warning)
+module UiColors exposing (adminText, background, border, button, buttonActive, colorSquareBorder, error, text, warning)
 
 import Element
 
@@ -41,3 +41,8 @@ adminText =
 warning : Element.Color
 warning =
     Element.rgb255 255 210 212
+
+
+error : Element.Color
+error =
+    Element.rgb255 200 0 0

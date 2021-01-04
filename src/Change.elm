@@ -5,6 +5,7 @@ import Dict exposing (Dict)
 import Grid
 import GridCell
 import Helper exposing (Coord, RawCellCoord)
+import NotifyMe
 import Units exposing (AsciiUnit, CellUnit)
 import User exposing (UserId)
 
