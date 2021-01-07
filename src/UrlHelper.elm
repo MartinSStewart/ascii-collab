@@ -26,7 +26,9 @@ urlParser =
         , Url.Parser.s notifyMe
             <?> coordQueryParser
             |> Url.Parser.map (internalRoute True)
-        , Url.Parser.s notifyMeConfirmation </> Url.Parser.string |> Url.Parser.map EmailConfirmationRoute
+        , Url.Parser.s notifyMeConfirmation
+            </> Url.Parser.string
+            |> Url.Parser.map (ConfirmEmailKey >> EmailConfirmationRoute)
         ]
 
 
@@ -47,7 +49,7 @@ encodeUrl route =
                 )
                 [ Url.Builder.int "x" x, Url.Builder.int "y" y ]
 
-        EmailConfirmationRoute key ->
+        EmailConfirmationRoute (ConfirmEmailKey key) ->
             Url.Builder.relative [ notifyMeConfirmation, key ] []
 
 

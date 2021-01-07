@@ -1,5 +1,6 @@
 module Types exposing
-    ( BackendModel
+    ( BackendError(..)
+    , BackendModel
     , BackendMsg(..)
     , BackendUserData
     , FrontendLoaded
@@ -8,7 +9,8 @@ module Types exposing
     , FrontendMsg(..)
     , LoadingData_
     , MouseButtonState(..)
-    , NotifyMeStatus(..)
+    , PendingEmail
+    , SubscribedEmail
     , ToBackend(..)
     , ToFrontend(..)
     , ToolType(..)
@@ -115,20 +117,33 @@ type alias BackendModel =
     , userSessions : Dict SessionId { clientIds : Dict ClientId (Bounds CellUnit), userId : UserId }
     , users : Dict RawUserId BackendUserData
     , usersHiddenRecently : List { reporter : UserId, hiddenUser : UserId, hidePoint : Coord AsciiUnit }
-    , userChangesRecently : Dict ( RawUserId, RawCellCoord ) Int
-    , subscribedEmails :
-        Dict RawUserId
-            { email : Email.Email
-            , frequency : NotifyMe.Frequency
-            , status : NotifyMeStatus
-            }
+    , userChangesRecently : List ( Time.Posix, Coord CellUnit )
+    , subscribedEmails : List SubscribedEmail
+    , pendingEmails : List PendingEmail
     , secretLinkCounter : Int
+    , errors : List ( Time.Posix, BackendError )
     }
 
 
-type NotifyMeStatus
-    = WaitingOnConfirmation { creationTime : Time.Posix, key : ConfirmEmailKey }
-    | ConfirmationEmailConfirmed
+type alias SubscribedEmail =
+    { email : Email.Email
+    , frequency : NotifyMe.Frequency
+    , confirmTime : Time.Posix
+    , userId : UserId
+    }
+
+
+type alias PendingEmail =
+    { email : Email.Email
+    , frequency : NotifyMe.Frequency
+    , creationTime : Time.Posix
+    , userId : UserId
+    , key : ConfirmEmailKey
+    }
+
+
+type BackendError
+    = SendGridError SendGrid.Error
 
 
 type alias BackendUserData =
@@ -186,14 +201,14 @@ type BackendMsg
     = UserDisconnected SessionId ClientId
     | NotifyAdminTimeElapsed Time.Posix
     | NotifyAdminEmailSent
-    | ConfirmationEmailSent (Result SendGrid.Error ())
+    | ConfirmationEmailSent SessionId Time.Posix (Result SendGrid.Error ())
     | UpdateFromFrontend SessionId ClientId ToBackend Time.Posix
 
 
 type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (Nonempty Change)
-    | NotifyMeEmailSent
+    | NotifyMeEmailSent { isSuccessful : Bool }
     | NotifyMeConfirmed
 
 

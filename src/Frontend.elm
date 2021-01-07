@@ -1362,8 +1362,8 @@ updateLoadedFromBackend msg model =
             , Cmd.none
             )
 
-        NotifyMeEmailSent ->
-            ( { model | notifyMeModel = NotifyMe.confirmSubmit model.notifyMeModel }, Cmd.none )
+        NotifyMeEmailSent result ->
+            ( { model | notifyMeModel = NotifyMe.confirmSubmit result model.notifyMeModel }, Cmd.none )
 
         NotifyMeConfirmed ->
             ( { model | notifyMeModel = NotifyMe.emailConfirmed model.notifyMeModel }, Cmd.none )
@@ -1442,6 +1442,21 @@ lostConnection model =
 
 view : FrontendModel -> Browser.Document FrontendMsg
 view model =
+    let
+        notifyMeView : { a | showNotifyMe : Bool, notifyMeModel : NotifyMe.Model } -> Element.Attribute FrontendMsg
+        notifyMeView a =
+            Element.inFront
+                (if a.showNotifyMe then
+                    NotifyMe.view
+                        NotifyMeModelChanged
+                        PressedSubmitNotifyMe
+                        PressedCancelNotifyMe
+                        a.notifyMeModel
+
+                 else
+                    Element.none
+                )
+    in
     { title =
         case model of
             Loading _ ->
@@ -1455,10 +1470,11 @@ view model =
                     "Ascii Collab"
     , body =
         [ case model of
-            Loading _ ->
+            Loading loadingModel ->
                 Element.layout
                     [ Element.width Element.fill
                     , Element.height Element.fill
+                    , notifyMeView loadingModel
                     ]
                     (Element.text "Loading")
 
@@ -1492,18 +1508,7 @@ view model =
                                 Nothing ->
                                     []
                            )
-                        ++ [ Element.inFront
-                                (if loadedModel.showNotifyMe then
-                                    NotifyMe.view
-                                        NotifyMeModelChanged
-                                        PressedSubmitNotifyMe
-                                        PressedCancelNotifyMe
-                                        loadedModel.notifyMeModel
-
-                                 else
-                                    Element.none
-                                )
-                           ]
+                        ++ [ notifyMeView loadedModel ]
                     )
                     (Element.html (canvasView maybeHyperlink loadedModel))
         ]

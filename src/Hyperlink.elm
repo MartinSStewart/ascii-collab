@@ -142,6 +142,10 @@ urlParser offset =
                         |= parseCoordinate
                     , Parser.succeed NotifyMe
                         |. Parser.token UrlHelper.notifyMe
+                        |. Parser.oneOf
+                            [ Parser.chompIf ((==) '/')
+                            , Parser.succeed ()
+                            ]
                     ]
             , Parser.succeed Coordinate
                 |= parseCoordinate

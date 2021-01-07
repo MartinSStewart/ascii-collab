@@ -1,4 +1,4 @@
-module NotifyMe exposing (Frequency(..), Model, Validated, confirmSubmit, emailConfirmed, frequencyToString, init, view)
+module NotifyMe exposing (Frequency(..), Model, ThreeHours, Validated, confirmSubmit, duration, emailConfirmed, frequencies, frequencyToString, init, view)
 
 import Element exposing (Element)
 import Element.Background
@@ -7,6 +7,7 @@ import Element.Events
 import Element.Font
 import Element.Input
 import Email
+import Quantity exposing (Quantity(..))
 import UiColors
 
 
@@ -19,6 +20,7 @@ type Status
 type Model
     = InProgress InProgressModel
     | Completed
+    | BackendError
 
 
 type alias InProgressModel =
@@ -40,6 +42,39 @@ type Frequency
     | Daily
     | Weekly
     | Monthly
+
+
+frequencies : List Frequency
+frequencies =
+    [ Every3Hours
+    , Every12Hours
+    , Daily
+    , Weekly
+    , Monthly
+    ]
+
+
+type ThreeHours
+    = ThreeHours Never
+
+
+duration : Frequency -> Quantity Int ThreeHours
+duration frequency =
+    case frequency of
+        Every3Hours ->
+            Quantity 1
+
+        Every12Hours ->
+            Quantity 4
+
+        Daily ->
+            Quantity 8
+
+        Weekly ->
+            Quantity (8 * 7)
+
+        Monthly ->
+            Quantity (8 * 30)
 
 
 frequencyToString : Frequency -> String
@@ -93,15 +128,7 @@ view modelChangedMsg submitMsg closeMsg model =
 
             Completed ->
                 Element.column
-                    [ Element.centerX
-                    , Element.centerY
-                    , Element.padding 16
-                    , Element.Background.color UiColors.background
-                    , Element.Border.color UiColors.border
-                    , Element.Border.width 1
-                    , Element.Border.rounded 4
-                    , Element.spacing 16
-                    ]
+                    formStyle
                     [ Element.text "Email confirmed! You should now receive notifications."
                     , Element.Input.button
                         buttonStyle
@@ -109,7 +136,31 @@ view modelChangedMsg submitMsg closeMsg model =
                         , label = Element.text "Done"
                         }
                     ]
+
+            BackendError ->
+                Element.column
+                    formStyle
+                    [ Element.text "Something went wrong... try again later maybe?"
+                    , Element.Input.button
+                        buttonStyle
+                        { onPress = Just closeMsg
+                        , label = Element.text "Close"
+                        }
+                    ]
         )
+
+
+formStyle : List (Element.Attribute msg)
+formStyle =
+    [ Element.centerX
+    , Element.centerY
+    , Element.padding 16
+    , Element.Background.color UiColors.background
+    , Element.Border.color UiColors.border
+    , Element.Border.width 1
+    , Element.Border.rounded 4
+    , Element.spacing 16
+    ]
 
 
 noPadding =
@@ -126,14 +177,17 @@ errorMessage message =
         (Element.text message)
 
 
-confirmSubmit : Model -> Model
-confirmSubmit model =
-    case model of
-        InProgress inProgress ->
+confirmSubmit : { isSuccessful : Bool } -> Model -> Model
+confirmSubmit { isSuccessful } model =
+    case ( model, isSuccessful ) of
+        ( InProgress inProgress, True ) ->
             InProgress { inProgress | status = WaitingOnConfirmation }
 
-        Completed ->
-            Completed
+        ( InProgress _, False ) ->
+            BackendError
+
+        _ ->
+            model
 
 
 emailConfirmed : Model -> Model
@@ -145,19 +199,14 @@ emailConfirmed model =
         Completed ->
             Completed
 
+        BackendError ->
+            BackendError
+
 
 form : (InProgressModel -> msg) -> (Validated -> msg) -> msg -> InProgressModel -> Element msg
 form modelChangedMsg submitMsg closeMsg model =
     Element.column
-        [ Element.centerX
-        , Element.centerY
-        , Element.padding 16
-        , Element.Background.color UiColors.background
-        , Element.Border.color UiColors.border
-        , Element.Border.width 1
-        , Element.Border.rounded 4
-        , Element.spacing 16
-        ]
+        formStyle
         [ emailField model modelChangedMsg
         , frequencyField model modelChangedMsg
         , Element.row
@@ -245,7 +294,7 @@ frequencyField model modelChangedMsg =
             , options =
                 List.map
                     (\option -> Element.Input.option option (Element.text (frequencyToString option)))
-                    [ Every3Hours, Every12Hours, Daily, Weekly, Monthly ]
+                    frequencies
             , selected = model.frequency
             , label =
                 Element.Input.labelAbove
