@@ -7,6 +7,7 @@ module Helper exposing
     , coordToPoint
     , coordToVec
     , coordToVector2d
+    , divideTuple
     , fromRawCoord
     , maxTuple
     , minTuple
@@ -50,6 +51,11 @@ minusTuple ( x0, y0 ) ( x1, y1 ) =
 multiplyTuple : ( Int, Int ) -> Coord unit -> Coord unit
 multiplyTuple ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.multiplyBy x0 x1, Quantity.multiplyBy y0 y1 )
+
+
+divideTuple : Coord unit -> Coord unit -> Coord unit
+divideTuple ( Quantity x0, Quantity y0 ) ( Quantity x1, Quantity y1 ) =
+    ( x1 // x0 |> Quantity, y1 // y0 |> Quantity )
 
 
 minTuple : Coord unit -> Coord unit -> Coord unit

@@ -1,17 +1,19 @@
 module RecentChanges exposing (RecentChanges, addChange, init, threeHoursElapsed)
 
 import AssocList
+import Dict exposing (Dict)
+import GridCell
 import Helper exposing (Coord, RawCellCoord)
 import List.Extra as List
+import List.Nonempty exposing (Nonempty)
 import NotifyMe exposing (Frequency(..), ThreeHours)
 import Quantity exposing (Quantity(..))
-import Set exposing (Set)
 import Units exposing (CellUnit)
 
 
 type RecentChanges
     = RecentChanges
-        { frequencies : AssocList.Dict Frequency (Set RawCellCoord)
+        { frequencies : AssocList.Dict Frequency (Dict RawCellCoord GridCell.Cell)
         , threeHoursElapsed : Quantity Int ThreeHours
         }
 
@@ -24,26 +26,26 @@ init =
         }
 
 
-addChange : Coord CellUnit -> RecentChanges -> RecentChanges
-addChange coord (RecentChanges recentChanges) =
+addChange : Coord CellUnit -> GridCell.Cell -> RecentChanges -> RecentChanges
+addChange coord originalCell (RecentChanges recentChanges) =
     RecentChanges
         { recentChanges
             | frequencies =
                 AssocList.update
                     Every3Hours
-                    (Maybe.withDefault Set.empty >> Set.insert (Helper.toRawCoord coord) >> Just)
+                    (Maybe.withDefault Dict.empty >> Dict.insert (Helper.toRawCoord coord) originalCell >> Just)
                     recentChanges.frequencies
         }
 
 
-addChanges : Frequency -> Set RawCellCoord -> RecentChanges -> RecentChanges
+addChanges : Frequency -> Dict RawCellCoord GridCell.Cell -> RecentChanges -> RecentChanges
 addChanges frequency coords (RecentChanges recentChanges) =
     RecentChanges
         { recentChanges
             | frequencies =
                 AssocList.update
                     frequency
-                    (Maybe.withDefault Set.empty >> Set.union coords >> Just)
+                    (\maybeDict -> Dict.union (Maybe.withDefault Dict.empty maybeDict) coords |> Just)
                     recentChanges.frequencies
         }
 
@@ -59,7 +61,7 @@ longestDurationReady counter =
         |> Maybe.withDefault Every3Hours
 
 
-threeHoursElapsed : RecentChanges -> ( ( Frequency, Set RawCellCoord ), RecentChanges )
+threeHoursElapsed : RecentChanges -> ( Nonempty ( Frequency, Dict RawCellCoord GridCell.Cell ), RecentChanges )
 threeHoursElapsed (RecentChanges recentChanges) =
     let
         longestDurationReady_ =
@@ -68,7 +70,7 @@ threeHoursElapsed (RecentChanges recentChanges) =
         maybeNextLongest : Maybe Frequency
         maybeNextLongest =
             NotifyMe.frequencies
-                |> List.sortBy (NotifyMe.duration >> Quantity.unwrap)
+                |> Quantity.sortBy NotifyMe.duration
                 |> List.dropWhile
                     (\frequency ->
                         NotifyMe.duration frequency
@@ -76,6 +78,7 @@ threeHoursElapsed (RecentChanges recentChanges) =
                     )
                 |> List.head
 
+        changes : Nonempty ( Frequency, Dict RawCellCoord GridCell.Cell )
         changes =
             recentChanges.frequencies
                 |> AssocList.filter
@@ -83,9 +86,22 @@ threeHoursElapsed (RecentChanges recentChanges) =
                         NotifyMe.duration frequency
                             |> Quantity.lessThanOrEqualTo (NotifyMe.duration longestDurationReady_)
                     )
-                |> AssocList.values
-                |> List.foldl Set.union Set.empty
+                |> AssocList.toList
+                |> Quantity.sortBy (Tuple.first >> NotifyMe.duration)
+                |> List.foldl
+                    (\( frequency, change ) list ->
+                        case list of
+                            ( _, previousChange ) :: _ ->
+                                ( frequency, Dict.union change previousChange ) :: list
 
+                            [] ->
+                                ( frequency, change ) :: list
+                    )
+                    []
+                |> List.Nonempty.fromList
+                |> Maybe.withDefault (List.Nonempty.fromElement ( Every3Hours, Dict.empty ))
+
+        newRecentChanges : RecentChanges
         newRecentChanges =
             RecentChanges
                 { recentChanges
@@ -99,10 +115,13 @@ threeHoursElapsed (RecentChanges recentChanges) =
                     , threeHoursElapsed = Quantity.plus recentChanges.threeHoursElapsed (Quantity 1)
                 }
     in
-    ( ( longestDurationReady_, changes )
+    ( changes
     , case maybeNextLongest of
         Just nextLongest ->
-            addChanges nextLongest changes newRecentChanges
+            addChanges
+                nextLongest
+                (List.Nonempty.foldl (\( _, value ) dict -> Dict.union value dict) Dict.empty changes)
+                newRecentChanges
 
         Nothing ->
             newRecentChanges

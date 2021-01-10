@@ -4,6 +4,7 @@ import Array exposing (Array)
 import Ascii exposing (Ascii)
 import Bounds exposing (Bounds)
 import Change exposing (ClientChange(..), ServerChange(..))
+import Cluster
 import Crypto.Hash
 import Dict
 import Duration exposing (Duration)
@@ -12,17 +13,20 @@ import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
-import Helper exposing (Coord)
+import Helper exposing (Coord, RawCellCoord)
 import Html.String
 import Html.String.Attributes
 import Lamdera exposing (ClientId, SessionId)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
+import Maybe.Extra as Maybe
 import NonemptyExtra as Nonempty
 import NotifyMe
 import Quantity exposing (Quantity(..))
+import RecentChanges
 import SendGrid
+import Set
 import String.Nonempty exposing (NonemptyString(..))
 import Time
 import Types exposing (..)
@@ -30,6 +34,7 @@ import Undo
 import Units exposing (AsciiUnit, CellUnit)
 import UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..))
 import User exposing (UserId)
+import Vector8
 
 
 type Effect
@@ -44,7 +49,7 @@ init =
     , users =
         Dict.empty
     , usersHiddenRecently = []
-    , userChangesRecently = []
+    , userChangesRecently = RecentChanges.init
     , subscribedEmails = []
     , pendingEmails = []
     , secretLinkCounter = 0
@@ -78,23 +83,76 @@ update msg model =
 
         NotifyAdminTimeElapsed time ->
             let
-                ( newModel, cmd ) =
-                    notifyAdmin model
+                --( newModel, cmd ) =
+                --    notifyAdmin model
+                --
+                --( newModel3, cmd3 ) =
+                --    case Dict.get (User.rawId backendUserId) newModel.users of
+                --        Just userData ->
+                --            drawStatistics time ( backendUserId, userData ) newModel
+                --
+                --        Nothing ->
+                --            let
+                --                ( newModel2, userData ) =
+                --                    createUser backendUserId newModel
+                --            in
+                --            drawStatistics time ( backendUserId, userData ) newModel2
+                ( frequencyChanges, recentChanges ) =
+                    RecentChanges.threeHoursElapsed model.userChangesRecently
 
-                ( newModel3, cmd3 ) =
-                    case Dict.get (User.rawId backendUserId) newModel.users of
-                        Just userData ->
-                            drawStatistics time ( backendUserId, userData ) newModel
+                getActualChanges : Dict.Dict RawCellCoord GridCell.Cell -> List ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
+                getActualChanges changes =
+                    Dict.toList changes
+                        |> List.filterMap
+                            (\( coord, originalCell ) ->
+                                let
+                                    diff : Array ( Maybe UserId, Ascii )
+                                    diff =
+                                        diffCells
+                                            model
+                                            originalCell
+                                            (Grid.getCell (Helper.fromRawCoord coord) model.grid
+                                                |> Maybe.withDefault GridCell.empty
+                                            )
+                                in
+                                if Array.toList diff |> List.any (Tuple.first >> (/=) Nothing) then
+                                    Just ( coord, diff )
 
-                        Nothing ->
-                            let
-                                ( newModel2, userData ) =
-                                    createUser backendUserId newModel
-                            in
-                            drawStatistics time ( backendUserId, userData ) newModel2
+                                else
+                                    Nothing
+                            )
+
+                clusters : List ( RawCellCoord, Array ( Maybe UserId, Ascii ) ) -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) )
+                clusters actualChanges =
+                    List.map Tuple.first actualChanges |> Set.fromList |> Cluster.cluster
+
+                content actualChanges =
+                    List.map (\( bounds, _ ) -> clusterToTextImage model actualChanges bounds) (clusters actualChanges)
+                        |> Html.String.div []
+
+                email frequency_ content_ to =
+                    asciiCollabEmail
+                        (case frequency_ of
+                            NotifyMe.Every3Hours ->
+                                NonemptyString 'C' "hanges over the past 3 hours"
+
+                            NotifyMe.Every12Hours ->
+                                NonemptyString 'C' "hanges over the past 12 hours"
+
+                            NotifyMe.Daily ->
+                                NonemptyString 'C' "hanges over the past day"
+
+                            NotifyMe.Weekly ->
+                                NonemptyString 'C' "hanges over the past week"
+
+                            NotifyMe.Monthly ->
+                                NonemptyString 'C' "hanges over the past month"
+                        )
+                        content_
+                        to
             in
-            ( newModel3
-            , cmd ++ cmd3
+            ( { model | userChangesRecently = recentChanges }
+            , []
             )
 
         NotifyAdminEmailSent ->
@@ -120,6 +178,80 @@ update msg model =
 
         UpdateFromFrontend sessionId clientId toBackendMsg time ->
             updateFromFrontend time sessionId clientId toBackendMsg model
+
+
+clusterToTextImage :
+    { a | grid : Grid, users : Dict.Dict Int { b | hiddenForAll : Bool } }
+    -> List ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
+    -> Bounds CellUnit
+    -> Html.String.Html msg
+clusterToTextImage model actualChanges bounds =
+    Bounds.coordRangeFoldReverse
+        (\coord ( value, a ) ->
+            let
+                rawCoord =
+                    Helper.toRawCoord coord
+
+                array =
+                    case List.find (Tuple.first >> (==) rawCoord) actualChanges of
+                        Just ( _, original ) ->
+                            original
+
+                        Nothing ->
+                            Grid.getCell coord model.grid
+                                |> Maybe.withDefault GridCell.empty
+                                |> GridCell.flatten EverySet.empty (hiddenUsers Nothing model)
+
+                slices : List (List ( Maybe UserId, Ascii ))
+                slices =
+                    List.range 0 (GridCell.cellSize - 1)
+                        |> List.map
+                            (\index ->
+                                Array.slice
+                                    (GridCell.cellSize * index)
+                                    (GridCell.cellSize * (index + 1))
+                                    array
+                                    |> Array.toList
+                            )
+            in
+            ( List.map2 (\slice rest -> slice ++ rest) slices value
+            , a
+            )
+        )
+        (\( a, b ) -> ( [], a :: b ))
+        bounds
+        ( [], [] )
+        |> (\( a, b ) -> a :: b)
+        |> List.concat
+        |> List.map
+            (\row ->
+                List.foldl
+                    (\( maybeUserId, ascii ) ( asciiChanged, text, html ) ->
+                        if (maybeUserId == Nothing) == asciiChanged then
+                            ( asciiChanged, String.fromChar (Ascii.toChar ascii) ++ text, html )
+
+                        else
+                            ( maybeUserId == Nothing
+                            , Ascii.toChar ascii |> String.fromChar
+                            , (case maybeUserId of
+                                Just userId ->
+                                    Html.String.span
+                                        [ Html.String.Attributes.style "color" "blue" ]
+                                        [ Html.String.text text ]
+
+                                Nothing ->
+                                    Html.String.text text
+                              )
+                                :: html
+                            )
+                    )
+                    ( False, "", [] )
+                    row
+                    |> (\( _, _, a ) -> List.reverse a)
+            )
+        |> List.intersperse [ Html.String.br [] [] ]
+        |> List.concat
+        |> Html.String.div []
 
 
 addError : Time.Posix -> BackendError -> BackendModel -> BackendModel
@@ -749,14 +881,10 @@ sendConfirmationEmail validated model sessionId userId time =
 
             email : SendGrid.Email a
             email =
-                { subject = NonemptyString 'C' "onfirm ascii-collab notifications"
-                , content = content
-                , to = Nonempty.fromElement (Email.toString validated.email)
-                , cc = []
-                , bcc = []
-                , nameOfSender = "ascii-collab"
-                , emailAddressOfSender = "ascii-collab@lamdera.app"
-                }
+                asciiCollabEmail
+                    (NonemptyString 'C' "onfirm ascii-collab notifications")
+                    content
+                    validated.email
         in
         ( { model
             | pendingEmails =
@@ -773,6 +901,18 @@ sendConfirmationEmail validated model sessionId userId time =
           }
         , [ SendEmail (ConfirmationEmailSent sessionId time) email ]
         )
+
+
+asciiCollabEmail : NonemptyString -> SendGrid.Content a -> Email.Email -> SendGrid.Email a
+asciiCollabEmail subject content to =
+    { subject = subject
+    , content = content
+    , to = Nonempty.fromElement (Email.toString to)
+    , cc = []
+    , bcc = []
+    , nameOfSender = "ascii-collab"
+    , emailAddressOfSender = "ascii-collab@lamdera.app"
+    }
 
 
 updateLocalChange :
@@ -808,14 +948,19 @@ updateLocalChange ( userId, _ ) change model =
                     ( { model
                         | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
                         , userChangesRecently =
-                            if Just userId == Env.adminUserId || userId == backendUserId then
+                            RecentChanges.addChange
+                                localChange.cellPosition
+                                (Grid.getCell localChange.cellPosition model.grid |> Maybe.withDefault GridCell.empty)
                                 model.userChangesRecently
 
-                            else
-                                Dict.insert
-                                    ( User.rawId userId, Helper.toRawCoord localChange.cellPosition )
-                                    localChange.localPosition
-                                    model.userChangesRecently
+                        --if Just userId == Env.adminUserId || userId == backendUserId then
+                        --    model.userChangesRecently
+                        --
+                        --else
+                        --    Dict.insert
+                        --        ( User.rawId userId, Helper.toRawCoord localChange.cellPosition )
+                        --        localChange.localPosition
+                        --        model.userChangesRecently
                       }
                         |> updateUser userId (always { user | undoCurrent = LocalGrid.incrementUndoCurrent localChange user.undoCurrent })
                     , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
@@ -907,7 +1052,10 @@ updateUser userId updateUserFunc model =
 
 {-| Gets globally hidden users known to a specific user.
 -}
-hiddenUsers : Maybe UserId -> BackendModel -> EverySet UserId
+hiddenUsers :
+    Maybe UserId
+    -> { a | users : Dict.Dict Int { b | hiddenForAll : Bool } }
+    -> EverySet UserId
 hiddenUsers userId model =
     model.users
         |> Dict.toList

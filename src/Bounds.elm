@@ -9,6 +9,7 @@ module Bounds exposing
     , coordRangeFold
     , coordRangeFoldReverse
     , expand
+    , fromCoords
     , height
     , maximum
     , minimum
@@ -19,6 +20,9 @@ module Bounds exposing
 
 import BoundingBox2d exposing (BoundingBox2d)
 import Helper exposing (Coord)
+import List.Extra as List
+import List.Nonempty exposing (Nonempty)
+import NonemptyExtra as Nonempty
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 
@@ -61,6 +65,28 @@ bounds min_ max_ =
         { min = Helper.minTuple min_ max_
         , max = Helper.maxTuple min_ max_
         }
+
+
+fromCoords : Nonempty (Coord unit) -> Bounds unit
+fromCoords coords =
+    let
+        xValues =
+            List.Nonempty.map Tuple.first coords
+
+        yValues =
+            List.Nonempty.map Tuple.second coords
+    in
+    Bounds
+        { min = ( Nonempty.minimumBy Quantity.unwrap xValues, Nonempty.maximumBy Quantity.unwrap xValues )
+        , max = ( Nonempty.minimumBy Quantity.unwrap xValues, Nonempty.maximumBy Quantity.unwrap xValues )
+        }
+
+
+centerAndHalfSize : Coord unit -> Coord unit -> Bounds unit
+centerAndHalfSize centerPoint halfSize =
+    bounds
+        (centerPoint |> Helper.minusTuple halfSize)
+        (centerPoint |> Helper.addTuple halfSize)
 
 
 translate : Coord unit -> Bounds unit -> Bounds unit

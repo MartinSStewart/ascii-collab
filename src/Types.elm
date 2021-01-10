@@ -38,6 +38,7 @@ import NotifyMe
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
+import RecentChanges exposing (RecentChanges)
 import SendGrid
 import Time
 import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
@@ -117,7 +118,7 @@ type alias BackendModel =
     , userSessions : Dict SessionId { clientIds : Dict ClientId (Bounds CellUnit), userId : UserId }
     , users : Dict RawUserId BackendUserData
     , usersHiddenRecently : List { reporter : UserId, hiddenUser : UserId, hidePoint : Coord AsciiUnit }
-    , userChangesRecently : List ( Time.Posix, Coord CellUnit )
+    , userChangesRecently : RecentChanges
     , subscribedEmails : List SubscribedEmail
     , pendingEmails : List PendingEmail
     , secretLinkCounter : Int

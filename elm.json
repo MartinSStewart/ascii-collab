@@ -8,6 +8,7 @@
     "elm-version": "0.19.1",
     "dependencies": {
         "direct": {
+            "Chadtech/elm-vector": "3.0.2",
             "Gizra/elm-all-set": "1.0.1",
             "MartinSStewart/elm-nonempty-string": "2.0.0",
             "MartinSStewart/elm-serialize": "1.2.0",
@@ -57,12 +58,13 @@
             "elm/virtual-dom": "1.0.2",
             "folkertdev/elm-flate": "2.0.4",
             "ianmackenzie/elm-geometry": "3.6.0",
-            "icidasset/elm-binary": "2.1.0",
             "ktonon/elm-word": "2.1.2"
         }
     },
     "test-dependencies": {
         "direct": {},
-        "indirect": {}
+        "indirect": {
+            "icidasset/elm-binary": "2.1.0"
+        }
     }
 }
