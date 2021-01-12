@@ -61,7 +61,7 @@ longestDurationReady counter =
         |> Maybe.withDefault Every3Hours
 
 
-threeHoursElapsed : RecentChanges -> ( Nonempty ( Frequency, Dict RawCellCoord GridCell.Cell ), RecentChanges )
+threeHoursElapsed : RecentChanges -> ( List ( Frequency, Dict RawCellCoord GridCell.Cell ), RecentChanges )
 threeHoursElapsed (RecentChanges recentChanges) =
     let
         longestDurationReady_ =
@@ -78,7 +78,7 @@ threeHoursElapsed (RecentChanges recentChanges) =
                     )
                 |> List.head
 
-        changes : Nonempty ( Frequency, Dict RawCellCoord GridCell.Cell )
+        changes : List ( Frequency, Dict RawCellCoord GridCell.Cell )
         changes =
             recentChanges.frequencies
                 |> AssocList.filter
@@ -98,8 +98,6 @@ threeHoursElapsed (RecentChanges recentChanges) =
                                 ( frequency, change ) :: list
                     )
                     []
-                |> List.Nonempty.fromList
-                |> Maybe.withDefault (List.Nonempty.fromElement ( Every3Hours, Dict.empty ))
 
         newRecentChanges : RecentChanges
         newRecentChanges =
@@ -120,7 +118,7 @@ threeHoursElapsed (RecentChanges recentChanges) =
         Just nextLongest ->
             addChanges
                 nextLongest
-                (List.Nonempty.foldl (\( _, value ) dict -> Dict.union value dict) Dict.empty changes)
+                (List.foldl (\( _, value ) dict -> Dict.union value dict) Dict.empty changes)
                 newRecentChanges
 
         Nothing ->

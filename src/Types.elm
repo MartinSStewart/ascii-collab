@@ -144,7 +144,7 @@ type alias PendingEmail =
 
 
 type BackendError
-    = SendGridError SendGrid.Error
+    = SendGridError Email.Email SendGrid.Error
 
 
 type alias BackendUserData =
@@ -203,6 +203,7 @@ type BackendMsg
     | NotifyAdminTimeElapsed Time.Posix
     | NotifyAdminEmailSent
     | ConfirmationEmailSent SessionId Time.Posix (Result SendGrid.Error ())
+    | ChangeEmailSent Time.Posix Email.Email (Result SendGrid.Error ())
     | UpdateFromFrontend SessionId ClientId ToBackend Time.Posix
 
 

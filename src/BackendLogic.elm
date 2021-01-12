@@ -97,7 +97,7 @@ update msg model =
                 --                    createUser backendUserId newModel
                 --            in
                 --            drawStatistics time ( backendUserId, userData ) newModel2
-                ( frequencyChanges, recentChanges ) =
+                ( frequencyChanges, recentChangeState ) =
                     RecentChanges.threeHoursElapsed model.userChangesRecently
 
                 getActualChanges : Dict.Dict RawCellCoord GridCell.Cell -> List ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
@@ -130,29 +130,50 @@ update msg model =
                     List.map (\( bounds, _ ) -> clusterToTextImage model actualChanges bounds) (clusters actualChanges)
                         |> Html.String.div []
 
-                email frequency_ content_ to =
-                    asciiCollabEmail
-                        (case frequency_ of
-                            NotifyMe.Every3Hours ->
-                                NonemptyString 'C' "hanges over the past 3 hours"
+                subject frequency_ =
+                    case frequency_ of
+                        NotifyMe.Every3Hours ->
+                            NonemptyString 'C' "hanges over the past 3 hours"
 
-                            NotifyMe.Every12Hours ->
-                                NonemptyString 'C' "hanges over the past 12 hours"
+                        NotifyMe.Every12Hours ->
+                            NonemptyString 'C' "hanges over the past 12 hours"
 
-                            NotifyMe.Daily ->
-                                NonemptyString 'C' "hanges over the past day"
+                        NotifyMe.Daily ->
+                            NonemptyString 'C' "hanges over the past day"
 
-                            NotifyMe.Weekly ->
-                                NonemptyString 'C' "hanges over the past week"
+                        NotifyMe.Weekly ->
+                            NonemptyString 'C' "hanges over the past week"
 
-                            NotifyMe.Monthly ->
-                                NonemptyString 'C' "hanges over the past month"
-                        )
-                        content_
-                        to
+                        NotifyMe.Monthly ->
+                            NonemptyString 'C' "hanges over the past month"
             in
-            ( { model | userChangesRecently = recentChanges }
-            , []
+            ( { model | userChangesRecently = recentChangeState }
+            , List.concatMap
+                (\( frequency, changes ) ->
+                    let
+                        content_ =
+                            content (getActualChanges changes) |> SendGrid.htmlContent
+
+                        subject_ =
+                            subject frequency
+                    in
+                    List.filter (.frequency >> (==) frequency)
+                        model.subscribedEmails
+                        |> List.map
+                            (\email ->
+                                SendEmail
+                                    (ChangeEmailSent time email.email)
+                                    (asciiCollabEmail
+                                        subject_
+                                        content_
+                                        email.email
+                                    )
+                            )
+                 --asciiCollabEmail
+                 --SendEmail
+                 --(ChangeEmailSent time)
+                )
+                frequencyChanges
             )
 
         NotifyAdminEmailSent ->
@@ -164,7 +185,7 @@ update msg model =
                     model
 
                 Err error ->
-                    addError timeSent (SendGridError error) model
+                    addError timeSent (SendGridError Env.adminEmail error) model
             , broadcast
                 (\sessionId_ _ ->
                     if sessionId_ == sessionId then
@@ -178,6 +199,14 @@ update msg model =
 
         UpdateFromFrontend sessionId clientId toBackendMsg time ->
             updateFromFrontend time sessionId clientId toBackendMsg model
+
+        ChangeEmailSent time email result ->
+            case result of
+                Ok _ ->
+                    ( model, [] )
+
+                Err error ->
+                    ( addError time (SendGridError email error) model, [] )
 
 
 clusterToTextImage :
