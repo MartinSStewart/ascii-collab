@@ -20,7 +20,6 @@ import Lamdera exposing (ClientId, SessionId)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
-import Maybe.Extra as Maybe
 import NonemptyExtra as Nonempty
 import NotifyMe
 import Quantity exposing (Quantity(..))
@@ -34,7 +33,6 @@ import Undo
 import Units exposing (AsciiUnit, CellUnit)
 import UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..))
 import User exposing (UserId)
-import Vector8
 
 
 type Effect
@@ -122,7 +120,9 @@ update msg model =
                                     Nothing
                             )
 
-                clusters : List ( RawCellCoord, Array ( Maybe UserId, Ascii ) ) -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) )
+                clusters :
+                    List ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
+                    -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) )
                 clusters actualChanges =
                     List.map Tuple.first actualChanges |> Set.fromList |> Cluster.cluster
 
@@ -247,9 +247,9 @@ clusterToTextImage model actualChanges bounds =
             , a
             )
         )
-        (\( a, b ) -> ( [], a :: b ))
+        (\( a, b ) -> ( List.repeat GridCell.cellSize [], a :: b ))
         bounds
-        ( [], [] )
+        ( List.repeat GridCell.cellSize [], [] )
         |> (\( a, b ) -> a :: b)
         |> List.concat
         |> List.map
@@ -957,10 +957,15 @@ updateLocalChange ( userId, _ ) change model =
                     case Undo.undo user of
                         Just newUser ->
                             let
+                                undoMoveAmount : Dict.Dict RawCellCoord Int
                                 undoMoveAmount =
                                     Dict.map (\_ a -> -a) user.undoCurrent
                             in
-                            ( { model | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid }
+                            ( { model
+                                | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
+                                , userChangesRecently =
+                                    RecentChanges.undoRedoChange undoMoveAmount model.grid model.userChangesRecently
+                              }
                                 |> updateUser userId (always newUser)
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
                             )
@@ -991,7 +996,9 @@ updateLocalChange ( userId, _ ) change model =
                         --        localChange.localPosition
                         --        model.userChangesRecently
                       }
-                        |> updateUser userId (always { user | undoCurrent = LocalGrid.incrementUndoCurrent localChange user.undoCurrent })
+                        |> updateUser
+                            userId
+                            (always { user | undoCurrent = LocalGrid.incrementUndoCurrent localChange user.undoCurrent })
                     , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
                     )
 
@@ -1009,6 +1016,8 @@ updateLocalChange ( userId, _ ) change model =
                             in
                             ( { model
                                 | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
+                                , userChangesRecently =
+                                    RecentChanges.undoRedoChange undoMoveAmount model.grid model.userChangesRecently
                               }
                                 |> updateUser userId (always newUser)
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just

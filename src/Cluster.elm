@@ -52,7 +52,7 @@ clusterHelper coords allBounds =
                 )
 
         [] ->
-            []
+            allBounds
 
 
 toCoarseGrid : Coord Units.CellUnit -> Coord Units.CellUnit

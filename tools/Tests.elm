@@ -24,9 +24,10 @@ import NonemptyExtra as Nonempty
 import NotifyMe exposing (Frequency(..))
 import Parser
 import Quantity exposing (Quantity(..))
+import RecentChanges
 import Time
 import Types exposing (BackendModel, BackendMsg(..), FrontendModel, ToBackend(..), ToFrontend(..))
-import Units exposing (CellUnit)
+import Units exposing (AsciiUnit, CellUnit)
 import UrlHelper exposing (ConfirmEmailKey(..))
 import User
 
@@ -527,11 +528,40 @@ main =
                                     [ SendToFrontend "clientId0" NotifyMeConfirmed ]
                                     effect
                             )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.updateFromFrontend
+                                    (Time.millisToPosix
+                                        (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                    )
+                                    "sessionId0"
+                                    "clientId0"
+                                    (changes ( Units.asciiUnit 5, Units.asciiUnit 1 ) "test" |> GridChange)
+                            )
+                        --|> testAssert
+                        --    (\( model, _ ) ->
+                        --        expectEqual RecentChanges.init model.userChangesRecently
+                        --    )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 3)
+                                        |> NotifyAdminTimeElapsed
+                                    )
+                            )
+                        |> testAssert
+                            (\( _, effect ) ->
+                                expectEqual [] effect
+                            )
                         |> testMap (always ())
                 )
                 (Email.fromString "test@test.com")
                 |> Maybe.withDefault (Failed "Invalid email" |> testSingle)
-                |> test "Email confirmation happy path"
+                |> test "Email notification happy path"
             , Maybe.map
                 (\email ->
                     let
@@ -584,6 +614,16 @@ main =
                 |> Maybe.withDefault (Failed "Invalid email" |> testSingle)
                 |> test "Email confirmation rate limit"
             ]
+
+
+changes : Coord AsciiUnit -> String -> Nonempty Change.LocalChange
+changes coord text =
+    String.split "\n" text
+        |> List.map (String.toList >> List.filterMap Ascii.fromChar)
+        |> Nonempty.fromList
+        |> Maybe.withDefault (Nonempty [] [])
+        |> Grid.textToChange coord
+        |> Nonempty.map LocalGridChange
 
 
 expectEqual : a -> a -> TestResult

@@ -1,7 +1,8 @@
-module RecentChanges exposing (RecentChanges, addChange, init, threeHoursElapsed)
+module RecentChanges exposing (RecentChanges, addChange, init, threeHoursElapsed, undoRedoChange)
 
 import AssocList
 import Dict exposing (Dict)
+import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord, RawCellCoord)
 import List.Extra as List
@@ -36,6 +37,17 @@ addChange coord originalCell (RecentChanges recentChanges) =
                     (Maybe.withDefault Dict.empty >> Dict.insert (Helper.toRawCoord coord) originalCell >> Just)
                     recentChanges.frequencies
         }
+
+
+undoRedoChange : Dict.Dict RawCellCoord Int -> Grid -> RecentChanges -> RecentChanges
+undoRedoChange changes grid recentChanges =
+    addChanges
+        Every3Hours
+        (Dict.map
+            (\key _ -> Grid.getCell (Helper.fromRawCoord key) grid |> Maybe.withDefault GridCell.empty)
+            changes
+        )
+        recentChanges
 
 
 addChanges : Frequency -> Dict RawCellCoord GridCell.Cell -> RecentChanges -> RecentChanges
