@@ -37,7 +37,7 @@ import User exposing (UserId)
 
 type Effect
     = SendToFrontend ClientId ToFrontend
-    | SendEmail (Result SendGrid.Error () -> BackendMsg) (SendGrid.Email ())
+    | SendEmail (Result SendGrid.Error () -> BackendMsg) NonemptyString (Html.String.Html Never) Email.Email
 
 
 init : BackendModel
@@ -128,7 +128,11 @@ update msg model =
 
                 content actualChanges =
                     List.map (\( bounds, _ ) -> clusterToTextImage model actualChanges bounds) (clusters actualChanges)
-                        |> Html.String.div []
+                        |> Html.String.pre
+                            [ Html.String.Attributes.style "font-family" "monospace"
+                            , Html.String.Attributes.style "font-size" "16px"
+                            , Html.String.Attributes.style "line-height" "14px"
+                            ]
 
                 subject frequency_ =
                     case frequency_ of
@@ -152,7 +156,7 @@ update msg model =
                 (\( frequency, changes ) ->
                     let
                         content_ =
-                            content (getActualChanges changes) |> SendGrid.htmlContent
+                            content (getActualChanges changes)
 
                         subject_ =
                             subject frequency
@@ -163,11 +167,9 @@ update msg model =
                             (\email ->
                                 SendEmail
                                     (ChangeEmailSent time email.email)
-                                    (asciiCollabEmail
-                                        subject_
-                                        content_
-                                        email.email
-                                    )
+                                    subject_
+                                    content_
+                                    email.email
                             )
                  --asciiCollabEmail
                  --SendEmail
@@ -215,12 +217,13 @@ clusterToTextImage :
     -> Bounds CellUnit
     -> Html.String.Html msg
 clusterToTextImage model actualChanges bounds =
-    Bounds.coordRangeFoldReverse
+    Bounds.coordRangeFold
         (\coord ( value, a ) ->
             let
                 rawCoord =
                     Helper.toRawCoord coord
 
+                array : Array ( Maybe UserId, Ascii )
                 array =
                     case List.find (Tuple.first >> (==) rawCoord) actualChanges of
                         Just ( _, original ) ->
@@ -243,40 +246,51 @@ clusterToTextImage model actualChanges bounds =
                                     |> Array.toList
                             )
             in
-            ( List.map2 (\slice rest -> slice ++ rest) slices value
+            ( List.map2 (\slice rest -> rest ++ slice) slices value
             , a
             )
         )
-        (\( a, b ) -> ( List.repeat GridCell.cellSize [], a :: b ))
+        (\( a, b ) -> ( List.repeat GridCell.cellSize [], b ++ [ a ] ))
         bounds
         ( List.repeat GridCell.cellSize [], [] )
-        |> (\( a, b ) -> a :: b)
+        |> (\( a, b ) -> b ++ [ a ])
         |> List.concat
         |> List.map
             (\row ->
+                let
+                    startsWithChange =
+                        List.head row |> Maybe.map Tuple.first |> Maybe.withDefault Nothing
+
+                    textToHtml currentUserId text =
+                        let
+                            text_ =
+                                List.reverse text |> String.fromList
+                        in
+                        case currentUserId of
+                            Just userId ->
+                                Html.String.span
+                                    [ Html.String.Attributes.style "background-color" "teal" ]
+                                    [ Html.String.text text_ ]
+
+                            Nothing ->
+                                Html.String.text text_
+                in
                 List.foldl
-                    (\( maybeUserId, ascii ) ( asciiChanged, text, html ) ->
-                        if (maybeUserId == Nothing) == asciiChanged then
-                            ( asciiChanged, String.fromChar (Ascii.toChar ascii) ++ text, html )
+                    (\( maybeUserId, ascii ) ( currentUserId, text, html ) ->
+                        if maybeUserId == currentUserId then
+                            ( currentUserId, Ascii.toChar ascii :: text, html )
 
                         else
-                            ( maybeUserId == Nothing
-                            , Ascii.toChar ascii |> String.fromChar
-                            , (case maybeUserId of
-                                Just userId ->
-                                    Html.String.span
-                                        [ Html.String.Attributes.style "color" "blue" ]
-                                        [ Html.String.text text ]
-
-                                Nothing ->
-                                    Html.String.text text
-                              )
-                                :: html
+                            ( maybeUserId
+                            , [ Ascii.toChar ascii ]
+                            , textToHtml currentUserId text :: html
                             )
                     )
-                    ( False, "", [] )
+                    ( startsWithChange, [], [] )
                     row
-                    |> (\( _, _, a ) -> List.reverse a)
+                    |> (\( currentUserId, text, html ) ->
+                            textToHtml currentUserId text :: html |> List.reverse
+                       )
             )
         |> List.intersperse [ Html.String.br [] [] ]
         |> List.concat
@@ -891,29 +905,19 @@ sendConfirmationEmail validated model sessionId userId time =
                     |> Crypto.Hash.sha256
                     |> ConfirmEmailKey
 
-            content : SendGrid.Content msg
             content =
-                SendGrid.htmlContent
-                    (Html.String.div []
-                        [ Html.String.a
-                            [ Html.String.Attributes.href
-                                ("https://ascii-collab.lamdera.app"
-                                    ++ UrlHelper.encodeUrl (EmailConfirmationRoute key)
-                                )
-                            ]
-                            [ Html.String.text "Click this link" ]
-                        , Html.String.text
-                            " to confirm you want to be notified about changes people make on ascii-collab."
-                        , Html.String.text "If this email was sent to you in error, you can safely ignore it."
+                Html.String.div []
+                    [ Html.String.a
+                        [ Html.String.Attributes.href
+                            ("https://ascii-collab.lamdera.app"
+                                ++ UrlHelper.encodeUrl (EmailConfirmationRoute key)
+                            )
                         ]
-                    )
-
-            email : SendGrid.Email a
-            email =
-                asciiCollabEmail
-                    (NonemptyString 'C' "onfirm ascii-collab notifications")
-                    content
-                    validated.email
+                        [ Html.String.text "Click this link" ]
+                    , Html.String.text
+                        " to confirm you want to be notified about changes people make on ascii-collab."
+                    , Html.String.text "If this email was sent to you in error, you can safely ignore it."
+                    ]
         in
         ( { model
             | pendingEmails =
@@ -928,20 +932,13 @@ sendConfirmationEmail validated model sessionId userId time =
                         }
             , secretLinkCounter = model.secretLinkCounter + 1
           }
-        , [ SendEmail (ConfirmationEmailSent sessionId time) email ]
+        , [ SendEmail
+                (ConfirmationEmailSent sessionId time)
+                (NonemptyString 'C' "onfirm ascii-collab notifications")
+                content
+                validated.email
+          ]
         )
-
-
-asciiCollabEmail : NonemptyString -> SendGrid.Content a -> Email.Email -> SendGrid.Email a
-asciiCollabEmail subject content to =
-    { subject = subject
-    , content = content
-    , to = Nonempty.fromElement (Email.toString to)
-    , cc = []
-    , bcc = []
-    , nameOfSender = "ascii-collab"
-    , emailAddressOfSender = "ascii-collab@lamdera.app"
-    }
 
 
 updateLocalChange :

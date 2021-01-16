@@ -34,7 +34,10 @@ addChange coord originalCell (RecentChanges recentChanges) =
             | frequencies =
                 AssocList.update
                     Every3Hours
-                    (Maybe.withDefault Dict.empty >> Dict.insert (Helper.toRawCoord coord) originalCell >> Just)
+                    (Maybe.withDefault Dict.empty
+                        >> Dict.update (Helper.toRawCoord coord) (Maybe.withDefault originalCell >> Just)
+                        >> Just
+                    )
                     recentChanges.frequencies
         }
 
@@ -65,7 +68,7 @@ addChanges frequency coords (RecentChanges recentChanges) =
 longestDurationReady : Quantity Int ThreeHours -> Frequency
 longestDurationReady counter =
     NotifyMe.frequencies
-        |> List.sortBy (NotifyMe.duration >> Quantity.unwrap)
+        |> Quantity.sortBy NotifyMe.duration
         |> List.takeWhile
             (\frequency -> Quantity.modBy (NotifyMe.duration frequency) counter |> (==) Quantity.zero)
         |> List.reverse
@@ -76,7 +79,7 @@ longestDurationReady counter =
 threeHoursElapsed : RecentChanges -> ( List ( Frequency, Dict RawCellCoord GridCell.Cell ), RecentChanges )
 threeHoursElapsed (RecentChanges recentChanges) =
     let
-        longestDurationReady_ =
+        longestFrequencyReady_ =
             longestDurationReady recentChanges.threeHoursElapsed
 
         maybeNextLongest : Maybe Frequency
@@ -86,18 +89,22 @@ threeHoursElapsed (RecentChanges recentChanges) =
                 |> List.dropWhile
                     (\frequency ->
                         NotifyMe.duration frequency
-                            |> Quantity.lessThan (NotifyMe.duration longestDurationReady_)
+                            |> Quantity.lessThanOrEqualTo (NotifyMe.duration longestFrequencyReady_)
                     )
                 |> List.head
 
-        changes : List ( Frequency, Dict RawCellCoord GridCell.Cell )
-        changes =
+        allReadyFrequencies : AssocList.Dict Frequency (Dict RawCellCoord GridCell.Cell)
+        allReadyFrequencies =
             recentChanges.frequencies
                 |> AssocList.filter
                     (\frequency _ ->
                         NotifyMe.duration frequency
-                            |> Quantity.lessThanOrEqualTo (NotifyMe.duration longestDurationReady_)
+                            |> Quantity.lessThanOrEqualTo (NotifyMe.duration longestFrequencyReady_)
                     )
+
+        changes : List ( Frequency, Dict RawCellCoord GridCell.Cell )
+        changes =
+            allReadyFrequencies
                 |> AssocList.toList
                 |> Quantity.sortBy (Tuple.first >> NotifyMe.duration)
                 |> List.foldl
@@ -120,7 +127,7 @@ threeHoursElapsed (RecentChanges recentChanges) =
                             |> AssocList.filter
                                 (\frequency _ ->
                                     NotifyMe.duration frequency
-                                        |> Quantity.greaterThan (NotifyMe.duration longestDurationReady_)
+                                        |> Quantity.greaterThan (NotifyMe.duration longestFrequencyReady_)
                                 )
                     , threeHoursElapsed = Quantity.plus recentChanges.threeHoursElapsed (Quantity 1)
                 }

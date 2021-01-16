@@ -16,6 +16,7 @@ import Grid
 import GridCell
 import Helper exposing (Coord)
 import Html exposing (Html)
+import Html.String
 import Hyperlink exposing (Hyperlink)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
@@ -24,7 +25,6 @@ import NonemptyExtra as Nonempty
 import NotifyMe exposing (Frequency(..))
 import Parser
 import Quantity exposing (Quantity(..))
-import RecentChanges
 import Time
 import Types exposing (BackendModel, BackendMsg(..), FrontendModel, ToBackend(..), ToFrontend(..))
 import Units exposing (AsciiUnit, CellUnit)
@@ -34,10 +34,15 @@ import User
 
 type TestResult
     = Passed
-    | Failed String
+    | Failed (Element Never)
 
 
-main : Html msg
+failed : String -> TestResult
+failed =
+    Element.text >> List.singleton >> Element.paragraph [] >> Failed
+
+
+main : Html Never
 main =
     Element.layout [] <|
         Element.column [ Element.padding 16 ]
@@ -49,10 +54,10 @@ main =
                  in
                  (case effect of
                     [] ->
-                        Failed "No response sent"
+                        failed "No response sent"
 
                     _ :: _ :: _ ->
-                        Failed "Too many responses sent"
+                        failed "Too many responses sent"
 
                     (SendToFrontend clientId head) :: [] ->
                         if clientId == "client0" then
@@ -67,16 +72,16 @@ main =
                                             Passed
 
                                         Nothing ->
-                                            Failed "User not found"
+                                            failed "User not found"
 
                                 _ ->
-                                    Failed "Wrong ToFrontend msg"
+                                    failed "Wrong ToFrontend msg"
 
                         else
-                            Failed "Response sent to wrong client"
+                            failed "Response sent to wrong client"
 
-                    (SendEmail _ _) :: [] ->
-                        Failed "Wrong effect"
+                    (SendEmail _ _ _ _) :: [] ->
+                        failed "Wrong effect"
                  )
                     |> testSingle
                 )
@@ -217,7 +222,7 @@ main =
                                 Passed
 
                             else
-                                Failed "Expected 4 spaces"
+                                failed "Expected 4 spaces"
                        )
                     |> testSingle
                 )
@@ -238,7 +243,7 @@ main =
                                 Passed
 
                             else
-                                Failed "Expected single a"
+                                failed "Expected single a"
                        )
                     |> testSingle
                 )
@@ -263,7 +268,7 @@ main =
                                 Passed
 
                             else
-                                Failed "Expected single a"
+                                failed "Expected single a"
                        )
                     |> testSingle
             , test "statistics single a at min coord, not aligned vertically" <|
@@ -287,7 +292,7 @@ main =
                                 Passed
 
                             else
-                                Failed "Expected single a"
+                                failed "Expected single a"
                        )
                     |> testSingle
             , test "statistics single a at min coord, not aligned horizontally" <|
@@ -311,7 +316,7 @@ main =
                                 Passed
 
                             else
-                                Failed "Expected single a"
+                                failed "Expected single a"
                        )
                     |> testSingle
             , test "statistics single a outside below" <|
@@ -335,7 +340,7 @@ main =
                                 Passed
 
                             else
-                                Failed "Expected no a"
+                                failed "Expected no a"
                        )
                     |> testSingle
             , test "statistics single a outside to the right" <|
@@ -359,7 +364,7 @@ main =
                                 Passed
 
                             else
-                                Failed "Expected no a"
+                                failed "Expected no a"
                        )
                     |> testSingle
             , test "Parse no hyperlink" <| parseHyperlinkTest "test" []
@@ -436,7 +441,7 @@ main =
                                 testSingle Passed
 
                             else
-                                testSingle <| Failed ("Expected bbbbb but got " ++ a)
+                                testSingle <| failed ("Expected bbbbb but got " ++ a)
                        )
                 )
             , Maybe.map
@@ -466,11 +471,11 @@ main =
                         |> testAssert
                             (\( _, effect ) ->
                                 case effect of
-                                    (SendEmail _ _) :: [] ->
+                                    (SendEmail _ _ _ _) :: [] ->
                                         Passed
 
                                     _ ->
-                                        Failed "No confirmation email attempted"
+                                        failed "No confirmation email attempted"
                             )
                         |> testMap Tuple.first
                         |> testMap
@@ -491,7 +496,7 @@ main =
                                             subscribed
 
                                     _ ->
-                                        Failed "Missing email notification configuration"
+                                        failed "Missing email notification configuration"
                             )
                         |> testAssert
                             (\( _, effect ) ->
@@ -520,7 +525,7 @@ main =
                                             subscribed
 
                                     _ ->
-                                        Failed "Missing email notification configuration"
+                                        failed "Missing email notification configuration"
                             )
                         |> testAssert
                             (\( _, effect ) ->
@@ -536,7 +541,7 @@ main =
                                     )
                                     "sessionId0"
                                     "clientId0"
-                                    (changes ( Units.asciiUnit 5, Units.asciiUnit 1 ) "test" |> GridChange)
+                                    (changes ( Units.asciiUnit 3, Units.asciiUnit 1 ) "123 \n abc\nxyz" |> GridChange)
                             )
                         --|> testAssert
                         --    (\( model, _ ) ->
@@ -555,12 +560,21 @@ main =
                             )
                         |> testAssert
                             (\( _, effect ) ->
-                                expectEqual [] effect
+                                case effect of
+                                    (SendEmail _ _ content _) :: [] ->
+                                        Failed
+                                            (Html.String.toHtml content
+                                                |> Element.html
+                                                |> Element.el [ Element.Background.color <| Element.rgb 1 1 1 ]
+                                            )
+
+                                    _ ->
+                                        failed "Expected a single SendEmail effect"
                             )
                         |> testMap (always ())
                 )
                 (Email.fromString "test@test.com")
-                |> Maybe.withDefault (Failed "Invalid email" |> testSingle)
+                |> Maybe.withDefault (failed "Invalid email" |> testSingle)
                 |> test "Email notification happy path"
             , Maybe.map
                 (\email ->
@@ -611,7 +625,7 @@ main =
                         |> testMap (always ())
                 )
                 (Email.fromString "test@test.com")
-                |> Maybe.withDefault (Failed "Invalid email" |> testSingle)
+                |> Maybe.withDefault (failed "Invalid email" |> testSingle)
                 |> test "Email confirmation rate limit"
             ]
 
@@ -632,7 +646,7 @@ expectEqual expected actual =
         Passed
 
     else
-        Failed <|
+        failed <|
             "Expected: "
                 ++ Debug.toString expected
                 ++ " but got "
@@ -648,7 +662,7 @@ parseHyperlinkTest input expected =
     expectEqual (Ok expected) actual |> testSingle
 
 
-boundsTest : String -> List (Coord unit) -> Bounds unit -> Element msg
+boundsTest : String -> List (Coord unit) -> Bounds unit -> Element Never
 boundsTest name expected bounds =
     Bounds.coordRangeFold
         (::)
@@ -660,7 +674,7 @@ boundsTest name expected bounds =
         |> test name
 
 
-boundsReverseTest : String -> List (Coord unit) -> Bounds unit -> Element msg
+boundsReverseTest : String -> List (Coord unit) -> Bounds unit -> Element Never
 boundsReverseTest name expected bounds =
     Bounds.coordRangeFoldReverse
         (::)
@@ -672,13 +686,13 @@ boundsReverseTest name expected bounds =
                     Passed
 
                 else
-                    Failed (Debug.toString a ++ " is incorrect. Expected " ++ Debug.toString expected)
+                    failed (Debug.toString a ++ " is incorrect. Expected " ++ Debug.toString expected)
            )
         |> testSingle
         |> test name
 
 
-test : String -> Test model -> Element msg
+test : String -> Test model -> Element Never
 test name (Test testResults _) =
     Element.row
         [ Element.width Element.fill ]
@@ -687,12 +701,12 @@ test name (Test testResults _) =
             (\testResult ->
                 case testResult of
                     Failed error ->
-                        Element.paragraph
+                        Element.el
                             [ Element.Background.color (Element.rgb 1 0 0)
                             , Element.padding 8
                             , Element.width Element.fill
                             ]
-                            [ Element.text error ]
+                            error
 
                     Passed ->
                         Element.el
@@ -773,7 +787,7 @@ checkGridValue ( cellPosition, localPosition ) value =
                     Passed
 
                 else
-                    Failed
+                    failed
                         ("Wrong value found in grid "
                             ++ Debug.toString ascii
                             ++ " at cell position "
