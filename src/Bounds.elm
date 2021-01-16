@@ -1,5 +1,6 @@
 module Bounds exposing
     ( Bounds
+    , addToMax
     , bounds
     , boundsToBounds2d
     , center
@@ -78,7 +79,7 @@ fromCoords coords =
     in
     Bounds
         { min = ( Nonempty.minimumBy Quantity.unwrap xValues, Nonempty.maximumBy Quantity.unwrap xValues )
-        , max = ( Nonempty.minimumBy Quantity.unwrap xValues, Nonempty.maximumBy Quantity.unwrap xValues )
+        , max = ( Nonempty.minimumBy Quantity.unwrap yValues, Nonempty.maximumBy Quantity.unwrap yValues )
         }
 
 
@@ -156,6 +157,11 @@ center (Bounds bounds_) =
     Point2d.xy
         (Quantity.plus minX maxX |> Quantity.toFloatQuantity |> Quantity.divideBy 2)
         (Quantity.plus minY maxY |> Quantity.toFloatQuantity |> Quantity.divideBy 2)
+
+
+addToMax : Coord unit -> Bounds unit -> Bounds unit
+addToMax coord (Bounds bounds_) =
+    Bounds { min = bounds_.min, max = Helper.addTuple coord bounds_.max }
 
 
 boundsToBounds2d : Bounds units -> BoundingBox2d units coordinate

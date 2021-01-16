@@ -34,6 +34,7 @@ import User
 
 type TestResult
     = Passed
+    | Inconclusive (Element Never)
     | Failed (Element Never)
 
 
@@ -541,12 +542,8 @@ main =
                                     )
                                     "sessionId0"
                                     "clientId0"
-                                    (changes ( Units.asciiUnit 3, Units.asciiUnit 1 ) "123 \n abc\nxyz" |> GridChange)
+                                    (changes ( Units.asciiUnit -1, Units.asciiUnit 0 ) "o  o\n  > \n\\__/" |> GridChange)
                             )
-                        --|> testAssert
-                        --    (\( model, _ ) ->
-                        --        expectEqual RecentChanges.init model.userChangesRecently
-                        --    )
                         |> testMap
                             (Tuple.first
                                 >> BackendLogic.update
@@ -562,7 +559,7 @@ main =
                             (\( _, effect ) ->
                                 case effect of
                                     (SendEmail _ _ content _) :: [] ->
-                                        Failed
+                                        Inconclusive
                                             (Html.String.toHtml content
                                                 |> Element.html
                                                 |> Element.el [ Element.Background.color <| Element.rgb 1 1 1 ]
@@ -570,6 +567,62 @@ main =
 
                                     _ ->
                                         failed "Expected a single SendEmail effect"
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.updateFromFrontend
+                                    (Time.millisToPosix
+                                        (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                    )
+                                    "sessionId0"
+                                    "clientId0"
+                                    (changes ( Units.asciiUnit -1, Units.asciiUnit 1 ) " < \n~~~~" |> GridChange)
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 3)
+                                        |> NotifyAdminTimeElapsed
+                                    )
+                            )
+                        |> testAssert
+                            (\( _, effect ) ->
+                                case effect of
+                                    (SendEmail _ _ content _) :: [] ->
+                                        Inconclusive
+                                            (Html.String.toHtml content
+                                                |> Element.html
+                                                |> Element.el [ Element.Background.color <| Element.rgb 1 1 1 ]
+                                            )
+
+                                    _ ->
+                                        failed "Expected a single SendEmail effect"
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 3)
+                                        |> NotifyAdminTimeElapsed
+                                    )
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 3)
+                                        |> NotifyAdminTimeElapsed
+                                    )
                             )
                         |> testMap (always ())
                 )
@@ -707,6 +760,14 @@ test name (Test testResults _) =
                             , Element.width Element.fill
                             ]
                             error
+
+                    Inconclusive content ->
+                        Element.el
+                            [ Element.Background.color (Element.rgb 0.9 0.8 0.3)
+                            , Element.padding 8
+                            , Element.width Element.fill
+                            ]
+                            content
 
                     Passed ->
                         Element.el

@@ -1,4 +1,4 @@
-module Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, asciiToWorld, asciiUnit, cellToAscii, cellUnit, inWorldUnits, pixelToWorldPixel, screenFrame, worldToAscii, worldUnit)
+module Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, asciiToWorld, asciiUnit, cellToAscii, cellToAscii_, cellUnit, inWorldUnits, pixelToWorldPixel, screenFrame, worldToAscii, worldUnit)
 
 import Ascii
 import Frame2d exposing (Frame2d)
@@ -22,7 +22,7 @@ type CellUnit
     = CellUnit Never
 
 
-asciiUnit : Int -> Quantity Int AsciiUnit
+asciiUnit : number -> Quantity number AsciiUnit
 asciiUnit =
     Quantity.Quantity
 
@@ -37,7 +37,7 @@ inWorldUnits (Quantity.Quantity value) =
     value
 
 
-cellUnit : Int -> Quantity Int CellUnit
+cellUnit : number -> Quantity number CellUnit
 cellUnit =
     Quantity.Quantity
 
@@ -66,6 +66,11 @@ worldToAscii point =
 cellToAscii : Coord CellUnit -> Coord AsciiUnit
 cellToAscii coord =
     Helper.multiplyTuple ( GridCell.cellSize, GridCell.cellSize ) coord |> Helper.toRawCoord |> Helper.fromRawCoord
+
+
+cellToAscii_ : Point2d CellUnit WorldCoordinate -> Point2d AsciiUnit WorldCoordinate
+cellToAscii_ coord =
+    coord |> Point2d.at (Quantity.per (cellUnit 1) (asciiUnit (toFloat GridCell.cellSize)))
 
 
 pixelToWorldPixel : Float -> Vector2d Pixels ScreenCoordinate -> Coord WorldPixel

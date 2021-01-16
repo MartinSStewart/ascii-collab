@@ -8,6 +8,7 @@ import Cluster
 import Crypto.Hash
 import Dict
 import Duration exposing (Duration)
+import Element
 import Email
 import Env
 import EverySet exposing (EverySet)
@@ -26,6 +27,7 @@ import Quantity exposing (Quantity(..))
 import RecentChanges
 import SendGrid
 import Set
+import Shaders
 import String.Nonempty exposing (NonemptyString(..))
 import Time
 import Types exposing (..)
@@ -126,13 +128,21 @@ update msg model =
                 clusters actualChanges =
                     List.map Tuple.first actualChanges |> Set.fromList |> Cluster.cluster
 
-                content actualChanges =
-                    List.map (\( bounds, _ ) -> clusterToTextImage model actualChanges bounds) (clusters actualChanges)
-                        |> Html.String.pre
+                content frequency_ actualChanges =
+                    let
+                        images =
+                            List.map (\( bounds, _ ) -> clusterToTextImage model actualChanges bounds) (clusters actualChanges)
+                    in
+                    Html.String.div
+                        [ Html.String.Attributes.style "background-color" "rgb(220, 220, 200)" ]
+                        [ subject frequency_ |> String.Nonempty.toString |> Html.String.text
+                        , Html.String.pre
                             [ Html.String.Attributes.style "font-family" "monospace"
                             , Html.String.Attributes.style "font-size" "16px"
                             , Html.String.Attributes.style "line-height" "14px"
                             ]
+                            images
+                        ]
 
                 subject frequency_ =
                     case frequency_ of
@@ -156,7 +166,7 @@ update msg model =
                 (\( frequency, changes ) ->
                     let
                         content_ =
-                            content (getActualChanges changes)
+                            content frequency (getActualChanges changes)
 
                         subject_ =
                             subject frequency
@@ -171,9 +181,6 @@ update msg model =
                                     content_
                                     email.email
                             )
-                 --asciiCollabEmail
-                 --SendEmail
-                 --(ChangeEmailSent time)
                 )
                 frequencyChanges
             )
@@ -217,6 +224,18 @@ clusterToTextImage :
     -> Bounds CellUnit
     -> Html.String.Html msg
 clusterToTextImage model actualChanges bounds =
+    let
+        url : String
+        url =
+            bounds
+                |> Bounds.addToMax ( Units.cellUnit 1, Units.cellUnit 1 )
+                |> Bounds.center
+                |> Units.cellToAscii_
+                |> Helper.roundPoint
+                |> UrlHelper.internalRoute False
+                |> UrlHelper.encodeUrl
+                |> (++) "https://ascii-collab.lamdera.app"
+    in
     Bounds.coordRangeFold
         (\coord ( value, a ) ->
             let
@@ -268,8 +287,24 @@ clusterToTextImage model actualChanges bounds =
                         in
                         case currentUserId of
                             Just userId ->
+                                let
+                                    { red, green, blue } =
+                                        Shaders.userColor userId
+                                            |> Shaders.lch2rgb
+                                            |> Element.toRgb
+                                in
                                 Html.String.span
-                                    [ Html.String.Attributes.style "background-color" "teal" ]
+                                    [ Html.String.Attributes.style
+                                        "background-color"
+                                        ("rgb("
+                                            ++ (String.fromInt <| round <| red * 255)
+                                            ++ ","
+                                            ++ (String.fromInt <| round <| green * 255)
+                                            ++ ","
+                                            ++ (String.fromInt <| round <| blue * 255)
+                                            ++ ")"
+                                        )
+                                    ]
                                     [ Html.String.text text_ ]
 
                             Nothing ->
@@ -294,7 +329,13 @@ clusterToTextImage model actualChanges bounds =
             )
         |> List.intersperse [ Html.String.br [] [] ]
         |> List.concat
-        |> Html.String.div []
+        |> Html.String.a
+            [ Html.String.Attributes.href url
+            , Html.String.Attributes.style "color" "black"
+            , Html.String.Attributes.style "text-decoration" "none"
+            ]
+        |> List.singleton
+        |> Html.String.div [ Html.String.Attributes.style "background-color" "white" ]
 
 
 addError : Time.Posix -> BackendError -> BackendModel -> BackendModel
