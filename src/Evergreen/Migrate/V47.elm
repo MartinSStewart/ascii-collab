@@ -1,5 +1,6 @@
 module Evergreen.Migrate.V47 exposing (backendModel, backendMsg, frontendModel, frontendMsg, toBackend, toFrontend)
 
+import Ascii
 import AssocList
 import Dict
 import Evergreen.V45.Ascii
@@ -8,33 +9,32 @@ import Evergreen.V45.GridCell
 import Evergreen.V45.Helper
 import Evergreen.V45.Types as Old exposing (BackendMsg(..))
 import Evergreen.V45.User
-import Evergreen.V47.Ascii
-import Evergreen.V47.Grid
-import Evergreen.V47.GridCell
-import Evergreen.V47.Helper
-import Evergreen.V47.NotifyMe exposing (Frequency(..))
-import Evergreen.V47.RecentChanges exposing (RecentChanges(..))
-import Evergreen.V47.Types as New
-import Evergreen.V47.User
 import EverySet
+import Grid
+import GridCell
+import Helper
 import Lamdera.Migrations exposing (..)
 import List.Nonempty
+import NotifyMe
 import Quantity exposing (Quantity(..))
+import RecentChanges
+import Types as New
+import User
 
 
-migrateUserId : Evergreen.V45.User.UserId -> Evergreen.V47.User.UserId
+migrateUserId : Evergreen.V45.User.UserId -> User.UserId
 migrateUserId (Evergreen.V45.User.UserId userId) =
-    Evergreen.V47.User.UserId userId
+    User.UserId userId
 
 
-migrateAscii : Evergreen.V45.Ascii.Ascii -> Evergreen.V47.Ascii.Ascii
+migrateAscii : Evergreen.V45.Ascii.Ascii -> Ascii.Ascii
 migrateAscii (Evergreen.V45.Ascii.Ascii ascii) =
-    Evergreen.V47.Ascii.Ascii ascii
+    Ascii.Ascii ascii
 
 
-migrateCell : Evergreen.V45.GridCell.Cell -> Evergreen.V47.GridCell.Cell
+migrateCell : Evergreen.V45.GridCell.Cell -> GridCell.Cell
 migrateCell (Evergreen.V45.GridCell.Cell cell) =
-    Evergreen.V47.GridCell.Cell
+    GridCell.Cell
         { history =
             List.map
                 (\{ userId, position, line } ->
@@ -48,9 +48,9 @@ migrateCell (Evergreen.V45.GridCell.Cell cell) =
         }
 
 
-migrateGrid : Evergreen.V45.Grid.Grid -> Evergreen.V47.Grid.Grid
+migrateGrid : Evergreen.V45.Grid.Grid -> Grid.Grid
 migrateGrid (Evergreen.V45.Grid.Grid dict) =
-    Dict.map (\_ v -> migrateCell v) dict |> Evergreen.V47.Grid.Grid
+    Dict.map (\_ v -> migrateCell v) dict |> Grid.Grid
 
 
 migrateQuantity : Quantity number a -> Quantity number b
@@ -58,9 +58,14 @@ migrateQuantity (Quantity quantity) =
     Quantity quantity
 
 
-migrateCoord : Evergreen.V45.Helper.Coord a -> Evergreen.V47.Helper.Coord b
+migrateCoord : Evergreen.V45.Helper.Coord a -> Helper.Coord b
 migrateCoord ( x, y ) =
     ( migrateQuantity x, migrateQuantity y )
+
+
+recentChanges : RecentChanges.RecentChanges
+recentChanges =
+    RecentChanges.init
 
 
 migrateBackendModel : Old.BackendModel -> New.BackendModel
@@ -94,19 +99,7 @@ migrateBackendModel old =
                 { reporter = migrateUserId reporter, hiddenUser = migrateUserId hiddenUser, hidePoint = migrateCoord hidePoint }
             )
             old.usersHiddenRecently
-    , userChangesRecently =
-        RecentChanges
-            { frequencies =
-                [ Every3Hours
-                , Every12Hours
-                , Daily
-                , Weekly
-                , Monthly
-                ]
-                    |> List.map (\a -> ( a, Dict.empty ))
-                    |> AssocList.fromList
-            , threeHoursElapsed = Quantity 1
-            }
+    , userChangesRecently = recentChanges
     , pendingEmails = []
     , subscribedEmails = []
     , secretLinkCounter = 0
