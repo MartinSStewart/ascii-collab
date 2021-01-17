@@ -43,7 +43,7 @@ import SendGrid
 import Time
 import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
-import UrlHelper exposing (ConfirmEmailKey)
+import UrlHelper exposing (ConfirmEmailKey, UnsubscribeEmailKey)
 import User exposing (RawUserId, UserId)
 import WebGL
 import WebGL.Texture exposing (Texture)
@@ -131,6 +131,7 @@ type alias SubscribedEmail =
     , frequency : NotifyMe.Frequency
     , confirmTime : Time.Posix
     , userId : UserId
+    , unsubscribeKey : UnsubscribeEmailKey
     }
 
 
@@ -196,6 +197,7 @@ type ToBackend
     | ChangeViewBounds (Bounds CellUnit)
     | NotifyMeSubmitted NotifyMe.Validated
     | ConfirmationEmailConfirmed_ ConfirmEmailKey
+    | UnsubscribeEmail UnsubscribeEmailKey
 
 
 type BackendMsg
@@ -212,6 +214,7 @@ type ToFrontend
     | ChangeBroadcast (Nonempty Change)
     | NotifyMeEmailSent { isSuccessful : Bool }
     | NotifyMeConfirmed
+    | UnsubscribeEmailConfirmed
 
 
 type alias LoadingData_ =

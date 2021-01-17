@@ -21,6 +21,7 @@ type Model
     = InProgress InProgressModel
     | Completed
     | BackendError
+    | Unsubscribed
 
 
 type alias InProgressModel =
@@ -147,6 +148,17 @@ view modelChangedMsg submitMsg closeMsg model =
                         , label = Element.text "Close"
                         }
                     ]
+
+            Unsubscribed ->
+                Element.column
+                    formStyle
+                    [ Element.text "Your email is successfully unsubscribed."
+                    , Element.Input.button
+                        buttonStyle
+                        { onPress = Just closeMsg
+                        , label = Element.text "Close"
+                        }
+                    ]
         )
 
 
@@ -201,6 +213,9 @@ emailConfirmed model =
 
         BackendError ->
             BackendError
+
+        Unsubscribed ->
+            Unsubscribed
 
 
 form : (InProgressModel -> msg) -> (Validated -> msg) -> msg -> InProgressModel -> Element msg
@@ -278,6 +293,15 @@ emailField model modelChangedMsg =
                     (Element.text "Email address")
             }
         )
+
+
+privacyPolicy : Element msg
+privacyPolicy =
+    Element.paragraph
+        [ Element.width <| Element.maximum 600 Element.fill ]
+        [ Element.el [ Element.Font.bold ] (Element.text "Privacy policy: ")
+        , Element.text "Your email is only used for notifications. If this privacy policy changes, an email will be sent out in advance."
+        ]
 
 
 frequencyField : InProgressModel -> (InProgressModel -> msg) -> Element msg

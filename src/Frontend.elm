@@ -167,6 +167,17 @@ init url key =
                             ]
                     }
 
+                Just (UrlHelper.EmailUnsubscribeRoute a) ->
+                    { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+                    , showNotifyMe = True
+                    , notifyMe = NotifyMe.init |> NotifyMe.emailConfirmed
+                    , cmd =
+                        Cmd.batch
+                            [ Lamdera.sendToBackend (UnsubscribeEmail a)
+                            , Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
+                            ]
+                    }
+
                 Nothing ->
                     { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 )
                     , showNotifyMe = False
@@ -1367,6 +1378,9 @@ updateLoadedFromBackend msg model =
 
         NotifyMeConfirmed ->
             ( { model | notifyMeModel = NotifyMe.emailConfirmed model.notifyMeModel }, Cmd.none )
+
+        UnsubscribeEmailConfirmed ->
+            ( { model | notifyMeModel = Debug.todo "" }, Cmd.none )
 
 
 textarea : Maybe Hyperlink -> FrontendLoaded -> Element.Attribute FrontendMsg

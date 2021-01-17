@@ -28,7 +28,7 @@ import Quantity exposing (Quantity(..))
 import Time
 import Types exposing (BackendModel, BackendMsg(..), FrontendModel, ToBackend(..), ToFrontend(..))
 import Units exposing (AsciiUnit, CellUnit)
-import UrlHelper exposing (ConfirmEmailKey(..))
+import UrlHelper exposing (ConfirmEmailKey(..), UnsubscribeEmailKey(..))
 import User
 
 
@@ -46,7 +46,7 @@ failed =
 main : Html Never
 main =
     Element.layout [] <|
-        Element.column [ Element.padding 16 ]
+        Element.column [ Element.padding 16, Element.spacing 16 ]
             [ test
                 "Request Data creates user"
                 (let
@@ -453,175 +453,174 @@ main =
                 (Email.fromString "test@test.com")
                 |> Maybe.withDefault (failed "Invalid email" |> testSingle)
                 |> test "Email subscription happy path"
+            , Maybe.map
+                (\email ->
+                    notifyMeEvery Every3Hours email
+                        |> testModel
+                        |> testInit
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.updateFromFrontend
+                                    (Time.millisToPosix
+                                        (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                    )
+                                    "sessionId0"
+                                    "clientId0"
+                                    (changes ( Units.asciiUnit -1, Units.asciiUnit 0 ) "o  o\n  > \n\\__/" |> GridChange)
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 3)
+                                        |> NotifyAdminTimeElapsed
+                                    )
+                            )
+                        |> testAssert
+                            (\( _, effect ) ->
+                                case effect of
+                                    (SendEmail _ _ content _) :: [] ->
+                                        Html.String.toHtml content |> Element.html |> Inconclusive
 
-            --, Maybe.map
-            --    (\email ->
-            --        notifyMeEvery Every3Hours email
-            --            |> testModel
-            --            |> testInit
-            --            |> testMap
-            --                (Tuple.first
-            --                    >> BackendLogic.updateFromFrontend
-            --                        (Time.millisToPosix
-            --                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
-            --                        )
-            --                        "sessionId0"
-            --                        "clientId0"
-            --                        (changes ( Units.asciiUnit -1, Units.asciiUnit 0 ) "o  o\n  > \n\\__/" |> GridChange)
-            --                )
-            --            |> testMap
-            --                (Tuple.first
-            --                    >> BackendLogic.update
-            --                        (Duration.addTo
-            --                            (Time.millisToPosix
-            --                                (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
-            --                            )
-            --                            (Duration.hours 3)
-            --                            |> NotifyAdminTimeElapsed
-            --                        )
-            --                )
-            --            |> testAssert
-            --                (\( _, effect ) ->
-            --                    case effect of
-            --                        (SendEmail _ _ content _) :: [] ->
-            --                            Html.String.toHtml content |> Element.html |> Inconclusive
-            --
-            --                        _ ->
-            --                            failed "Expected a single SendEmail effect"
-            --                )
-            --            |> testMap
-            --                (Tuple.first
-            --                    >> BackendLogic.updateFromFrontend
-            --                        (Time.millisToPosix
-            --                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
-            --                        )
-            --                        "sessionId0"
-            --                        "clientId0"
-            --                        (changes ( Units.asciiUnit -2, Units.asciiUnit 1 ) "  < \n~~~~~~" |> GridChange)
-            --                )
-            --            |> testMap
-            --                (Tuple.first
-            --                    >> BackendLogic.update
-            --                        (Duration.addTo
-            --                            (Time.millisToPosix
-            --                                (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
-            --                            )
-            --                            (Duration.hours 6)
-            --                            |> NotifyAdminTimeElapsed
-            --                        )
-            --                )
-            --            |> testAssert
-            --                (\( _, effect ) ->
-            --                    case effect of
-            --                        (SendEmail _ _ content _) :: [] ->
-            --                            Html.String.toHtml content |> Element.html |> Inconclusive
-            --
-            --                        _ ->
-            --                            failed "Expected a single SendEmail effect"
-            --                )
-            --            |> testMap (always ())
-            --    )
-            --    (Email.fromString "test@test.com")
-            --    |> Maybe.withDefault (failed "Invalid email" |> testSingle)
-            --    |> test "Email notification every 3 hours"
-            --, Maybe.map
-            --    (\email ->
-            --        notifyMeEvery Every12Hours email
-            --            |> testModel
-            --            |> testInit
-            --            |> testMap
-            --                (Tuple.first
-            --                    >> BackendLogic.updateFromFrontend
-            --                        (Time.millisToPosix
-            --                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
-            --                        )
-            --                        "sessionId0"
-            --                        "clientId0"
-            --                        (changes ( Units.asciiUnit -1, Units.asciiUnit 0 ) "o  o\n  > \n\\__/" |> GridChange)
-            --                )
-            --            |> testMap
-            --                (Tuple.first
-            --                    >> BackendLogic.update
-            --                        (Duration.addTo
-            --                            (Time.millisToPosix
-            --                                (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
-            --                            )
-            --                            (Duration.hours 3)
-            --                            |> NotifyAdminTimeElapsed
-            --                        )
-            --                )
-            --            |> testAssert (\( _, effect ) -> expectEqual [] effect)
-            --            |> testMap
-            --                (Tuple.first
-            --                    >> BackendLogic.updateFromFrontend
-            --                        (Time.millisToPosix
-            --                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
-            --                        )
-            --                        "sessionId0"
-            --                        "clientId0"
-            --                        (changes ( Units.asciiUnit -2, Units.asciiUnit 1 ) "  < \n~~~~~~" |> GridChange)
-            --                )
-            --            |> testMap
-            --                (Tuple.first
-            --                    >> BackendLogic.update
-            --                        (Duration.addTo
-            --                            (Time.millisToPosix
-            --                                (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
-            --                            )
-            --                            (Duration.hours 6)
-            --                            |> NotifyAdminTimeElapsed
-            --                        )
-            --                )
-            --            |> testAssert (\( _, effect ) -> expectEqual [] effect)
-            --            |> testMap
-            --                (Tuple.first
-            --                    >> BackendLogic.update
-            --                        (Duration.addTo
-            --                            (Time.millisToPosix
-            --                                (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
-            --                            )
-            --                            (Duration.hours 9)
-            --                            |> NotifyAdminTimeElapsed
-            --                        )
-            --                )
-            --            |> testAssert (\( _, effect ) -> expectEqual [] effect)
-            --            |> testMap
-            --                (Tuple.first
-            --                    >> BackendLogic.update
-            --                        (Duration.addTo
-            --                            (Time.millisToPosix
-            --                                (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
-            --                            )
-            --                            (Duration.hours 12)
-            --                            |> NotifyAdminTimeElapsed
-            --                        )
-            --                )
-            --            |> testAssert
-            --                (\( _, effect ) ->
-            --                    case effect of
-            --                        (SendEmail _ _ content _) :: [] ->
-            --                            Html.String.toHtml content |> Element.html |> Inconclusive
-            --
-            --                        _ ->
-            --                            failed "Expected a single SendEmail effect"
-            --                )
-            --            |> testMap
-            --                (Tuple.first
-            --                    >> BackendLogic.update
-            --                        (Duration.addTo
-            --                            (Time.millisToPosix
-            --                                (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
-            --                            )
-            --                            (Duration.hours 15)
-            --                            |> NotifyAdminTimeElapsed
-            --                        )
-            --                )
-            --            |> testAssert (\( _, effect ) -> expectEqual [] effect)
-            --            |> testMap (always ())
-            --    )
-            --    (Email.fromString "test@test.com")
-            --    |> Maybe.withDefault (failed "Invalid email" |> testSingle)
-            --    |> test "Email notification every 12 hours"
+                                    _ ->
+                                        failed "Expected a single SendEmail effect"
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.updateFromFrontend
+                                    (Time.millisToPosix
+                                        (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                    )
+                                    "sessionId0"
+                                    "clientId0"
+                                    (changes ( Units.asciiUnit -2, Units.asciiUnit 1 ) "  < \n~~~~~~" |> GridChange)
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 6)
+                                        |> NotifyAdminTimeElapsed
+                                    )
+                            )
+                        |> testAssert
+                            (\( _, effect ) ->
+                                case effect of
+                                    (SendEmail _ _ content _) :: [] ->
+                                        Html.String.toHtml content |> Element.html |> Inconclusive
+
+                                    _ ->
+                                        failed "Expected a single SendEmail effect"
+                            )
+                        |> testMap (always ())
+                )
+                (Email.fromString "test@test.com")
+                |> Maybe.withDefault (failed "Invalid email" |> testSingle)
+                |> test "Email notification every 3 hours"
+            , Maybe.map
+                (\email ->
+                    notifyMeEvery Every12Hours email
+                        |> testModel
+                        |> testInit
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.updateFromFrontend
+                                    (Time.millisToPosix
+                                        (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                    )
+                                    "sessionId0"
+                                    "clientId0"
+                                    (changes ( Units.asciiUnit -1, Units.asciiUnit 0 ) "o  o\n  > \n\\__/" |> GridChange)
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 3)
+                                        |> NotifyAdminTimeElapsed
+                                    )
+                            )
+                        |> testAssert (\( _, effect ) -> expectEqual [] effect)
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.updateFromFrontend
+                                    (Time.millisToPosix
+                                        (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                    )
+                                    "sessionId0"
+                                    "clientId0"
+                                    (changes ( Units.asciiUnit -2, Units.asciiUnit 1 ) "  < \n~~~~~~" |> GridChange)
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 6)
+                                        |> NotifyAdminTimeElapsed
+                                    )
+                            )
+                        |> testAssert (\( _, effect ) -> expectEqual [] effect)
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 9)
+                                        |> NotifyAdminTimeElapsed
+                                    )
+                            )
+                        |> testAssert (\( _, effect ) -> expectEqual [] effect)
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 12)
+                                        |> NotifyAdminTimeElapsed
+                                    )
+                            )
+                        |> testAssert
+                            (\( _, effect ) ->
+                                case effect of
+                                    (SendEmail _ _ content _) :: [] ->
+                                        Html.String.toHtml content |> Element.html |> Inconclusive
+
+                                    _ ->
+                                        failed "Expected a single SendEmail effect"
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 15)
+                                        |> NotifyAdminTimeElapsed
+                                    )
+                            )
+                        |> testAssert (\( _, effect ) -> expectEqual [] effect)
+                        |> testMap (always ())
+                )
+                (Email.fromString "test@test.com")
+                |> Maybe.withDefault (failed "Invalid email" |> testSingle)
+                |> test "Email notification every 12 hours"
             , Maybe.map
                 (\email ->
                     notifyMeEvery Every3Hours email
@@ -714,6 +713,139 @@ main =
                 (Email.fromString "test@test.com")
                 |> Maybe.withDefault (failed "Invalid email" |> testSingle)
                 |> test "Many changes in email notification"
+            , Maybe.map
+                (\email ->
+                    notifyMeEvery Every3Hours email
+                        |> testModel
+                        |> testInit
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.updateFromFrontend
+                                    (Time.millisToPosix
+                                        (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                    )
+                                    "sessionId0"
+                                    "clientId0"
+                                    (GridChange (Nonempty.fromElement LocalAddUndo))
+                            )
+                        |> canvasChange
+                            ( Units.asciiUnit 0, Units.asciiUnit 0 )
+                            "a"
+                            (Time.millisToPosix
+                                (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.updateFromFrontend
+                                    (Time.millisToPosix
+                                        (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                    )
+                                    "sessionId0"
+                                    "clientId0"
+                                    (GridChange (Nonempty.fromElement LocalUndo))
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 3)
+                                        |> NotifyAdminTimeElapsed
+                                    )
+                            )
+                        |> testAssert (\( _, effect ) -> expectEqual [] effect)
+                        |> testMap (always ())
+                )
+                (Email.fromString "test@test.com")
+                |> Maybe.withDefault (failed "Invalid email" |> testSingle)
+                |> test "No notification if changes are undone"
+            , Maybe.map
+                (\email ->
+                    notifyMeEvery Every3Hours email
+                        |> testModel
+                        |> testInit
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.updateFromFrontend
+                                    (Time.millisToPosix
+                                        (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                    )
+                                    "sessionId0"
+                                    "clientId0"
+                                    (GridChange (Nonempty.fromElement LocalAddUndo))
+                            )
+                        |> canvasChange
+                            ( Units.asciiUnit 0, Units.asciiUnit 0 )
+                            "a"
+                            (Time.millisToPosix
+                                (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.update
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (3000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 3)
+                                        |> NotifyAdminTimeElapsed
+                                    )
+                            )
+                        |> testAssert
+                            (\( _, effect ) ->
+                                case effect of
+                                    (SendEmail _ _ content _) :: [] ->
+                                        let
+                                            (UnsubscribeEmailKey key) =
+                                                unsubscribeKey
+                                        in
+                                        if Debug.toString content |> String.contains key then
+                                            Passed
+
+                                        else
+                                            failed "Missing unsubscribe key"
+
+                                    _ ->
+                                        failed "Expected one email to be sent"
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.updateFromFrontend
+                                    (Time.millisToPosix 0)
+                                    "sessionId0"
+                                    "clientId1"
+                                    (RequestData
+                                        (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 5, 5 )))
+                                    )
+                            )
+                        |> testMap
+                            (Tuple.first
+                                >> BackendLogic.updateFromFrontend
+                                    (Duration.addTo
+                                        (Time.millisToPosix
+                                            (5000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
+                                        )
+                                        (Duration.hours 3)
+                                    )
+                                    "sessionId0"
+                                    "clientId1"
+                                    (UnsubscribeEmail unsubscribeKey)
+                            )
+                        |> testAssert
+                            (\( _, effect ) ->
+                                expectEqual [ SendToFrontend "clientId1" UnsubscribeEmailConfirmed ] effect
+                            )
+                        |> testAssert
+                            (\( model, _ ) ->
+                                expectEqual [] model.subscribedEmails
+                            )
+                        |> testMap (always ())
+                )
+                (Email.fromString "test@test.com")
+                |> Maybe.withDefault (failed "Invalid email" |> testSingle)
+                |> test "Unsubscribe"
             , Maybe.map
                 (\email ->
                     testInit BackendLogic.init
@@ -853,6 +985,7 @@ notifyMeEvery frequency email =
                             , frequency = frequency
                             , userId = User.userId 0
                             , confirmTime = Time.millisToPosix 3000
+                            , unsubscribeKey = unsubscribeKey
                             }
                             subscribed
 
@@ -865,6 +998,10 @@ notifyMeEvery frequency email =
                     [ SendToFrontend "clientId0" NotifyMeConfirmed ]
                     effect
             )
+
+
+unsubscribeKey =
+    UnsubscribeEmailKey "dbfcfd0d87220f629339bd3adcf452d083fde3246625fb3a93e314f833e20d37"
 
 
 changes : Coord AsciiUnit -> String -> Nonempty Change.LocalChange
@@ -931,9 +1068,9 @@ boundsReverseTest name expected bounds =
 
 test : String -> Test model -> Element Never
 test name (Test testResults _) =
-    Element.row
+    Element.column
         [ Element.width Element.fill ]
-        [ Element.el [ Element.alignTop, Element.padding 8 ] (Element.text name)
+        [ Element.paragraph [ Element.alignTop, Element.padding 8 ] [ Element.text name ]
         , List.map
             (\testResult ->
                 case testResult of

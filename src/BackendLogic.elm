@@ -33,7 +33,7 @@ import Time
 import Types exposing (..)
 import Undo
 import Units exposing (AsciiUnit, CellUnit)
-import UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..))
+import UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..), UnsubscribeEmailKey(..))
 import User exposing (UserId)
 
 
@@ -100,7 +100,7 @@ update msg model =
                 ( frequencyChanges, recentChangeState ) =
                     RecentChanges.threeHoursElapsed model.userChangesRecently
 
-                getActualChanges : Dict.Dict RawCellCoord GridCell.Cell -> List ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
+                getActualChanges : Dict.Dict RawCellCoord GridCell.Cell -> Maybe (Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) ))
                 getActualChanges changes =
                     Dict.toList changes
                         |> List.filterMap
@@ -121,30 +121,49 @@ update msg model =
                                 else
                                     Nothing
                             )
+                        |> Nonempty.fromList
 
                 clusters :
-                    List ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
+                    Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
                     -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) )
                 clusters actualChanges =
-                    List.map Tuple.first actualChanges |> Set.fromList |> Cluster.cluster
+                    Nonempty.map Tuple.first actualChanges |> Nonempty.toList |> Set.fromList |> Cluster.cluster
 
+                content :
+                    NotifyMe.Frequency
+                    -> Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
+                    -> UnsubscribeEmailKey
+                    -> Html.String.Html msg
                 content frequency_ actualChanges =
                     let
                         images =
                             List.map (\( bounds, _ ) -> clusterToTextImage model actualChanges bounds) (clusters actualChanges)
                     in
-                    Html.String.div
-                        [ Html.String.Attributes.style "background-color" "rgb(220, 220, 200)" ]
-                        [ subject frequency_ |> String.Nonempty.toString |> Html.String.text
-                        , Html.String.pre
-                            [ Html.String.Attributes.style "font-family" "monospace"
-                            , Html.String.Attributes.style "font-size" "16px"
-                            , Html.String.Attributes.style "line-height" "14px"
+                    \unsubscribeKey ->
+                        Html.String.div
+                            [ Html.String.Attributes.style "background-color" "rgb(220, 220, 200)"
+                            , Html.String.Attributes.style "padding" "8px"
                             ]
-                            images
-                        , Html.String.node "hr" [] []
-                        , Html.String.a [ Html.String.Attributes.href "asdf" ] [ Html.String.text "Click here to unsubscribe" ]
-                        ]
+                            [ String.Nonempty.toString (subject frequency_) |> Html.String.text
+                            , Html.String.div
+                                [ Html.String.Attributes.style "font-size" "14px"
+                                , Html.String.Attributes.style "margin-top" "8px"
+                                ]
+                                [ Html.String.text "(Click on an image to view it in ascii-collab)" ]
+                            , Html.String.pre
+                                [ Html.String.Attributes.style "font-family" "monospace"
+                                , Html.String.Attributes.style "font-size" "16px"
+                                , Html.String.Attributes.style "line-height" "14px"
+                                ]
+                                images
+                            , Html.String.node "hr" [] []
+                            , Html.String.a
+                                [ UrlHelper.encodeUrl (EmailUnsubscribeRoute unsubscribeKey)
+                                    |> (++) "https://ascii-collab.lamdera.app/"
+                                    |> Html.String.Attributes.href
+                                ]
+                                [ Html.String.text "Click here to unsubscribe" ]
+                            ]
 
                 subject frequency_ =
                     case frequency_ of
@@ -166,23 +185,28 @@ update msg model =
             ( { model | userChangesRecently = recentChangeState }
             , List.concatMap
                 (\( frequency, changes ) ->
-                    let
-                        content_ =
-                            content frequency (getActualChanges changes)
+                    case getActualChanges changes of
+                        Just actualChanges_ ->
+                            let
+                                content_ =
+                                    content frequency actualChanges_
 
-                        subject_ =
-                            subject frequency
-                    in
-                    List.filter (.frequency >> (==) frequency)
-                        model.subscribedEmails
-                        |> List.map
-                            (\email ->
-                                SendEmail
-                                    (ChangeEmailSent time email.email)
-                                    subject_
-                                    content_
-                                    email.email
-                            )
+                                subject_ =
+                                    subject frequency
+                            in
+                            List.filter (.frequency >> (==) frequency)
+                                model.subscribedEmails
+                                |> List.map
+                                    (\email ->
+                                        SendEmail
+                                            (ChangeEmailSent time email.email)
+                                            subject_
+                                            (content_ email.unsubscribeKey)
+                                            email.email
+                                    )
+
+                        Nothing ->
+                            []
                 )
                 frequencyChanges
             )
@@ -222,7 +246,7 @@ update msg model =
 
 clusterToTextImage :
     { a | grid : Grid, users : Dict.Dict Int { b | hiddenForAll : Bool } }
-    -> List ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
+    -> Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
     -> Bounds CellUnit
     -> Html.String.Html msg
 clusterToTextImage model actualChanges bounds =
@@ -236,7 +260,7 @@ clusterToTextImage model actualChanges bounds =
                 |> Helper.roundPoint
                 |> UrlHelper.internalRoute False
                 |> UrlHelper.encodeUrl
-                |> (++) "https://ascii-collab.lamdera.app"
+                |> (++) "https://ascii-collab.lamdera.app/"
     in
     Bounds.coordRangeFold
         (\coord ( value, a ) ->
@@ -246,7 +270,7 @@ clusterToTextImage model actualChanges bounds =
 
                 array : Array ( Maybe UserId, Ascii )
                 array =
-                    case List.find (Tuple.first >> (==) rawCoord) actualChanges of
+                    case List.find (Tuple.first >> (==) rawCoord) (Nonempty.toList actualChanges) of
                         Just ( _, original ) ->
                             original
 
@@ -340,7 +364,7 @@ clusterToTextImage model actualChanges bounds =
         |> Html.String.div
             [ Html.String.Attributes.style "background-color" "white"
             , Html.String.Attributes.style "width" "max-content"
-            , Html.String.Attributes.style "margin" "8px"
+            , Html.String.Attributes.style "margin" "8px 0"
             , Html.String.Attributes.style "padding" "2px 0"
             ]
 
@@ -897,22 +921,47 @@ updateFromFrontend currentTime sessionId clientId msg model =
         ConfirmationEmailConfirmed_ confirmEmailKey ->
             case List.find (.key >> (==) confirmEmailKey) model.pendingEmails of
                 Just pending ->
-                    ( { model
-                        | pendingEmails = List.filter (.key >> (/=) confirmEmailKey) model.pendingEmails
+                    let
+                        ( key, model2 ) =
+                            generateKey UnsubscribeEmailKey model
+                    in
+                    ( { model2
+                        | pendingEmails = List.filter (.key >> (/=) confirmEmailKey) model2.pendingEmails
                         , subscribedEmails =
-                            model.subscribedEmails
+                            model2.subscribedEmails
                                 |> List.filter (.email >> (/=) pending.email)
                                 |> (::)
                                     { email = pending.email
                                     , frequency = pending.frequency
                                     , confirmTime = currentTime
                                     , userId = pending.userId
+                                    , unsubscribeKey = key
                                     }
                       }
                     , broadcast
-                        (\sessionId_ _ ->
-                            if sessionId_ == sessionId then
+                        (\sessionId_ clientId_ ->
+                            if sessionId_ == sessionId && clientId_ == clientId then
                                 Just NotifyMeConfirmed
+
+                            else
+                                Nothing
+                        )
+                        model
+                    )
+
+                Nothing ->
+                    ( model, [] )
+
+        UnsubscribeEmail unsubscribeEmailKey ->
+            case List.find (.unsubscribeKey >> (==) unsubscribeEmailKey) model.subscribedEmails of
+                Just _ ->
+                    ( { model
+                        | subscribedEmails = List.filter (.unsubscribeKey >> (/=) unsubscribeEmailKey) model.subscribedEmails
+                      }
+                    , broadcast
+                        (\sessionId_ clientId_ ->
+                            if sessionId_ == sessionId && clientId_ == clientId then
+                                Just UnsubscribeEmailConfirmed
 
                             else
                                 Nothing
@@ -946,12 +995,8 @@ sendConfirmationEmail validated model sessionId userId time =
 
     else
         let
-            key : ConfirmEmailKey
-            key =
-                Env.confirmationEmailKey
-                    ++ String.fromInt model.secretLinkCounter
-                    |> Crypto.Hash.sha256
-                    |> ConfirmEmailKey
+            ( key, model2 ) =
+                generateKey ConfirmEmailKey model
 
             content =
                 Html.String.div []
@@ -967,9 +1012,9 @@ sendConfirmationEmail validated model sessionId userId time =
                     , Html.String.text "If this email was sent to you in error, you can safely ignore it."
                     ]
         in
-        ( { model
+        ( { model2
             | pendingEmails =
-                model.pendingEmails
+                model2.pendingEmails
                     |> List.filter (.email >> (/=) validated.email)
                     |> (::)
                         { email = validated.email
@@ -978,7 +1023,6 @@ sendConfirmationEmail validated model sessionId userId time =
                         , key = key
                         , userId = userId
                         }
-            , secretLinkCounter = model.secretLinkCounter + 1
           }
         , [ SendEmail
                 (ConfirmationEmailSent sessionId time)
@@ -987,6 +1031,16 @@ sendConfirmationEmail validated model sessionId userId time =
                 validated.email
           ]
         )
+
+
+generateKey : (String -> keyType) -> { a | secretLinkCounter : Int } -> ( keyType, { a | secretLinkCounter : Int } )
+generateKey keyType model =
+    ( Env.confirmationEmailKey
+        ++ String.fromInt model.secretLinkCounter
+        |> Crypto.Hash.sha256
+        |> keyType
+    , { model | secretLinkCounter = model.secretLinkCounter + 1 }
+    )
 
 
 updateLocalChange :

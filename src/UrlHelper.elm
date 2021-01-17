@@ -1,4 +1,4 @@
-module UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..), coordQueryParser, encodeUrl, internalRoute, notifyMe, urlParser)
+module UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..), UnsubscribeEmailKey(..), coordQueryParser, encodeUrl, internalRoute, notifyMe, urlParser)
 
 import Helper exposing (Coord)
 import Units exposing (AsciiUnit)
@@ -29,6 +29,9 @@ urlParser =
         , Url.Parser.s notifyMeConfirmation
             </> Url.Parser.string
             |> Url.Parser.map (ConfirmEmailKey >> EmailConfirmationRoute)
+        , Url.Parser.s unsubscribe
+            </> Url.Parser.string
+            |> Url.Parser.map (UnsubscribeEmailKey >> EmailUnsubscribeRoute)
         ]
 
 
@@ -52,6 +55,9 @@ encodeUrl route =
         EmailConfirmationRoute (ConfirmEmailKey key) ->
             Url.Builder.relative [ notifyMeConfirmation, key ] []
 
+        EmailUnsubscribeRoute (UnsubscribeEmailKey key) ->
+            Url.Builder.relative [ unsubscribe, key ] []
+
 
 notifyMe : String
 notifyMe =
@@ -63,13 +69,23 @@ notifyMeConfirmation =
     "a"
 
 
+unsubscribe : String
+unsubscribe =
+    "b"
+
+
 type InternalRoute
     = InternalRoute { showNotifyMe : Bool, viewPoint : Coord AsciiUnit }
     | EmailConfirmationRoute ConfirmEmailKey
+    | EmailUnsubscribeRoute UnsubscribeEmailKey
 
 
 type ConfirmEmailKey
     = ConfirmEmailKey String
+
+
+type UnsubscribeEmailKey
+    = UnsubscribeEmailKey String
 
 
 internalRoute : Bool -> Coord AsciiUnit -> InternalRoute
