@@ -25,6 +25,7 @@ import NonemptyExtra as Nonempty
 import NotifyMe exposing (Frequency(..))
 import Parser
 import Quantity exposing (Quantity(..))
+import String.Nonempty exposing (NonemptyString)
 import Time
 import Types exposing (BackendModel, BackendMsg(..), FrontendModel, ToBackend(..), ToFrontend(..))
 import Units exposing (AsciiUnit, CellUnit)
@@ -481,8 +482,8 @@ main =
                             )
                         |> testAssert
                             (\( _, effect ) ->
-                                case effect of
-                                    (SendEmail _ _ content _) :: [] ->
+                                case getEmails effect of
+                                    ( _, content, _ ) :: [] ->
                                         Html.String.toHtml content |> Element.html |> Inconclusive
 
                                     _ ->
@@ -511,8 +512,8 @@ main =
                             )
                         |> testAssert
                             (\( _, effect ) ->
-                                case effect of
-                                    (SendEmail _ _ content _) :: [] ->
+                                case getEmails effect of
+                                    ( _, content, _ ) :: [] ->
                                         Html.String.toHtml content |> Element.html |> Inconclusive
 
                                     _ ->
@@ -549,7 +550,7 @@ main =
                                         |> NotifyAdminTimeElapsed
                                     )
                             )
-                        |> testAssert (\( _, effect ) -> expectEqual [] effect)
+                        |> expectNoEmails
                         |> testMap
                             (Tuple.first
                                 >> BackendLogic.updateFromFrontend
@@ -571,7 +572,7 @@ main =
                                         |> NotifyAdminTimeElapsed
                                     )
                             )
-                        |> testAssert (\( _, effect ) -> expectEqual [] effect)
+                        |> expectNoEmails
                         |> testMap
                             (Tuple.first
                                 >> BackendLogic.update
@@ -583,7 +584,7 @@ main =
                                         |> NotifyAdminTimeElapsed
                                     )
                             )
-                        |> testAssert (\( _, effect ) -> expectEqual [] effect)
+                        |> expectNoEmails
                         |> testMap
                             (Tuple.first
                                 >> BackendLogic.update
@@ -597,8 +598,8 @@ main =
                             )
                         |> testAssert
                             (\( _, effect ) ->
-                                case effect of
-                                    (SendEmail _ _ content _) :: [] ->
+                                case getEmails effect of
+                                    ( _, content, _ ) :: [] ->
                                         Html.String.toHtml content |> Element.html |> Inconclusive
 
                                     _ ->
@@ -615,7 +616,7 @@ main =
                                         |> NotifyAdminTimeElapsed
                                     )
                             )
-                        |> testAssert (\( _, effect ) -> expectEqual [] effect)
+                        |> expectNoEmails
                         |> testMap (always ())
                 )
                 (Email.fromString "test@test.com")
@@ -659,8 +660,8 @@ main =
                             )
                         |> testAssert
                             (\( _, effect ) ->
-                                case effect of
-                                    (SendEmail _ _ content _) :: [] ->
+                                case getEmails effect of
+                                    ( _, content, _ ) :: [] ->
                                         Html.String.toHtml content |> Element.html |> Inconclusive
 
                                     _ ->
@@ -701,8 +702,8 @@ main =
                             )
                         |> testAssert
                             (\( _, effect ) ->
-                                case effect of
-                                    (SendEmail _ _ content _) :: [] ->
+                                case getEmails effect of
+                                    ( _, content, _ ) :: [] ->
                                         Html.String.toHtml content |> Element.html |> Inconclusive
 
                                     _ ->
@@ -755,7 +756,7 @@ main =
                                         |> NotifyAdminTimeElapsed
                                     )
                             )
-                        |> testAssert (\( _, effect ) -> expectEqual [] effect)
+                        |> expectNoEmails
                         |> testMap (always ())
                 )
                 (Email.fromString "test@test.com")
@@ -795,8 +796,8 @@ main =
                             )
                         |> testAssert
                             (\( _, effect ) ->
-                                case effect of
-                                    (SendEmail _ _ content _) :: [] ->
+                                case getEmails effect of
+                                    ( _, content, _ ) :: [] ->
                                         let
                                             (UnsubscribeEmailKey key) =
                                                 unsubscribeKey
@@ -905,6 +906,32 @@ canvasChange coord text time_ =
                 "sessionId0"
                 "clientId0"
                 (changes coord text |> GridChange)
+        )
+
+
+getEmails : List Effect -> List ( NonemptyString, Html.String.Html Never, Email.Email )
+getEmails effects =
+    List.filterMap
+        (\effect ->
+            case effect of
+                SendEmail _ subject content to ->
+                    Just ( subject, content, to )
+
+                _ ->
+                    Nothing
+        )
+        effects
+
+
+expectNoEmails =
+    testAssert
+        (\( _, effect ) ->
+            case getEmails effect of
+                [] ->
+                    Passed
+
+                _ ->
+                    failed "Expected no emails"
         )
 
 

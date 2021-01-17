@@ -83,133 +83,25 @@ update msg model =
 
         NotifyAdminTimeElapsed time ->
             let
-                --( newModel, cmd ) =
-                --    notifyAdmin model
-                --
-                --( newModel3, cmd3 ) =
-                --    case Dict.get (User.rawId backendUserId) newModel.users of
-                --        Just userData ->
-                --            drawStatistics time ( backendUserId, userData ) newModel
-                --
-                --        Nothing ->
-                --            let
-                --                ( newModel2, userData ) =
-                --                    createUser backendUserId newModel
-                --            in
-                --            drawStatistics time ( backendUserId, userData ) newModel2
-                ( frequencyChanges, recentChangeState ) =
-                    RecentChanges.threeHoursElapsed model.userChangesRecently
+                ( newModel, cmd ) =
+                    notifyAdmin model
 
-                getActualChanges : Dict.Dict RawCellCoord GridCell.Cell -> Maybe (Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) ))
-                getActualChanges changes =
-                    Dict.toList changes
-                        |> List.filterMap
-                            (\( coord, originalCell ) ->
-                                let
-                                    diff : Array ( Maybe UserId, Ascii )
-                                    diff =
-                                        diffCells
-                                            model
-                                            originalCell
-                                            (Grid.getCell (Helper.fromRawCoord coord) model.grid
-                                                |> Maybe.withDefault GridCell.empty
-                                            )
-                                in
-                                if Array.toList diff |> List.any (Tuple.first >> (/=) Nothing) then
-                                    Just ( coord, diff )
+                ( newModel2, cmd2 ) =
+                    sendChangeEmails time newModel
 
-                                else
-                                    Nothing
-                            )
-                        |> Nonempty.fromList
-
-                clusters :
-                    Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
-                    -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) )
-                clusters actualChanges =
-                    Nonempty.map Tuple.first actualChanges |> Nonempty.toList |> Set.fromList |> Cluster.cluster
-
-                content :
-                    NotifyMe.Frequency
-                    -> Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
-                    -> UnsubscribeEmailKey
-                    -> Html.String.Html msg
-                content frequency_ actualChanges =
-                    let
-                        images =
-                            List.map (\( bounds, _ ) -> clusterToTextImage model actualChanges bounds) (clusters actualChanges)
-                    in
-                    \unsubscribeKey ->
-                        Html.String.div
-                            [ Html.String.Attributes.style "background-color" "rgb(220, 220, 200)"
-                            , Html.String.Attributes.style "padding" "8px"
-                            ]
-                            [ String.Nonempty.toString (subject frequency_) |> Html.String.text
-                            , Html.String.div
-                                [ Html.String.Attributes.style "font-size" "14px"
-                                , Html.String.Attributes.style "margin-top" "8px"
-                                ]
-                                [ Html.String.text "(Click on an image to view it in ascii-collab)" ]
-                            , Html.String.pre
-                                [ Html.String.Attributes.style "font-family" "monospace"
-                                , Html.String.Attributes.style "font-size" "16px"
-                                , Html.String.Attributes.style "line-height" "14px"
-                                ]
-                                images
-                            , Html.String.node "hr" [] []
-                            , Html.String.a
-                                [ UrlHelper.encodeUrl (EmailUnsubscribeRoute unsubscribeKey)
-                                    |> (++) "https://ascii-collab.lamdera.app/"
-                                    |> Html.String.Attributes.href
-                                ]
-                                [ Html.String.text "Click here to unsubscribe" ]
-                            ]
-
-                subject frequency_ =
-                    case frequency_ of
-                        NotifyMe.Every3Hours ->
-                            NonemptyString 'C' "hanges over the past 3 hours"
-
-                        NotifyMe.Every12Hours ->
-                            NonemptyString 'C' "hanges over the past 12 hours"
-
-                        NotifyMe.Daily ->
-                            NonemptyString 'C' "hanges over the past day"
-
-                        NotifyMe.Weekly ->
-                            NonemptyString 'C' "hanges over the past week"
-
-                        NotifyMe.Monthly ->
-                            NonemptyString 'C' "hanges over the past month"
-            in
-            ( { model | userChangesRecently = recentChangeState }
-            , List.concatMap
-                (\( frequency, changes ) ->
-                    case getActualChanges changes of
-                        Just actualChanges_ ->
-                            let
-                                content_ =
-                                    content frequency actualChanges_
-
-                                subject_ =
-                                    subject frequency
-                            in
-                            List.filter (.frequency >> (==) frequency)
-                                model.subscribedEmails
-                                |> List.map
-                                    (\email ->
-                                        SendEmail
-                                            (ChangeEmailSent time email.email)
-                                            subject_
-                                            (content_ email.unsubscribeKey)
-                                            email.email
-                                    )
+                ( newModel4, cmd3 ) =
+                    case Dict.get (User.rawId backendUserId) newModel2.users of
+                        Just userData ->
+                            drawStatistics time ( backendUserId, userData ) newModel2
 
                         Nothing ->
-                            []
-                )
-                frequencyChanges
-            )
+                            let
+                                ( newModel3, userData ) =
+                                    createUser backendUserId newModel2
+                            in
+                            drawStatistics time ( backendUserId, userData ) newModel3
+            in
+            ( newModel4, cmd ++ cmd2 ++ cmd3 )
 
         NotifyAdminEmailSent ->
             ( model, [] )
@@ -242,6 +134,123 @@ update msg model =
 
                 Err error ->
                     ( addError time (SendGridError email error) model, [] )
+
+
+sendChangeEmails time model =
+    let
+        ( frequencyChanges, recentChangeState ) =
+            RecentChanges.threeHoursElapsed model.userChangesRecently
+
+        getActualChanges : Dict.Dict RawCellCoord GridCell.Cell -> Maybe (Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) ))
+        getActualChanges changes =
+            Dict.toList changes
+                |> List.filterMap
+                    (\( coord, originalCell ) ->
+                        let
+                            diff : Array ( Maybe UserId, Ascii )
+                            diff =
+                                diffCells
+                                    model
+                                    originalCell
+                                    (Grid.getCell (Helper.fromRawCoord coord) model.grid
+                                        |> Maybe.withDefault GridCell.empty
+                                    )
+                        in
+                        if Array.toList diff |> List.any (Tuple.first >> (/=) Nothing) then
+                            Just ( coord, diff )
+
+                        else
+                            Nothing
+                    )
+                |> Nonempty.fromList
+
+        clusters :
+            Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
+            -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) )
+        clusters actualChanges =
+            Nonempty.map Tuple.first actualChanges |> Nonempty.toList |> Set.fromList |> Cluster.cluster
+
+        content :
+            NotifyMe.Frequency
+            -> Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
+            -> UnsubscribeEmailKey
+            -> Html.String.Html msg
+        content frequency_ actualChanges =
+            let
+                images =
+                    List.map (\( bounds, _ ) -> clusterToTextImage model actualChanges bounds) (clusters actualChanges)
+            in
+            \unsubscribeKey ->
+                Html.String.div
+                    [ Html.String.Attributes.style "background-color" "rgb(220, 220, 200)"
+                    , Html.String.Attributes.style "padding" "8px"
+                    ]
+                    [ String.Nonempty.toString (subject frequency_) |> Html.String.text
+                    , Html.String.div
+                        [ Html.String.Attributes.style "font-size" "14px"
+                        , Html.String.Attributes.style "margin-top" "8px"
+                        ]
+                        [ Html.String.text "(Click on an image to view it in ascii-collab)" ]
+                    , Html.String.pre
+                        [ Html.String.Attributes.style "font-family" "monospace"
+                        , Html.String.Attributes.style "font-size" "16px"
+                        , Html.String.Attributes.style "line-height" "14px"
+                        ]
+                        images
+                    , Html.String.node "hr" [] []
+                    , Html.String.a
+                        [ UrlHelper.encodeUrl (EmailUnsubscribeRoute unsubscribeKey)
+                            |> (++) "https://ascii-collab.lamdera.app/"
+                            |> Html.String.Attributes.href
+                        ]
+                        [ Html.String.text "Click here to unsubscribe" ]
+                    ]
+
+        subject frequency_ =
+            case frequency_ of
+                NotifyMe.Every3Hours ->
+                    NonemptyString 'C' "hanges over the past 3 hours"
+
+                NotifyMe.Every12Hours ->
+                    NonemptyString 'C' "hanges over the past 12 hours"
+
+                NotifyMe.Daily ->
+                    NonemptyString 'C' "hanges over the past day"
+
+                NotifyMe.Weekly ->
+                    NonemptyString 'C' "hanges over the past week"
+
+                NotifyMe.Monthly ->
+                    NonemptyString 'C' "hanges over the past month"
+    in
+    ( { model | userChangesRecently = recentChangeState }
+    , List.concatMap
+        (\( frequency, changes ) ->
+            case getActualChanges changes of
+                Just actualChanges_ ->
+                    let
+                        content_ =
+                            content frequency actualChanges_
+
+                        subject_ =
+                            subject frequency
+                    in
+                    List.filter (.frequency >> (==) frequency)
+                        model.subscribedEmails
+                        |> List.map
+                            (\email ->
+                                SendEmail
+                                    (ChangeEmailSent time email.email)
+                                    subject_
+                                    (content_ email.unsubscribeKey)
+                                    email.email
+                            )
+
+                Nothing ->
+                    []
+        )
+        frequencyChanges
+    )
 
 
 clusterToTextImage :
@@ -383,22 +392,6 @@ notifyAdmin model =
         fullUrl point =
             Env.domain ++ "/" ++ UrlHelper.encodeUrl (UrlHelper.internalRoute False point)
 
-        --changes =
-        --    Dict.toList model.userChangesRecently
-        --        |> List.gatherEqualsBy (\( ( userId, _ ), _ ) -> userId)
-        --        |> List.map
-        --            (\( ( ( userId, _ ), _ ) as head, rest ) ->
-        --                List.map
-        --                    (\( ( _, cellCoord ), localPos ) ->
-        --                        Grid.cellAndLocalCoordToAscii ( Helper.fromRawCoord cellCoord, localPos )
-        --                            |> fullUrl
-        --                            |> (++) "\n    "
-        --                    )
-        --                    (head :: rest)
-        --                    |> String.concat
-        --                    |> (++) ("User " ++ String.fromInt userId ++ " made changes at ")
-        --            )
-        --        |> String.join "\n"
         hidden =
             List.map
                 (\{ reporter, hiddenUser, hidePoint } ->
@@ -412,34 +405,21 @@ notifyAdmin model =
                 model.usersHiddenRecently
                 |> String.join "\n"
     in
-    --case
-    --    ( List.isEmpty model.usersHiddenRecently && Dict.isEmpty model.userChangesRecently
-    --    , String.Nonempty.fromString (changes ++ "\n\n" ++ hidden)
-    --    )
-    --of
-    --    ( False, Just content ) ->
-    --        ( { model | usersHiddenRecently = [], userChangesRecently = Dict.empty }
-    --        , [ SendEmail
-    --                (always NotifyAdminEmailSent)
-    --                { subject =
-    --                    String.Nonempty.append_
-    --                        (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
-    --                        (" users hidden & "
-    --                            ++ String.fromInt (Dict.size model.userChangesRecently)
-    --                            ++ " cells changed"
-    --                        )
-    --                , content = SendGrid.textContent content
-    --                , to = Nonempty.fromElement Env.adminEmail
-    --                , cc = []
-    --                , bcc = []
-    --                , nameOfSender = "ascii-collab"
-    --                , emailAddressOfSender = "ascii-collab@lamdera.app"
-    --                }
-    --          ]
-    --        )
-    --
-    --    _ ->
-    ( model, [] )
+    if List.isEmpty model.usersHiddenRecently then
+        ( model, [] )
+
+    else
+        ( { model | usersHiddenRecently = [] }
+        , [ SendEmail
+                (always NotifyAdminEmailSent)
+                (String.Nonempty.append_
+                    (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
+                    " users hidden"
+                )
+                (Html.String.text hidden)
+                Env.adminEmail
+          ]
+        )
 
 
 diffCells : BackendModel -> GridCell.Cell -> GridCell.Cell -> Array ( Maybe UserId, Ascii )
@@ -1063,7 +1043,11 @@ updateLocalChange ( userId, _ ) change model =
                             ( { model
                                 | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
                                 , userChangesRecently =
-                                    RecentChanges.undoRedoChange undoMoveAmount model.grid model.userChangesRecently
+                                    if userId == backendUserId then
+                                        model.userChangesRecently
+
+                                    else
+                                        RecentChanges.undoRedoChange undoMoveAmount model.grid model.userChangesRecently
                               }
                                 |> updateUser userId (always newUser)
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
@@ -1081,10 +1065,14 @@ updateLocalChange ( userId, _ ) change model =
                     ( { model
                         | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
                         , userChangesRecently =
-                            RecentChanges.addChange
-                                localChange.cellPosition
-                                (Grid.getCell localChange.cellPosition model.grid |> Maybe.withDefault GridCell.empty)
+                            if userId == backendUserId then
                                 model.userChangesRecently
+
+                            else
+                                RecentChanges.addChange
+                                    localChange.cellPosition
+                                    (Grid.getCell localChange.cellPosition model.grid |> Maybe.withDefault GridCell.empty)
+                                    model.userChangesRecently
 
                         --if Just userId == Env.adminUserId || userId == backendUserId then
                         --    model.userChangesRecently
@@ -1116,7 +1104,11 @@ updateLocalChange ( userId, _ ) change model =
                             ( { model
                                 | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
                                 , userChangesRecently =
-                                    RecentChanges.undoRedoChange undoMoveAmount model.grid model.userChangesRecently
+                                    if userId == backendUserId then
+                                        model.userChangesRecently
+
+                                    else
+                                        RecentChanges.undoRedoChange undoMoveAmount model.grid model.userChangesRecently
                               }
                                 |> updateUser userId (always newUser)
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
