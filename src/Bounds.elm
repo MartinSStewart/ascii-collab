@@ -78,8 +78,8 @@ fromCoords coords =
             List.Nonempty.map Tuple.second coords
     in
     Bounds
-        { min = ( Nonempty.minimumBy Quantity.unwrap xValues, Nonempty.maximumBy Quantity.unwrap xValues )
-        , max = ( Nonempty.minimumBy Quantity.unwrap yValues, Nonempty.maximumBy Quantity.unwrap yValues )
+        { min = ( Nonempty.minimumBy Quantity.unwrap xValues, Nonempty.minimumBy Quantity.unwrap yValues )
+        , max = ( Nonempty.maximumBy Quantity.unwrap xValues, Nonempty.maximumBy Quantity.unwrap yValues )
         }
 
 

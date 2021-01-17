@@ -10,7 +10,7 @@ import Units exposing (CellUnit)
 
 maxSize : Coord units
 maxSize =
-    Helper.fromRawCoord ( 8, 6 )
+    Helper.fromRawCoord ( 4, 3 )
 
 
 cluster : Set RawCellCoord -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) )
@@ -22,7 +22,10 @@ cluster coords =
             )
 
 
-clusterHelper : Set RawCellCoord -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) ) -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) )
+clusterHelper :
+    Set RawCellCoord
+    -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) )
+    -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) )
 clusterHelper coords allBounds =
     case Set.toList coords of
         head :: _ ->

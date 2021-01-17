@@ -6,7 +6,6 @@ import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord, RawCellCoord)
 import List.Extra as List
-import List.Nonempty exposing (Nonempty)
 import NotifyMe exposing (Frequency(..), ThreeHours)
 import Quantity exposing (Quantity(..))
 import Units exposing (CellUnit)
@@ -22,9 +21,14 @@ type RecentChanges
 init : RecentChanges
 init =
     RecentChanges
-        { frequencies = AssocList.empty
-        , threeHoursElapsed = Quantity.zero
+        { frequencies = noFrequencies
+        , threeHoursElapsed = Quantity 1
         }
+
+
+noFrequencies : AssocList.Dict Frequency (Dict k v)
+noFrequencies =
+    NotifyMe.frequencies |> List.map (\a -> ( a, Dict.empty )) |> AssocList.fromList
 
 
 addChange : Coord CellUnit -> GridCell.Cell -> RecentChanges -> RecentChanges
@@ -129,6 +133,7 @@ threeHoursElapsed (RecentChanges recentChanges) =
                                     NotifyMe.duration frequency
                                         |> Quantity.greaterThan (NotifyMe.duration longestFrequencyReady_)
                                 )
+                            |> (\a -> AssocList.union a noFrequencies)
                     , threeHoursElapsed = Quantity.plus recentChanges.threeHoursElapsed (Quantity 1)
                 }
     in

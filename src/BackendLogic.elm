@@ -142,6 +142,8 @@ update msg model =
                             , Html.String.Attributes.style "line-height" "14px"
                             ]
                             images
+                        , Html.String.node "hr" [] []
+                        , Html.String.a [ Html.String.Attributes.href "asdf" ] [ Html.String.text "Click here to unsubscribe" ]
                         ]
 
                 subject frequency_ =
@@ -335,7 +337,12 @@ clusterToTextImage model actualChanges bounds =
             , Html.String.Attributes.style "text-decoration" "none"
             ]
         |> List.singleton
-        |> Html.String.div [ Html.String.Attributes.style "background-color" "white" ]
+        |> Html.String.div
+            [ Html.String.Attributes.style "background-color" "white"
+            , Html.String.Attributes.style "width" "max-content"
+            , Html.String.Attributes.style "margin" "8px"
+            , Html.String.Attributes.style "padding" "2px 0"
+            ]
 
 
 addError : Time.Posix -> BackendError -> BackendModel -> BackendModel
