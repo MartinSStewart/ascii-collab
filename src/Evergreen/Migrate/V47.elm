@@ -1,6 +1,5 @@
 module Evergreen.Migrate.V47 exposing (backendModel, backendMsg, frontendModel, frontendMsg, toBackend, toFrontend)
 
-import Ascii
 import AssocList
 import Dict
 import Evergreen.V45.Ascii
@@ -9,17 +8,18 @@ import Evergreen.V45.GridCell
 import Evergreen.V45.Helper
 import Evergreen.V45.Types as Old exposing (BackendMsg(..))
 import Evergreen.V45.User
+import Evergreen.V47.Ascii as Ascii
+import Evergreen.V47.Grid as Grid
+import Evergreen.V47.GridCell as GridCell
+import Evergreen.V47.NotifyMe exposing (Frequency(..))
+import Evergreen.V47.RecentChanges exposing (RecentChanges(..))
+import Evergreen.V47.Types as New
+import Evergreen.V47.User as User
 import EverySet
-import Grid
-import GridCell
 import Helper
 import Lamdera.Migrations exposing (..)
 import List.Nonempty
-import NotifyMe
 import Quantity exposing (Quantity(..))
-import RecentChanges
-import Types as New
-import User
 
 
 migrateUserId : Evergreen.V45.User.UserId -> User.UserId
@@ -63,9 +63,20 @@ migrateCoord ( x, y ) =
     ( migrateQuantity x, migrateQuantity y )
 
 
-recentChanges : RecentChanges.RecentChanges
+recentChanges : Evergreen.V47.RecentChanges.RecentChanges
 recentChanges =
-    RecentChanges.init
+    RecentChanges
+        { frequencies =
+            [ Every3Hours
+            , Every12Hours
+            , Daily
+            , Weekly
+            , Monthly
+            ]
+                |> List.map (\a -> ( a, Dict.empty ))
+                |> AssocList.fromList
+        , threeHoursElapsed = Quantity 1
+        }
 
 
 migrateBackendModel : Old.BackendModel -> New.BackendModel
