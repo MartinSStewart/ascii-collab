@@ -1,4 +1,4 @@
-module NotifyMe exposing (Frequency(..), Model, ThreeHours, Validated, confirmSubmit, duration, emailConfirmed, frequencies, frequencyToString, init, view)
+module NotifyMe exposing (Frequency(..), Model, ThreeHours, Validated, confirmSubmit, duration, emailConfirmed, frequencies, frequencyToString, init, unsubscribed, view)
 
 import Element exposing (Element)
 import Element.Background
@@ -216,6 +216,11 @@ emailConfirmed model =
 
         Unsubscribed ->
             Unsubscribed
+
+
+unsubscribed : Model -> Model
+unsubscribed _ =
+    Unsubscribed
 
 
 form : (InProgressModel -> msg) -> (Validated -> msg) -> msg -> InProgressModel -> Element msg

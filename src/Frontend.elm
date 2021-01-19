@@ -1380,7 +1380,7 @@ updateLoadedFromBackend msg model =
             ( { model | notifyMeModel = NotifyMe.emailConfirmed model.notifyMeModel }, Cmd.none )
 
         UnsubscribeEmailConfirmed ->
-            ( { model | notifyMeModel = Debug.todo "" }, Cmd.none )
+            ( { model | notifyMeModel = NotifyMe.unsubscribed model.notifyMeModel }, Cmd.none )
 
 
 textarea : Maybe Hyperlink -> FrontendLoaded -> Element.Attribute FrontendMsg
