@@ -38,6 +38,7 @@ import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2
+import NotifyMe
 import Parser
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -90,6 +91,7 @@ loadedInit loading loadingData =
         cursor =
             Cursor.setCursor loading.viewPoint
 
+        model : FrontendLoaded
         model =
             { key = loading.key
             , localModel = LocalGrid.init loadingData
@@ -116,6 +118,8 @@ loadedInit loading loadingData =
             , adminEnabled = False
             , animationElapsedTime = Duration.seconds 0
             , ignoreNextUrlChanged = False
+            , showNotifyMe = loading.showNotifyMe
+            , notifyMeModel = loading.notifyMeModel
             }
     in
     ( updateMeshes model model
@@ -139,18 +143,55 @@ loadedInit loading loadingData =
 init : Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
 init url key =
     let
-        ( viewPoint, cmd ) =
+        { viewPoint, showNotifyMe, notifyMe, cmd } =
+            let
+                defaultRoute =
+                    UrlHelper.internalRoute False ( Units.asciiUnit 0, Units.asciiUnit 0 )
+            in
             case Url.Parser.parse UrlHelper.urlParser url of
-                Just viewPoint_ ->
-                    ( viewPoint_, Cmd.none )
+                Just (UrlHelper.InternalRoute a) ->
+                    { viewPoint = a.viewPoint
+                    , showNotifyMe = a.showNotifyMe
+                    , notifyMe = NotifyMe.init
+                    , cmd = Cmd.none
+                    }
+
+                Just (UrlHelper.EmailConfirmationRoute a) ->
+                    { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+                    , showNotifyMe = True
+                    , notifyMe = NotifyMe.init |> NotifyMe.emailConfirmed
+                    , cmd =
+                        Cmd.batch
+                            [ Lamdera.sendToBackend (ConfirmationEmailConfirmed_ a)
+                            , Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
+                            ]
+                    }
+
+                Just (UrlHelper.EmailUnsubscribeRoute a) ->
+                    { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+                    , showNotifyMe = True
+                    , notifyMe = NotifyMe.init |> NotifyMe.emailConfirmed
+                    , cmd =
+                        Cmd.batch
+                            [ Lamdera.sendToBackend (UnsubscribeEmail a)
+                            , Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
+                            ]
+                    }
 
                 Nothing ->
-                    let
-                        defaultViewPoint =
-                            ( Units.asciiUnit 0, Units.asciiUnit 0 )
-                    in
-                    ( defaultViewPoint, Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultViewPoint) )
+                    { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+                    , showNotifyMe = False
+                    , notifyMe = NotifyMe.init
+                    , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
+                    }
 
+        --=
+        --   case route of
+        --       UrlHelper.InternalRoute internalRoute ->
+        --           { viewPoint = internalRoute.viewPoint, showNotifyMe = internalRoute.showNotifyMe }
+        --
+        --       UrlHelper.EmailConfirmationRoute _ ->
+        --           { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 ), showNotifyMe = True }
         -- We only load in a portion of the grid since we don't know the window size. The rest will get loaded in later anyway.
         bounds =
             Bounds.bounds
@@ -171,6 +212,8 @@ init url key =
         , time = Time.millisToPosix 0
         , viewPoint = viewPoint
         , mousePosition = Point2d.origin
+        , showNotifyMe = showNotifyMe
+        , notifyMeModel = notifyMe
         }
     , Cmd.batch
         [ Lamdera.sendToBackend (RequestData bounds)
@@ -238,13 +281,14 @@ updateLoaded msg model =
 
               else
                 case Url.Parser.parse UrlHelper.urlParser url of
-                    Just viewPoint ->
+                    Just (UrlHelper.InternalRoute { viewPoint, showNotifyMe }) ->
                         { model
                             | cursor = Cursor.setCursor viewPoint
                             , viewPoint = Units.asciiToWorld viewPoint |> Helper.coordToPoint
+                            , showNotifyMe = showNotifyMe
                         }
 
-                    Nothing ->
+                    _ ->
                         model
             , Cmd.none
             )
@@ -435,6 +479,7 @@ updateLoaded msg model =
                 ( model3, urlChange ) =
                     if Units.worldToAscii actualViewPoint_ /= Units.worldToAscii model.viewPointLastInterval then
                         Units.worldToAscii actualViewPoint_
+                            |> UrlHelper.internalRoute model.showNotifyMe
                             |> UrlHelper.encodeUrl
                             |> (\a -> replaceUrl a model2)
 
@@ -508,8 +553,7 @@ updateLoaded msg model =
 
                     else
                         ( { model
-                            | mouseLeft =
-                                MouseButtonDown { mouseState | current = touchPosition }
+                            | mouseLeft = MouseButtonDown { mouseState | current = touchPosition }
                             , cursor =
                                 case model.tool of
                                     SelectTool ->
@@ -575,6 +619,22 @@ updateLoaded msg model =
               }
             , Cmd.none
             )
+
+        PressedCancelNotifyMe ->
+            closeNotifyMe model
+
+        PressedSubmitNotifyMe _ ->
+            closeNotifyMe model
+
+        NotifyMeModelChanged notifyMeModel ->
+            ( { model | notifyMeModel = notifyMeModel }, Cmd.none )
+
+
+closeNotifyMe : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+closeNotifyMe model =
+    UrlHelper.internalRoute False (Units.worldToAscii (actualViewPoint model))
+        |> UrlHelper.encodeUrl
+        |> (\a -> pushUrl a { model | showNotifyMe = False })
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
@@ -815,26 +875,43 @@ mainMouseButtonUp mousePosition mouseState model =
 
 followHyperlink : Bool -> Hyperlink -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 followHyperlink newTab hyperlink model =
+    let
+        routeData =
+            { viewPoint = actualViewPoint model |> Units.worldToAscii
+            , showNotifyMe = model.showNotifyMe
+            }
+    in
     case hyperlink.route of
-        Hyperlink.Internal viewPoint_ ->
+        Hyperlink.Coordinate viewPoint_ ->
             if newTab then
-                ( model, martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl hyperlink.route) )
+                ( model, martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl routeData hyperlink.route) )
 
             else
                 pushUrl
-                    (Hyperlink.routeToUrl hyperlink.route)
+                    (Hyperlink.routeToUrl routeData hyperlink.route)
                     { model
                         | cursor = Cursor.setCursor viewPoint_
                         , viewPoint = Units.asciiToWorld viewPoint_ |> Helper.coordToPoint
                     }
 
+        Hyperlink.NotifyMe ->
+            if newTab then
+                ( model, martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl routeData hyperlink.route) )
+
+            else
+                pushUrl
+                    (Hyperlink.routeToUrl routeData hyperlink.route)
+                    { model
+                        | showNotifyMe = True
+                    }
+
         Hyperlink.External _ ->
             ( model
             , if newTab then
-                martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl hyperlink.route)
+                martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl routeData hyperlink.route)
 
               else
-                Browser.Navigation.load (Hyperlink.routeToUrl hyperlink.route)
+                Browser.Navigation.load (Hyperlink.routeToUrl routeData hyperlink.route)
             )
 
 
@@ -1296,6 +1373,15 @@ updateLoadedFromBackend msg model =
             , Cmd.none
             )
 
+        NotifyMeEmailSent result ->
+            ( { model | notifyMeModel = NotifyMe.confirmSubmit result model.notifyMeModel }, Cmd.none )
+
+        NotifyMeConfirmed ->
+            ( { model | notifyMeModel = NotifyMe.emailConfirmed model.notifyMeModel }, Cmd.none )
+
+        UnsubscribeEmailConfirmed ->
+            ( { model | notifyMeModel = Debug.todo "" }, Cmd.none )
+
 
 textarea : Maybe Hyperlink -> FrontendLoaded -> Element.Attribute FrontendMsg
 textarea maybeHyperlink model =
@@ -1370,6 +1456,21 @@ lostConnection model =
 
 view : FrontendModel -> Browser.Document FrontendMsg
 view model =
+    let
+        notifyMeView : { a | showNotifyMe : Bool, notifyMeModel : NotifyMe.Model } -> Element.Attribute FrontendMsg
+        notifyMeView a =
+            Element.inFront
+                (if a.showNotifyMe then
+                    NotifyMe.view
+                        NotifyMeModelChanged
+                        PressedSubmitNotifyMe
+                        PressedCancelNotifyMe
+                        a.notifyMeModel
+
+                 else
+                    Element.none
+                )
+    in
     { title =
         case model of
             Loading _ ->
@@ -1383,10 +1484,11 @@ view model =
                     "Ascii Collab"
     , body =
         [ case model of
-            Loading _ ->
+            Loading loadingModel ->
                 Element.layout
                     [ Element.width Element.fill
                     , Element.height Element.fill
+                    , notifyMeView loadingModel
                     ]
                     (Element.text "Loading")
 
@@ -1420,6 +1522,7 @@ view model =
                                 Nothing ->
                                     []
                            )
+                        ++ [ notifyMeView loadedModel ]
                     )
                     (Element.html (canvasView maybeHyperlink loadedModel))
         ]

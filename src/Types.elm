@@ -1,5 +1,6 @@
 module Types exposing
-    ( BackendModel
+    ( BackendError(..)
+    , BackendModel
     , BackendMsg(..)
     , BackendUserData
     , FrontendLoaded
@@ -8,6 +9,8 @@ module Types exposing
     , FrontendMsg(..)
     , LoadingData_
     , MouseButtonState(..)
+    , PendingEmail
+    , SubscribedEmail
     , ToBackend(..)
     , ToFrontend(..)
     , ToolType(..)
@@ -20,6 +23,7 @@ import Change exposing (Change, ServerChange)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
+import Email
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import Helper exposing (Coord, RawCellCoord)
@@ -30,12 +34,16 @@ import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import Math.Vector2 exposing (Vec2)
+import NotifyMe
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
+import RecentChanges exposing (RecentChanges)
+import SendGrid
 import Time
 import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
+import UrlHelper exposing (ConfirmEmailKey, UnsubscribeEmailKey)
 import User exposing (RawUserId, UserId)
 import WebGL
 import WebGL.Texture exposing (Texture)
@@ -54,6 +62,8 @@ type alias FrontendLoading =
     , time : Time.Posix
     , viewPoint : Coord AsciiUnit
     , mousePosition : Point2d Pixels ScreenCoordinate
+    , showNotifyMe : Bool
+    , notifyMeModel : NotifyMe.Model
     }
 
 
@@ -83,6 +93,8 @@ type alias FrontendLoaded =
     , adminEnabled : Bool
     , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
+    , showNotifyMe : Bool
+    , notifyMeModel : NotifyMe.Model
     }
 
 
@@ -106,8 +118,34 @@ type alias BackendModel =
     , userSessions : Dict SessionId { clientIds : Dict ClientId (Bounds CellUnit), userId : UserId }
     , users : Dict RawUserId BackendUserData
     , usersHiddenRecently : List { reporter : UserId, hiddenUser : UserId, hidePoint : Coord AsciiUnit }
-    , userChangesRecently : Dict ( RawUserId, RawCellCoord ) Int
+    , userChangesRecently : RecentChanges
+    , subscribedEmails : List SubscribedEmail
+    , pendingEmails : List PendingEmail
+    , secretLinkCounter : Int
+    , errors : List ( Time.Posix, BackendError )
     }
+
+
+type alias SubscribedEmail =
+    { email : Email.Email
+    , frequency : NotifyMe.Frequency
+    , confirmTime : Time.Posix
+    , userId : UserId
+    , unsubscribeKey : UnsubscribeEmailKey
+    }
+
+
+type alias PendingEmail =
+    { email : Email.Email
+    , frequency : NotifyMe.Frequency
+    , creationTime : Time.Posix
+    , userId : UserId
+    , key : ConfirmEmailKey
+    }
+
+
+type BackendError
+    = SendGridError Email.Email SendGrid.Error
 
 
 type alias BackendUserData =
@@ -148,23 +186,35 @@ type FrontendMsg
     | ToggleAdminEnabledPressed
     | HideUserPressed { userId : UserId, hidePoint : Coord AsciiUnit }
     | AnimationFrame Time.Posix
+    | PressedCancelNotifyMe
+    | PressedSubmitNotifyMe NotifyMe.Validated
+    | NotifyMeModelChanged NotifyMe.Model
 
 
 type ToBackend
     = RequestData (Bounds CellUnit)
     | GridChange (Nonempty Change.LocalChange)
     | ChangeViewBounds (Bounds CellUnit)
+    | NotifyMeSubmitted NotifyMe.Validated
+    | ConfirmationEmailConfirmed_ ConfirmEmailKey
+    | UnsubscribeEmail UnsubscribeEmailKey
 
 
 type BackendMsg
     = UserDisconnected SessionId ClientId
     | NotifyAdminTimeElapsed Time.Posix
     | NotifyAdminEmailSent
+    | ConfirmationEmailSent SessionId Time.Posix (Result SendGrid.Error ())
+    | ChangeEmailSent Time.Posix Email.Email (Result SendGrid.Error ())
+    | UpdateFromFrontend SessionId ClientId ToBackend Time.Posix
 
 
 type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (Nonempty Change)
+    | NotifyMeEmailSent { isSuccessful : Bool }
+    | NotifyMeConfirmed
+    | UnsubscribeEmailConfirmed
 
 
 type alias LoadingData_ =

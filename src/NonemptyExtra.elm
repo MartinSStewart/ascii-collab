@@ -1,4 +1,4 @@
-module NonemptyExtra exposing (find, greedyGroupsOf, maximumBy, transpose, updateFirst, updateIf)
+module NonemptyExtra exposing (find, greedyGroupsOf, maximumBy, minimumBy, transpose, updateFirst, updateIf)
 
 import List.Extra as List
 import List.Nonempty exposing (Nonempty)
@@ -20,6 +20,11 @@ updateIf predicate update_ nonempty =
 maximumBy : (a -> comparable) -> Nonempty a -> a
 maximumBy by nonempty =
     List.maximumBy by (List.Nonempty.toList nonempty) |> Maybe.withDefault (List.Nonempty.head nonempty)
+
+
+minimumBy : (a -> comparable) -> Nonempty a -> a
+minimumBy by nonempty =
+    List.minimumBy by (List.Nonempty.toList nonempty) |> Maybe.withDefault (List.Nonempty.head nonempty)
 
 
 updateFirst : (a -> Bool) -> (a -> a) -> Nonempty a -> Nonempty a

@@ -1,5 +1,6 @@
 module Bounds exposing
     ( Bounds
+    , addToMax
     , bounds
     , boundsToBounds2d
     , center
@@ -9,6 +10,7 @@ module Bounds exposing
     , coordRangeFold
     , coordRangeFoldReverse
     , expand
+    , fromCoords
     , height
     , maximum
     , minimum
@@ -19,6 +21,9 @@ module Bounds exposing
 
 import BoundingBox2d exposing (BoundingBox2d)
 import Helper exposing (Coord)
+import List.Extra as List
+import List.Nonempty exposing (Nonempty)
+import NonemptyExtra as Nonempty
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 
@@ -61,6 +66,28 @@ bounds min_ max_ =
         { min = Helper.minTuple min_ max_
         , max = Helper.maxTuple min_ max_
         }
+
+
+fromCoords : Nonempty (Coord unit) -> Bounds unit
+fromCoords coords =
+    let
+        xValues =
+            List.Nonempty.map Tuple.first coords
+
+        yValues =
+            List.Nonempty.map Tuple.second coords
+    in
+    Bounds
+        { min = ( Nonempty.minimumBy Quantity.unwrap xValues, Nonempty.minimumBy Quantity.unwrap yValues )
+        , max = ( Nonempty.maximumBy Quantity.unwrap xValues, Nonempty.maximumBy Quantity.unwrap yValues )
+        }
+
+
+centerAndHalfSize : Coord unit -> Coord unit -> Bounds unit
+centerAndHalfSize centerPoint halfSize =
+    bounds
+        (centerPoint |> Helper.minusTuple halfSize)
+        (centerPoint |> Helper.addTuple halfSize)
 
 
 translate : Coord unit -> Bounds unit -> Bounds unit
@@ -130,6 +157,11 @@ center (Bounds bounds_) =
     Point2d.xy
         (Quantity.plus minX maxX |> Quantity.toFloatQuantity |> Quantity.divideBy 2)
         (Quantity.plus minY maxY |> Quantity.toFloatQuantity |> Quantity.divideBy 2)
+
+
+addToMax : Coord unit -> Bounds unit -> Bounds unit
+addToMax coord (Bounds bounds_) =
+    Bounds { min = bounds_.min, max = Helper.addTuple coord bounds_.max }
 
 
 boundsToBounds2d : Bounds units -> BoundingBox2d units coordinate

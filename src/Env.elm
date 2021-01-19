@@ -1,10 +1,11 @@
-module Env exposing (Mode(..), adminEmail, adminUserId, adminUserId_, domain, hyperlinkWhitelist, isProduction, isProduction_, mapDrawAt, mapDrawAtX, mapDrawAtY, mode, notifyAdminWaitInHours, sendGridKey, sendGridKey_, statisticsBounds, statisticsDrawAt, statisticsDrawAtX, statisticsDrawAtY, statisticsX0, statisticsX1, statisticsY0, statisticsY1)
+module Env exposing (Mode(..), adminEmail, adminEmail_, adminUserId, adminUserId_, confirmationEmailKey, domain, hyperlinkWhitelist, isProduction, isProduction_, mapDrawAt, mapDrawAtX, mapDrawAtY, mode, notifyAdminWaitInHours, sendGridKey, sendGridKey_, statisticsBounds, statisticsDrawAt, statisticsDrawAtX, statisticsDrawAtY, statisticsX0, statisticsX1, statisticsY0, statisticsY1)
 
 -- The Env.elm file is for per-environment configuration.
 -- See https://dashboard.lamdera.app/docs/environment for more info.
 
 import Bounds exposing (Bounds)
 import Duration exposing (Duration)
+import Email
 import Helper exposing (Coord)
 import SendGrid
 import Units exposing (AsciiUnit)
@@ -39,9 +40,20 @@ isProduction =
             False
 
 
-adminEmail : String
-adminEmail =
+adminEmail_ : String
+adminEmail_ =
     ""
+
+
+adminEmail : Email.Email
+adminEmail =
+    Email.fromString adminEmail_
+        |> Maybe.withDefault
+            { localPart = ""
+            , tags = []
+            , domain = ""
+            , tld = []
+            }
 
 
 sendGridKey_ : String
@@ -135,4 +147,9 @@ notifyAdminWaitInHours =
 
 hyperlinkWhitelist : String
 hyperlinkWhitelist =
-    "www.patorjk.com/software/taag, ro-box.netlify.app, the-best-color.lamdera.app, agirg.com"
+    "www.patorjk.com/software/taag, ro-box.netlify.app, the-best-color.lamdera.app, agirg.com, yourworldoftext.com, www.yourworldoftext.com"
+
+
+confirmationEmailKey : String
+confirmationEmailKey =
+    "abc"

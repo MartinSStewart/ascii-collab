@@ -1,7 +1,7 @@
 module Grid exposing
-    ( Change
-    , Grid(..)
-    , LocalChange
+    ( Grid(..)
+    , GridChange
+    , LocalGridChange
     , Vertex
     , addChange
     , allCells
@@ -70,15 +70,15 @@ cellAndLocalCoordToAscii ( ( Quantity x, Quantity y ), local ) =
     )
 
 
-type alias Change =
+type alias GridChange =
     { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Nonempty Ascii, userId : UserId }
 
 
-type alias LocalChange =
+type alias LocalGridChange =
     { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Nonempty Ascii }
 
 
-localChangeToChange : UserId -> LocalChange -> Change
+localChangeToChange : UserId -> LocalGridChange -> GridChange
 localChangeToChange userId change_ =
     { cellPosition = change_.cellPosition
     , localPosition = change_.localPosition
@@ -87,7 +87,7 @@ localChangeToChange userId change_ =
     }
 
 
-textToChange : Coord Units.AsciiUnit -> Nonempty (List Ascii) -> Nonempty LocalChange
+textToChange : Coord Units.AsciiUnit -> Nonempty (List Ascii) -> Nonempty LocalGridChange
 textToChange asciiCoord lines =
     List.Nonempty.toList lines
         |> List.indexedMap Tuple.pair
@@ -145,7 +145,7 @@ changeCount ( Quantity x, Quantity y ) (Grid grid) =
             0
 
 
-addChange : Change -> Grid -> Grid
+addChange : GridChange -> Grid -> Grid
 addChange change grid =
     let
         cell : Cell
