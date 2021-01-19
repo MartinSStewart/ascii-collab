@@ -1,4 +1,4 @@
-module RecentChanges exposing (RecentChanges, addChange, init, threeHoursElapsed, undoRedoChange)
+module RecentChanges exposing (RecentChanges(..), addChange, init, threeHoursElapsed, undoRedoChange)
 
 import AssocList
 import Dict exposing (Dict)
