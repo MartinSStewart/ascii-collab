@@ -143,7 +143,7 @@ loadedInit loading loadingData =
 init : Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
 init url key =
     let
-        { viewPoint, showNotifyMe, notifyMe, cmd } =
+        { viewPoint, showNotifyMe, notifyMe, emailEvent, cmd } =
             let
                 defaultRoute =
                     UrlHelper.internalRoute False ( Units.asciiUnit 0, Units.asciiUnit 0 )
@@ -153,6 +153,7 @@ init url key =
                     { viewPoint = a.viewPoint
                     , showNotifyMe = a.showNotifyMe
                     , notifyMe = NotifyMe.init
+                    , emailEvent = Nothing
                     , cmd = Cmd.none
                     }
 
@@ -160,39 +161,27 @@ init url key =
                     { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 )
                     , showNotifyMe = True
                     , notifyMe = NotifyMe.init |> NotifyMe.emailConfirmed
-                    , cmd =
-                        Cmd.batch
-                            [ Lamdera.sendToBackend (ConfirmationEmailConfirmed_ a)
-                            , Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
-                            ]
+                    , emailEvent = Just (ConfirmationEmailConfirmed_ a)
+                    , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
                     }
 
                 Just (UrlHelper.EmailUnsubscribeRoute a) ->
                     { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 )
                     , showNotifyMe = True
                     , notifyMe = NotifyMe.init |> NotifyMe.emailConfirmed
-                    , cmd =
-                        Cmd.batch
-                            [ Lamdera.sendToBackend (UnsubscribeEmail a)
-                            , Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
-                            ]
+                    , emailEvent = Just (UnsubscribeEmail a)
+                    , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
                     }
 
                 Nothing ->
                     { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 )
                     , showNotifyMe = False
                     , notifyMe = NotifyMe.init
+                    , emailEvent = Nothing
                     , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
                     }
 
-        --=
-        --   case route of
-        --       UrlHelper.InternalRoute internalRoute ->
-        --           { viewPoint = internalRoute.viewPoint, showNotifyMe = internalRoute.showNotifyMe }
-        --
-        --       UrlHelper.EmailConfirmationRoute _ ->
-        --           { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 ), showNotifyMe = True }
-        -- We only load in a portion of the grid since we don't know the window size. The rest will get loaded in later anyway.
+        -- We only load in a portion of the grid since we don't know the window size yet. The rest will get loaded in later anyway.
         bounds =
             Bounds.bounds
                 (Grid.asciiToCellAndLocalCoord viewPoint
@@ -216,7 +205,7 @@ init url key =
         , notifyMeModel = notifyMe
         }
     , Cmd.batch
-        [ Lamdera.sendToBackend (RequestData bounds)
+        [ Lamdera.sendToBackend (ConnectToBackend bounds emailEvent)
         , Task.perform
             (\{ viewport } ->
                 WindowResized

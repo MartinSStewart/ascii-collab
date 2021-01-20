@@ -185,12 +185,7 @@ sendChangeEmails time model =
                     [ Html.String.Attributes.style "background-color" "rgb(220, 220, 200)"
                     , Html.String.Attributes.style "padding" "8px"
                     ]
-                    [ String.Nonempty.toString (subject frequency_) |> Html.String.text
-                    , Html.String.div
-                        [ Html.String.Attributes.style "font-size" "14px"
-                        , Html.String.Attributes.style "margin-top" "8px"
-                        ]
-                        [ Html.String.text "(Click on an image to view it in ascii-collab)" ]
+                    [ Html.String.text "Click on an image to view it in ascii-collab"
                     , Html.String.pre
                         [ Html.String.Attributes.style "font-family" "monospace"
                         , Html.String.Attributes.style "font-size" "16px"
@@ -830,8 +825,22 @@ updateFromFrontend :
     -> ( BackendModel, List Effect )
 updateFromFrontend currentTime sessionId clientId msg model =
     case msg of
-        RequestData requestData ->
-            requestDataUpdate sessionId clientId requestData model
+        ConnectToBackend requestData maybeEmailEvent ->
+            let
+                ( newModel, effects ) =
+                    requestDataUpdate sessionId clientId requestData model
+            in
+            (case maybeEmailEvent of
+                Just (ConfirmationEmailConfirmed_ key) ->
+                    confirmationEmailConfirmed sessionId currentTime key newModel
+
+                Just (UnsubscribeEmail key) ->
+                    unsubscribeEmail sessionId clientId key newModel
+
+                Nothing ->
+                    ( newModel, [] )
+            )
+                |> Tuple.mapSecond ((++) effects)
 
         GridChange changes ->
             case getUserFromSessionId sessionId model of
@@ -898,59 +907,68 @@ updateFromFrontend currentTime sessionId clientId msg model =
                 Nothing ->
                     ( model, [] )
 
-        ConfirmationEmailConfirmed_ confirmEmailKey ->
-            case List.find (.key >> (==) confirmEmailKey) model.pendingEmails of
-                Just pending ->
-                    let
-                        ( key, model2 ) =
-                            generateKey UnsubscribeEmailKey model
-                    in
-                    ( { model2
-                        | pendingEmails = List.filter (.key >> (/=) confirmEmailKey) model2.pendingEmails
-                        , subscribedEmails =
-                            model2.subscribedEmails
-                                |> List.filter (.email >> (/=) pending.email)
-                                |> (::)
-                                    { email = pending.email
-                                    , frequency = pending.frequency
-                                    , confirmTime = currentTime
-                                    , userId = pending.userId
-                                    , unsubscribeKey = key
-                                    }
-                      }
-                    , broadcast
-                        (\sessionId_ _ ->
-                            if sessionId_ == sessionId then
-                                Just NotifyMeConfirmed
 
-                            else
-                                Nothing
-                        )
-                        model
-                    )
+confirmationEmailConfirmed : SessionId -> Time.Posix -> ConfirmEmailKey -> BackendModel -> ( BackendModel, List Effect )
+confirmationEmailConfirmed sessionId currentTime confirmEmailKey model =
+    case List.find (.key >> (==) confirmEmailKey) model.pendingEmails of
+        Just pending ->
+            let
+                ( key, model2 ) =
+                    generateKey UnsubscribeEmailKey model
 
-                Nothing ->
-                    ( model, [] )
+                originalSessionId =
+                    Dict.toList model.userSessions
+                        |> List.find (\( _, { userId } ) -> pending.userId == userId)
+                        |> Maybe.map Tuple.first
+            in
+            ( { model2
+                | pendingEmails = List.filter (.key >> (/=) confirmEmailKey) model2.pendingEmails
+                , subscribedEmails =
+                    model2.subscribedEmails
+                        |> List.filter (.email >> (/=) pending.email)
+                        |> (::)
+                            { email = pending.email
+                            , frequency = pending.frequency
+                            , confirmTime = currentTime
+                            , userId = pending.userId
+                            , unsubscribeKey = key
+                            }
+              }
+            , broadcast
+                (\sessionId_ _ ->
+                    if sessionId_ == sessionId || Just sessionId_ == originalSessionId then
+                        Just NotifyMeConfirmed
 
-        UnsubscribeEmail unsubscribeEmailKey ->
-            case List.find (.unsubscribeKey >> (==) unsubscribeEmailKey) model.subscribedEmails of
-                Just _ ->
-                    ( { model
-                        | subscribedEmails = List.filter (.unsubscribeKey >> (/=) unsubscribeEmailKey) model.subscribedEmails
-                      }
-                    , broadcast
-                        (\sessionId_ clientId_ ->
-                            if sessionId_ == sessionId && clientId_ == clientId then
-                                Just UnsubscribeEmailConfirmed
+                    else
+                        Nothing
+                )
+                model
+            )
 
-                            else
-                                Nothing
-                        )
-                        model
-                    )
+        Nothing ->
+            ( model, [] )
 
-                Nothing ->
-                    ( model, [] )
+
+unsubscribeEmail : SessionId -> ClientId -> UnsubscribeEmailKey -> BackendModel -> ( BackendModel, List Effect )
+unsubscribeEmail sessionId clientId unsubscribeEmailKey model =
+    case List.find (.unsubscribeKey >> (==) unsubscribeEmailKey) model.subscribedEmails of
+        Just _ ->
+            ( { model
+                | subscribedEmails = List.filter (.unsubscribeKey >> (/=) unsubscribeEmailKey) model.subscribedEmails
+              }
+            , broadcast
+                (\sessionId_ clientId_ ->
+                    if sessionId_ == sessionId && clientId_ == clientId then
+                        Just UnsubscribeEmailConfirmed
+
+                    else
+                        Nothing
+                )
+                model
+            )
+
+        Nothing ->
+            ( model, [] )
 
 
 sendConfirmationEmailRateLimit : Duration

@@ -288,8 +288,8 @@ form modelChangedMsg submitMsg closeMsg model =
         , case model.status of
             WaitingOnConfirmation ->
                 Element.paragraph
-                    []
-                    [ Element.text "An confirmation email has been sent. Click on the link in it to begin getting notifications. If you don't see it, check your spam folder or try sending it again." ]
+                    [ paragraphWidth ]
+                    [ Element.text "A confirmation email has been sent. Click on the link in it to begin getting notifications. If you don't see it, check your spam folder or try sending it again." ]
 
             _ ->
                 Element.none
@@ -329,10 +329,14 @@ emailField model modelChangedMsg =
         )
 
 
+paragraphWidth =
+    Element.width <| Element.maximum 600 Element.fill
+
+
 privacyPolicy : Element msg
 privacyPolicy =
     Element.paragraph
-        [ Element.width <| Element.maximum 600 Element.fill ]
+        [ paragraphWidth ]
         [ Element.el [ Element.Font.bold ] (Element.text "Privacy policy: ")
         , Element.text "Your email is only used for notifications. If this privacy policy changes, an email will be sent out in advance."
         ]

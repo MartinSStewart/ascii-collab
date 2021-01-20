@@ -18,6 +18,7 @@ import Helper exposing (Coord)
 import Html exposing (Html)
 import Html.String
 import Hyperlink exposing (Hyperlink)
+import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import LocalModel
@@ -27,7 +28,7 @@ import Parser
 import Quantity exposing (Quantity(..))
 import String.Nonempty exposing (NonemptyString)
 import Time
-import Types exposing (BackendModel, BackendMsg(..), FrontendModel, ToBackend(..), ToFrontend(..))
+import Types exposing (BackendModel, BackendMsg(..), EmailEvent(..), FrontendModel, ToBackend(..), ToFrontend(..))
 import Units exposing (AsciiUnit, CellUnit)
 import UrlHelper exposing (ConfirmEmailKey(..), UnsubscribeEmailKey(..))
 import User
@@ -817,26 +818,18 @@ main =
                                     (Time.millisToPosix 0)
                                     "sessionId0"
                                     "clientId1"
-                                    (RequestData
+                                    (ConnectToBackend
                                         (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 5, 5 )))
+                                        (Just (UnsubscribeEmail unsubscribeKey))
                                     )
-                            )
-                        |> testMap
-                            (Tuple.first
-                                >> BackendLogic.updateFromFrontend
-                                    (Duration.addTo
-                                        (Time.millisToPosix
-                                            (5000 + round (Duration.inMilliseconds BackendLogic.sendConfirmationEmailRateLimit))
-                                        )
-                                        (Duration.hours 3)
-                                    )
-                                    "sessionId0"
-                                    "clientId1"
-                                    (UnsubscribeEmail unsubscribeKey)
                             )
                         |> testAssert
                             (\( _, effect ) ->
-                                expectEqual [ SendToFrontend "clientId1" UnsubscribeEmailConfirmed ] effect
+                                if List.count ((==) (SendToFrontend "clientId1" UnsubscribeEmailConfirmed)) effect == 1 then
+                                    Passed
+
+                                else
+                                    Failed (Element.text "Expected 1 UnsubscribeEmailConfirmed message")
                             )
                         |> testAssert
                             (\( model, _ ) ->
@@ -855,8 +848,9 @@ main =
                                 (Time.millisToPosix 0)
                                 "sessionId0"
                                 "clientId0"
-                                (RequestData
+                                (ConnectToBackend
                                     (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 5, 5 )))
+                                    Nothing
                                 )
                                 >> Tuple.first
                             )
@@ -937,18 +931,15 @@ expectNoEmails =
 
 notifyMeEvery : Frequency -> Email.Email -> Test ( BackendModel, List Effect )
 notifyMeEvery frequency email =
-    let
-        confirmationKey =
-            ConfirmEmailKey "56abfbd7d2ea606e667945422de5a368b8b0272b8f29081cb058b594dd7e3249"
-    in
     testInit BackendLogic.init
         |> testMap
             (BackendLogic.updateFromFrontend
                 (Time.millisToPosix 0)
                 "sessionId0"
                 "clientId0"
-                (RequestData
+                (ConnectToBackend
                     (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 5, 5 )))
+                    Nothing
                 )
                 >> Tuple.first
             )
@@ -999,9 +990,12 @@ notifyMeEvery frequency email =
         |> testMap
             (BackendLogic.updateFromFrontend
                 (Time.millisToPosix 3000)
-                "sessionId0"
-                "clientId0"
-                (ConfirmationEmailConfirmed_ confirmationKey)
+                "sessionId1"
+                "clientId1"
+                (ConnectToBackend
+                    (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 5, 5 )))
+                    (Just (ConfirmationEmailConfirmed_ confirmationKey))
+                )
             )
         |> testAssert
             (\( model, _ ) ->
@@ -1021,10 +1015,19 @@ notifyMeEvery frequency email =
             )
         |> testAssert
             (\( _, effect ) ->
-                expectEqual
-                    [ SendToFrontend "clientId0" NotifyMeConfirmed ]
-                    effect
+                if
+                    (List.count ((==) (SendToFrontend "clientId0" NotifyMeConfirmed)) effect == 1)
+                        && (List.count ((==) (SendToFrontend "clientId1" NotifyMeConfirmed)) effect == 1)
+                then
+                    Passed
+
+                else
+                    failed "Expected two NotifyMeConfirmed messages"
             )
+
+
+confirmationKey =
+    ConfirmEmailKey "56abfbd7d2ea606e667945422de5a368b8b0272b8f29081cb058b594dd7e3249"
 
 
 unsubscribeKey =
@@ -1137,7 +1140,7 @@ newUserState =
             (Time.millisToPosix 100000)
             "session0"
             "client0"
-            (RequestData smallViewBounds)
+            (ConnectToBackend smallViewBounds Nothing)
 
 
 smallViewBounds : Bounds Units.CellUnit

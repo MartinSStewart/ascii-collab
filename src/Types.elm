@@ -3,6 +3,7 @@ module Types exposing
     , BackendModel
     , BackendMsg(..)
     , BackendUserData
+    , EmailEvent(..)
     , FrontendLoaded
     , FrontendLoading
     , FrontendModel(..)
@@ -192,12 +193,10 @@ type FrontendMsg
 
 
 type ToBackend
-    = RequestData (Bounds CellUnit)
+    = ConnectToBackend (Bounds CellUnit) (Maybe EmailEvent)
     | GridChange (Nonempty Change.LocalChange)
     | ChangeViewBounds (Bounds CellUnit)
     | NotifyMeSubmitted NotifyMe.Validated
-    | ConfirmationEmailConfirmed_ ConfirmEmailKey
-    | UnsubscribeEmail UnsubscribeEmailKey
 
 
 type BackendMsg
@@ -215,6 +214,11 @@ type ToFrontend
     | NotifyMeEmailSent { isSuccessful : Bool }
     | NotifyMeConfirmed
     | UnsubscribeEmailConfirmed
+
+
+type EmailEvent
+    = ConfirmationEmailConfirmed_ ConfirmEmailKey
+    | UnsubscribeEmail UnsubscribeEmailKey
 
 
 type alias LoadingData_ =
