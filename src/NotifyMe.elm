@@ -1,4 +1,4 @@
-module NotifyMe exposing (Frequency(..), Model, ThreeHours, Validated, confirmSubmit, duration, emailConfirmed, frequencies, frequencyToString, init, unsubscribed, view)
+module NotifyMe exposing (Frequency(..), Model, ThreeHours, Validated, confirmSubmit, duration, emailConfirmed, frequencies, frequencyToString, inProgress, init, unsubscribed, view)
 
 import Element exposing (Element)
 import Element.Background
@@ -14,6 +14,7 @@ import UiColors
 type Status
     = Form
     | FormWithError
+    | SendingToBackend
     | WaitingOnConfirmation
 
 
@@ -124,40 +125,49 @@ view modelChangedMsg submitMsg closeMsg model =
                 Element.none
         ]
         (case model of
-            InProgress inProgress ->
-                form (InProgress >> modelChangedMsg) submitMsg closeMsg inProgress
+            InProgress inProgress_ ->
+                form (InProgress >> modelChangedMsg) submitMsg closeMsg inProgress_
 
             Completed ->
                 Element.column
                     formStyle
                     [ Element.text "Email confirmed! You should now receive notifications."
-                    , Element.Input.button
-                        buttonStyle
-                        { onPress = Just closeMsg
-                        , label = Element.text "Done"
-                        }
+                    , Element.el
+                        [ Element.centerX ]
+                        (Element.Input.button
+                            buttonStyle
+                            { onPress = Just closeMsg
+                            , label = Element.text "Done"
+                            }
+                        )
                     ]
 
             BackendError ->
                 Element.column
                     formStyle
                     [ Element.text "Something went wrong... try again later maybe?"
-                    , Element.Input.button
-                        buttonStyle
-                        { onPress = Just closeMsg
-                        , label = Element.text "Close"
-                        }
+                    , Element.el
+                        [ Element.centerX ]
+                        (Element.Input.button
+                            buttonStyle
+                            { onPress = Just closeMsg
+                            , label = Element.text "Close"
+                            }
+                        )
                     ]
 
             Unsubscribed ->
                 Element.column
                     formStyle
                     [ Element.text "Your email is successfully unsubscribed."
-                    , Element.Input.button
-                        buttonStyle
-                        { onPress = Just closeMsg
-                        , label = Element.text "Close"
-                        }
+                    , Element.el
+                        [ Element.centerX ]
+                        (Element.Input.button
+                            buttonStyle
+                            { onPress = Just closeMsg
+                            , label = Element.text "Close"
+                            }
+                        )
                     ]
         )
 
@@ -192,14 +202,30 @@ errorMessage message =
 confirmSubmit : { isSuccessful : Bool } -> Model -> Model
 confirmSubmit { isSuccessful } model =
     case ( model, isSuccessful ) of
-        ( InProgress inProgress, True ) ->
-            InProgress { inProgress | status = WaitingOnConfirmation }
+        ( InProgress inProgress_, True ) ->
+            InProgress { inProgress_ | status = WaitingOnConfirmation }
 
         ( InProgress _, False ) ->
             BackendError
 
         _ ->
             model
+
+
+inProgress : Model -> Model
+inProgress model =
+    case model of
+        InProgress inProgress_ ->
+            InProgress { inProgress_ | status = SendingToBackend }
+
+        Completed ->
+            Completed
+
+        BackendError ->
+            BackendError
+
+        Unsubscribed ->
+            Unsubscribed
 
 
 emailConfirmed : Model -> Model
@@ -251,6 +277,9 @@ form modelChangedMsg submitMsg closeMsg model =
 
                         WaitingOnConfirmation ->
                             Element.text "Try again"
+
+                        SendingToBackend ->
+                            Element.text "Sending..."
                 }
             , Element.Input.button
                 buttonStyle

@@ -200,7 +200,7 @@ sendChangeEmails time model =
                     , Html.String.node "hr" [] []
                     , Html.String.a
                         [ UrlHelper.encodeUrl (EmailUnsubscribeRoute unsubscribeKey)
-                            |> (++) "https://ascii-collab.lamdera.app/"
+                            |> (++) (Env.domain ++ "/")
                             |> Html.String.Attributes.href
                         ]
                         [ Html.String.text "Click here to unsubscribe" ]
@@ -269,7 +269,7 @@ clusterToTextImage model actualChanges bounds =
                 |> Helper.roundPoint
                 |> UrlHelper.internalRoute False
                 |> UrlHelper.encodeUrl
-                |> (++) "https://ascii-collab.lamdera.app/"
+                |> (++) Env.domain
     in
     Bounds.coordRangeFold
         (\coord ( value, a ) ->
@@ -982,13 +982,12 @@ sendConfirmationEmail validated model sessionId userId time =
                 Html.String.div []
                     [ Html.String.a
                         [ Html.String.Attributes.href
-                            ("https://ascii-collab.lamdera.app"
-                                ++ UrlHelper.encodeUrl (EmailConfirmationRoute key)
-                            )
+                            (Env.domain ++ "/" ++ UrlHelper.encodeUrl (EmailConfirmationRoute key))
                         ]
                         [ Html.String.text "Click this link" ]
                     , Html.String.text
                         " to confirm you want to be notified about changes people make on ascii-collab."
+                    , Html.String.br [] []
                     , Html.String.text "If this email was sent to you in error, you can safely ignore it."
                     ]
         in

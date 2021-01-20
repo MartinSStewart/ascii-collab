@@ -623,8 +623,8 @@ updateLoaded msg model =
         PressedCancelNotifyMe ->
             closeNotifyMe model
 
-        PressedSubmitNotifyMe _ ->
-            closeNotifyMe model
+        PressedSubmitNotifyMe validated ->
+            ( { model | notifyMeModel = NotifyMe.inProgress model.notifyMeModel }, Lamdera.sendToBackend (NotifyMeSubmitted validated) )
 
         NotifyMeModelChanged notifyMeModel ->
             ( { model | notifyMeModel = notifyMeModel }, Cmd.none )
@@ -649,8 +649,11 @@ pushUrl url model =
 
 cursorEnabled : FrontendLoaded -> Bool
 cursorEnabled model =
-    case model.tool of
-        HighlightTool _ ->
+    case ( model.tool, model.showNotifyMe ) of
+        ( HighlightTool _, _ ) ->
+            False
+
+        ( _, True ) ->
             False
 
         _ ->
