@@ -919,8 +919,8 @@ updateFromFrontend currentTime sessionId clientId msg model =
                                     }
                       }
                     , broadcast
-                        (\sessionId_ clientId_ ->
-                            if sessionId_ == sessionId && clientId_ == clientId then
+                        (\sessionId_ _ ->
+                            if sessionId_ == sessionId then
                                 Just NotifyMeConfirmed
 
                             else

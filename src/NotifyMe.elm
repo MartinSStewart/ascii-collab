@@ -131,7 +131,7 @@ view modelChangedMsg submitMsg closeMsg model =
             Completed ->
                 Element.column
                     formStyle
-                    [ Element.text "Email confirmed! You should now receive notifications."
+                    [ Element.paragraph [] [ Element.text "Email confirmed! You should now receive notifications." ]
                     , Element.el
                         [ Element.centerX ]
                         (Element.Input.button
@@ -145,7 +145,7 @@ view modelChangedMsg submitMsg closeMsg model =
             BackendError ->
                 Element.column
                     formStyle
-                    [ Element.text "Something went wrong... try again later maybe?"
+                    [ Element.paragraph [] [ Element.text "Something went wrong... try again later maybe?" ]
                     , Element.el
                         [ Element.centerX ]
                         (Element.Input.button
@@ -159,7 +159,7 @@ view modelChangedMsg submitMsg closeMsg model =
             Unsubscribed ->
                 Element.column
                     formStyle
-                    [ Element.text "Your email is successfully unsubscribed."
+                    [ Element.paragraph [] [ Element.text "Your email is successfully unsubscribed." ]
                     , Element.el
                         [ Element.centerX ]
                         (Element.Input.button
