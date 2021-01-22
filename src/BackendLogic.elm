@@ -171,26 +171,23 @@ sendChangeEmails time model =
             Nonempty.map Tuple.first actualChanges |> Nonempty.toList |> Set.fromList |> Cluster.cluster
 
         content :
-            NotifyMe.Frequency
-            -> Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
+            Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
             -> UnsubscribeEmailKey
             -> Html.String.Html msg
-        content frequency_ actualChanges =
+        content actualChanges =
             let
                 images =
                     List.map (\( bounds, _ ) -> clusterToTextImage model actualChanges bounds) (clusters actualChanges)
             in
             \unsubscribeKey ->
                 Html.String.div
-                    [ Html.String.Attributes.style "background-color" "rgb(220, 220, 200)"
+                    [ Html.String.Attributes.style "background-color" "rgb(230, 230, 225)"
                     , Html.String.Attributes.style "padding" "8px"
+                    , Html.String.Attributes.style "font-size" "16px"
                     ]
                     [ Html.String.text "Click on an image to view it in ascii-collab"
-                    , Html.String.pre
-                        [ Html.String.Attributes.style "font-family" "monospace"
-                        , Html.String.Attributes.style "font-size" "16px"
-                        , Html.String.Attributes.style "line-height" "14px"
-                        ]
+                    , Html.String.div
+                        [ Html.String.Attributes.style "font-family" "monospace" ]
                         images
                     , Html.String.node "hr" [] []
                     , Html.String.a
@@ -225,7 +222,7 @@ sendChangeEmails time model =
                 Just actualChanges_ ->
                     let
                         content_ =
-                            content frequency actualChanges_
+                            content actualChanges_
 
                         subject_ =
                             subject frequency
@@ -342,12 +339,23 @@ clusterToTextImage model actualChanges bounds =
                 in
                 List.foldl
                     (\( maybeUserId, ascii ) ( currentUserId, text, html ) ->
+                        let
+                            char =
+                                Ascii.toChar ascii
+                                    |> (\a ->
+                                            if a == ' ' then
+                                                '\u{00A0}'
+
+                                            else
+                                                a
+                                       )
+                        in
                         if maybeUserId == currentUserId then
-                            ( currentUserId, Ascii.toChar ascii :: text, html )
+                            ( currentUserId, char :: text, html )
 
                         else
                             ( maybeUserId
-                            , [ Ascii.toChar ascii ]
+                            , [ char ]
                             , textToHtml currentUserId text :: html
                             )
                     )
@@ -369,7 +377,7 @@ clusterToTextImage model actualChanges bounds =
             [ Html.String.Attributes.style "background-color" "white"
             , Html.String.Attributes.style "width" "max-content"
             , Html.String.Attributes.style "margin" "8px 0"
-            , Html.String.Attributes.style "padding" "2px 0"
+            , Html.String.Attributes.style "padding" "1px 0"
             ]
 
 
