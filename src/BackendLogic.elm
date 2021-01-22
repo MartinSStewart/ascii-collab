@@ -184,6 +184,7 @@ sendChangeEmails time model =
                     [ Html.String.Attributes.style "background-color" "rgb(230, 230, 225)"
                     , Html.String.Attributes.style "padding" "8px"
                     , Html.String.Attributes.style "font-size" "16px"
+                    , Html.String.Attributes.style "line-height" "100%"
                     ]
                     [ Html.String.text "Click on an image to view it in ascii-collab"
                     , Html.String.div
