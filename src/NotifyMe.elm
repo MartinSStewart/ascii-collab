@@ -1,4 +1,4 @@
-module NotifyMe exposing (Frequency(..), Model, ThreeHours, Validated, confirmSubmit, duration, emailConfirmed, frequencies, frequencyToString, inProgress, init, unsubscribed, view)
+module NotifyMe exposing (Frequency(..), Model, ThreeHours, Validated, confirmSubmit, duration, emailConfirmed, frequencies, frequencyToString, inProgress, init, unsubscribed, unsubscribing, view)
 
 import Element exposing (Element)
 import Element.Background
@@ -22,6 +22,7 @@ type Model
     = InProgress InProgressModel
     | Completed
     | BackendError
+    | Unsubscribing
     | Unsubscribed
 
 
@@ -169,6 +170,20 @@ view modelChangedMsg submitMsg closeMsg model =
                             }
                         )
                     ]
+
+            Unsubscribing ->
+                Element.column
+                    formStyle
+                    [ Element.paragraph [] [ Element.text "Unsubscribing..." ]
+                    , Element.el
+                        [ Element.centerX ]
+                        (Element.Input.button
+                            buttonStyle
+                            { onPress = Just closeMsg
+                            , label = Element.text "Close"
+                            }
+                        )
+                    ]
         )
 
 
@@ -227,6 +242,9 @@ inProgress model =
         Unsubscribed ->
             Unsubscribed
 
+        Unsubscribing ->
+            Unsubscribing
+
 
 emailConfirmed : Model -> Model
 emailConfirmed model =
@@ -243,10 +261,18 @@ emailConfirmed model =
         Unsubscribed ->
             Unsubscribed
 
+        Unsubscribing ->
+            Unsubscribing
+
 
 unsubscribed : Model -> Model
 unsubscribed _ =
     Unsubscribed
+
+
+unsubscribing : Model -> Model
+unsubscribing _ =
+    Unsubscribing
 
 
 form : (InProgressModel -> msg) -> (Validated -> msg) -> msg -> InProgressModel -> Element msg

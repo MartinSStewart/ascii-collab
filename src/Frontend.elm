@@ -168,7 +168,7 @@ init url key =
                 Just (UrlHelper.EmailUnsubscribeRoute a) ->
                     { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 )
                     , showNotifyMe = True
-                    , notifyMe = NotifyMe.init |> NotifyMe.emailConfirmed
+                    , notifyMe = NotifyMe.init |> NotifyMe.unsubscribing
                     , emailEvent = Just (UnsubscribeEmail a)
                     , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
                     }
