@@ -844,7 +844,7 @@ updateFromFrontend currentTime sessionId clientId msg model =
                     confirmationEmailConfirmed sessionId currentTime key newModel
 
                 Just (UnsubscribeEmail key) ->
-                    unsubscribeEmail sessionId clientId key newModel
+                    unsubscribeEmail clientId key newModel
 
                 Nothing ->
                     ( newModel, [] )
@@ -958,22 +958,14 @@ confirmationEmailConfirmed sessionId currentTime confirmEmailKey model =
             ( model, [] )
 
 
-unsubscribeEmail : SessionId -> ClientId -> UnsubscribeEmailKey -> BackendModel -> ( BackendModel, List Effect )
-unsubscribeEmail sessionId clientId unsubscribeEmailKey model =
+unsubscribeEmail : ClientId -> UnsubscribeEmailKey -> BackendModel -> ( BackendModel, List Effect )
+unsubscribeEmail clientId unsubscribeEmailKey model =
     case List.find (.unsubscribeKey >> (==) unsubscribeEmailKey) model.subscribedEmails of
         Just _ ->
             ( { model
                 | subscribedEmails = List.filter (.unsubscribeKey >> (/=) unsubscribeEmailKey) model.subscribedEmails
               }
-            , broadcast
-                (\sessionId_ clientId_ ->
-                    if sessionId_ == sessionId && clientId_ == clientId then
-                        Just UnsubscribeEmailConfirmed
-
-                    else
-                        Nothing
-                )
-                model
+            , [ SendToFrontend clientId UnsubscribeEmailConfirmed ]
             )
 
         Nothing ->
