@@ -280,6 +280,7 @@ clusterToTextImage model actualChanges bounds =
                             Grid.getCell coord model.grid
                                 |> Maybe.withDefault GridCell.empty
                                 |> GridCell.flatten EverySet.empty (hiddenUsers Nothing model)
+                                |> Array.map (\( _, ascii ) -> ( Nothing, ascii ))
 
                 slices : List (List ( Maybe UserId, Ascii ))
                 slices =
