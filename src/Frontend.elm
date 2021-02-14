@@ -205,7 +205,7 @@ init url key =
         , notifyMeModel = notifyMe
         }
     , Cmd.batch
-        [ Lamdera.sendToBackend (ConnectToBackend (Debug.log "bounds" bounds) emailEvent)
+        [ Lamdera.sendToBackend (ConnectToBackend bounds emailEvent)
         , Task.perform
             (\{ viewport } ->
                 WindowResized
