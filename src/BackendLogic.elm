@@ -1092,15 +1092,6 @@ updateLocalChange ( userId, _ ) change model =
                                     localChange.cellPosition
                                     (Grid.getCell localChange.cellPosition model.grid |> Maybe.withDefault GridCell.empty)
                                     model.userChangesRecently
-
-                        --if Just userId == Env.adminUserId || userId == backendUserId then
-                        --    model.userChangesRecently
-                        --
-                        --else
-                        --    Dict.insert
-                        --        ( User.rawId userId, Helper.toRawCoord localChange.cellPosition )
-                        --        localChange.localPosition
-                        --        model.userChangesRecently
                       }
                         |> updateUser
                             userId

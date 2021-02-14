@@ -1,4 +1,4 @@
-module Env exposing (Mode(..), adminEmail, adminEmail_, adminUserId, adminUserId_, confirmationEmailKey, domain, hyperlinkWhitelist, isProduction, isProduction_, mapDrawAt, mapDrawAtX, mapDrawAtY, mode, notifyAdminWaitInHours, sendGridKey, sendGridKey_, statisticsBounds, statisticsDrawAt, statisticsDrawAtX, statisticsDrawAtY, statisticsX0, statisticsX1, statisticsY0, statisticsY1)
+module Env exposing (Mode(..), adminEmail, adminEmail_, adminUserId, adminUserId_, confirmationEmailKey, domain, hyperlinkWhitelist, isProduction, isProduction_, mapDrawAt, mapDrawAtX, mapDrawAtY, mode, notifyAdminWaitInHours, sendGridKey, sendGridKey_, startPointAt, startPointX, startPointY, statisticsBounds, statisticsDrawAt, statisticsDrawAtX, statisticsDrawAtY, statisticsX0, statisticsX1, statisticsY0, statisticsY1)
 
 -- The Env.elm file is for per-environment configuration.
 -- See https://dashboard.lamdera.app/docs/environment for more info.
@@ -153,3 +153,22 @@ hyperlinkWhitelist =
 confirmationEmailKey : String
 confirmationEmailKey =
     "abc"
+
+
+startPointX : String
+startPointX =
+    "123"
+
+
+startPointY : String
+startPointY =
+    "44"
+
+
+startPointAt : Coord AsciiUnit
+startPointAt =
+    Maybe.map2
+        (\x y -> Helper.fromRawCoord ( x, y ))
+        (String.toInt startPointX)
+        (String.toInt startPointY)
+        |> Maybe.withDefault (Helper.fromRawCoord ( 0, 0 ))

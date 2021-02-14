@@ -1,5 +1,6 @@
 module UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..), UnsubscribeEmailKey(..), coordQueryParser, encodeUrl, internalRoute, notifyMe, urlParser)
 
+import Env
 import Helper exposing (Coord)
 import Units exposing (AsciiUnit)
 import Url.Builder
@@ -11,7 +12,9 @@ coordQueryParser : Url.Parser.Query.Parser (Coord AsciiUnit)
 coordQueryParser =
     Url.Parser.Query.map2
         (\maybeX maybeY ->
-            ( Maybe.withDefault 0 maybeX, Maybe.withDefault 0 maybeY ) |> Helper.fromRawCoord
+            ( Maybe.withDefault (Tuple.first Env.startPointAt) (Maybe.map Units.asciiUnit maybeX)
+            , Maybe.withDefault (Tuple.second Env.startPointAt) (Maybe.map Units.asciiUnit maybeY)
+            )
         )
         (Url.Parser.Query.int "x")
         (Url.Parser.Query.int "y")

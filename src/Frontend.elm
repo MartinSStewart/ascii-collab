@@ -146,7 +146,7 @@ init url key =
         { viewPoint, showNotifyMe, notifyMe, emailEvent, cmd } =
             let
                 defaultRoute =
-                    UrlHelper.internalRoute False ( Units.asciiUnit 0, Units.asciiUnit 0 )
+                    UrlHelper.internalRoute False Env.startPointAt
             in
             case Url.Parser.parse UrlHelper.urlParser url of
                 Just (UrlHelper.InternalRoute a) ->
@@ -158,7 +158,7 @@ init url key =
                     }
 
                 Just (UrlHelper.EmailConfirmationRoute a) ->
-                    { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+                    { viewPoint = Env.startPointAt
                     , showNotifyMe = True
                     , notifyMe = NotifyMe.init |> NotifyMe.emailConfirmed
                     , emailEvent = Just (ConfirmationEmailConfirmed_ a)
@@ -166,7 +166,7 @@ init url key =
                     }
 
                 Just (UrlHelper.EmailUnsubscribeRoute a) ->
-                    { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+                    { viewPoint = Env.startPointAt
                     , showNotifyMe = True
                     , notifyMe = NotifyMe.init |> NotifyMe.unsubscribing
                     , emailEvent = Just (UnsubscribeEmail a)
@@ -174,7 +174,7 @@ init url key =
                     }
 
                 Nothing ->
-                    { viewPoint = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+                    { viewPoint = Env.startPointAt
                     , showNotifyMe = False
                     , notifyMe = NotifyMe.init
                     , emailEvent = Nothing
@@ -205,7 +205,7 @@ init url key =
         , notifyMeModel = notifyMe
         }
     , Cmd.batch
-        [ Lamdera.sendToBackend (ConnectToBackend bounds emailEvent)
+        [ Lamdera.sendToBackend (ConnectToBackend (Debug.log "bounds" bounds) emailEvent)
         , Task.perform
             (\{ viewport } ->
                 WindowResized
@@ -906,6 +906,15 @@ followHyperlink newTab hyperlink model =
                 Browser.Navigation.load (Hyperlink.routeToUrl routeData hyperlink.route)
             )
 
+        Hyperlink.Resource _ ->
+            ( model
+            , if newTab then
+                martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl routeData hyperlink.route)
+
+              else
+                Browser.Navigation.load (Hyperlink.routeToUrl routeData hyperlink.route)
+            )
+
 
 highlightUser : UserId -> Coord AsciiUnit -> FrontendLoaded -> FrontendLoaded
 highlightUser highlightUserId highlightPoint model =
@@ -1258,7 +1267,7 @@ hyperlinkAtPosition coord model =
         model.hiddenUsers
         model.adminHiddenUsers
         model.grid
-        |> Parser.run (Hyperlink.urlsParser (start |> Helper.addTuple (Helper.fromRawCoord ( 0, 0 ))))
+        |> Parser.run (Hyperlink.urlsParser start)
         |> Result.toMaybe
         |> Maybe.withDefault []
         |> List.filter (Hyperlink.contains coord)

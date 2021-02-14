@@ -1,6 +1,5 @@
 module EmailTest exposing (main)
 
-import Ascii
 import Browser
 import Element
 import Element.Background

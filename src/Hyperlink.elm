@@ -9,6 +9,7 @@ import List.Extra as List
 import Parser exposing ((|.), (|=), Parser, Step(..))
 import Quantity exposing (Quantity(..))
 import Units exposing (AsciiUnit)
+import Url.Builder
 import UrlHelper
 import User exposing (UserId)
 
@@ -21,6 +22,7 @@ type Route
     = External String
     | Coordinate (Coord Units.AsciiUnit)
     | NotifyMe
+    | Resource String
 
 
 routeToUrl : { showNotifyMe : Bool, viewPoint : Coord Units.AsciiUnit } -> Route -> String
@@ -34,6 +36,9 @@ routeToUrl currentRoute route =
 
         NotifyMe ->
             UrlHelper.encodeUrl (UrlHelper.internalRoute True currentRoute.viewPoint)
+
+        Resource resource ->
+            Url.Builder.relative [ resource ] []
 
 
 hyperlinks : Coord Units.CellUnit -> List (Maybe (Array ( Maybe UserId, Ascii ))) -> List Hyperlink
@@ -142,6 +147,15 @@ urlParser offset =
                         |= parseCoordinate
                     , Parser.succeed NotifyMe
                         |. Parser.token UrlHelper.notifyMe
+                        |. Parser.oneOf
+                            [ Parser.chompIf ((==) '/')
+                            , Parser.succeed ()
+                            ]
+                    , Parser.succeed Resource
+                        |= Parser.oneOf
+                            [ Parser.token "poster.png" |> Parser.getChompedString
+                            , Parser.token "poster-color.png" |> Parser.getChompedString
+                            ]
                         |. Parser.oneOf
                             [ Parser.chompIf ((==) '/')
                             , Parser.succeed ()

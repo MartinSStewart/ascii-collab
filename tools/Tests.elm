@@ -422,6 +422,20 @@ main =
                       , route = Hyperlink.NotifyMe
                       }
                     ]
+            , test "Parse poster hyperlink" <|
+                parseHyperlinkTest "http://ascii-collab.lamdera.app/poster.png"
+                    [ { position = ( Quantity 0, Quantity.zero )
+                      , length = String.length "http://ascii-collab.lamdera.app/poster.png"
+                      , route = Hyperlink.Resource "poster.png"
+                      }
+                    ]
+            , test "Parse color poster hyperlink" <|
+                parseHyperlinkTest "http://ascii-collab.lamdera.app/poster-color.png"
+                    [ { position = ( Quantity 0, Quantity.zero )
+                      , length = String.length "http://ascii-collab.lamdera.app/poster-color.png"
+                      , route = Hyperlink.Resource "poster-color.png"
+                      }
+                    ]
             , test "Selection test" <|
                 (Grid.empty
                     |> Grid.addChange
