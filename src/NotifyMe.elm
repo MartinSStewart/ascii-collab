@@ -7,8 +7,14 @@ import Element.Events
 import Element.Font
 import Element.Input
 import Email
-import Quantity exposing (Quantity(..))
+import Helper exposing (Coord)
+import Html
+import Html.Attributes
+import Html.Events
+import Pixels exposing (Pixels)
+import Quantity exposing (Quantity(..), Rate)
 import UiColors
+import Units exposing (WorldPixel)
 
 
 type Status
@@ -111,8 +117,31 @@ init =
     InProgress { status = Form, email = "", frequency = Nothing }
 
 
-view : (Model -> msg) -> (Validated -> msg) -> msg -> Model -> Element msg
-view modelChangedMsg submitMsg closeMsg model =
+view :
+    { a | devicePixelRatio : Quantity Float (Rate WorldPixel Pixels), windowSize : Coord Pixels }
+    -> (Model -> msg)
+    -> (Validated -> msg)
+    -> msg
+    -> Model
+    -> Element msg
+view config modelChangedMsg submitMsg closeMsg model =
+    let
+        rawDevicePixelRatio =
+            Quantity.unwrap config.devicePixelRatio
+
+        scale : Float
+        scale =
+            toFloat (round rawDevicePixelRatio) / rawDevicePixelRatio
+
+        width value =
+            Html.Attributes.style "width" (String.fromFloat (value * scale) ++ "px")
+
+        height value =
+            Element.htmlAttribute <| Html.Attributes.style "height" (String.fromFloat (value * scale) ++ "px")
+
+        spacing value =
+            Element.spacing (round (value * scale))
+    in
     Element.el
         [ Element.width Element.fill
         , Element.height Element.fill
@@ -124,80 +153,102 @@ view modelChangedMsg submitMsg closeMsg model =
                 , Element.Background.color <| Element.rgba 0 0 0 0.5
                 ]
                 Element.none
+        , Element.Font.family [ Element.Font.typeface "ascii" ]
+        , Element.htmlAttribute <|
+            Html.Attributes.style
+                "font-size"
+                (String.fromFloat (18 * scale) ++ "px")
         ]
-        (case model of
-            InProgress inProgress_ ->
-                form (InProgress >> modelChangedMsg) submitMsg closeMsg inProgress_
+        (Element.column
+            [ padding config.devicePixelRatio 16
+            , Element.Border.color <| Element.rgb 0 0 0
+            , Element.Background.color <| Element.rgb 1 1 1
+            , Element.behindContent <|
+                Element.el
+                    [ padding config.devicePixelRatio 1
+                    , Element.width Element.fill
+                    , Element.height Element.fill
+                    ]
+                    (Element.el
+                        [ Element.width Element.fill
+                        , Element.height Element.fill
+                        , Element.Border.color <| Element.rgb 0 0 0
+                        , borderWidth config.devicePixelRatio 1
+                        ]
+                        Element.none
+                    )
+            , borderWidth config.devicePixelRatio 1
+            ]
+            (case model of
+                InProgress inProgress_ ->
+                    [ emailField config.devicePixelRatio inProgress_ (InProgress >> modelChangedMsg)
+                    , frequencyField inProgress_ (InProgress >> modelChangedMsg)
+                    , Element.row
+                        []
+                        [ button
+                            config.devicePixelRatio
+                            (case validate inProgress_ of
+                                Just validated ->
+                                    submitMsg validated
 
-            Completed ->
-                Element.column
-                    formStyle
+                                Nothing ->
+                                    modelChangedMsg (InProgress { inProgress_ | status = FormWithError })
+                            )
+                            (case inProgress_.status of
+                                Form ->
+                                    "Submit"
+
+                                FormWithError ->
+                                    "Submit"
+
+                                WaitingOnConfirmation ->
+                                    "Try again"
+
+                                SendingToBackend ->
+                                    "Sending..."
+                            )
+                        , Element.el [] (Element.html <| Html.div [ width 16 ] [])
+                        , button config.devicePixelRatio closeMsg "Cancel"
+                        ]
+                    , case inProgress_.status of
+                        WaitingOnConfirmation ->
+                            Element.paragraph
+                                [ paragraphWidth ]
+                                [ Element.text "A confirmation email has been sent. Click on the link in it to begin getting notifications. If you don't see it, check your spam folder or try sending it again." ]
+
+                        _ ->
+                            Element.none
+                    ]
+
+                Completed ->
                     [ Element.paragraph [] [ Element.text "Email confirmed! You should now receive notifications." ]
                     , Element.el
                         [ Element.centerX ]
-                        (Element.Input.button
-                            buttonStyle
-                            { onPress = Just closeMsg
-                            , label = Element.text "Done"
-                            }
-                        )
+                        (button config.devicePixelRatio closeMsg "Done")
                     ]
 
-            BackendError ->
-                Element.column
-                    formStyle
+                BackendError ->
                     [ Element.paragraph [] [ Element.text "Something went wrong... try again later maybe?" ]
                     , Element.el
                         [ Element.centerX ]
-                        (Element.Input.button
-                            buttonStyle
-                            { onPress = Just closeMsg
-                            , label = Element.text "Close"
-                            }
-                        )
+                        (button config.devicePixelRatio closeMsg "Close")
                     ]
 
-            Unsubscribed ->
-                Element.column
-                    formStyle
+                Unsubscribed ->
                     [ Element.paragraph [] [ Element.text "Your email is successfully unsubscribed." ]
                     , Element.el
                         [ Element.centerX ]
-                        (Element.Input.button
-                            buttonStyle
-                            { onPress = Just closeMsg
-                            , label = Element.text "Close"
-                            }
-                        )
+                        (button config.devicePixelRatio closeMsg "Close")
                     ]
 
-            Unsubscribing ->
-                Element.column
-                    formStyle
+                Unsubscribing ->
                     [ Element.paragraph [] [ Element.text "Unsubscribing..." ]
                     , Element.el
                         [ Element.centerX ]
-                        (Element.Input.button
-                            buttonStyle
-                            { onPress = Just closeMsg
-                            , label = Element.text "Close"
-                            }
-                        )
+                        (button config.devicePixelRatio closeMsg "Close")
                     ]
+            )
         )
-
-
-formStyle : List (Element.Attribute msg)
-formStyle =
-    [ Element.centerX
-    , Element.centerY
-    , Element.padding 16
-    , Element.Background.color UiColors.background
-    , Element.Border.color UiColors.border
-    , Element.Border.width 1
-    , Element.Border.rounded 4
-    , Element.spacing 16
-    ]
 
 
 noPadding =
@@ -275,53 +326,6 @@ unsubscribing _ =
     Unsubscribing
 
 
-form : (InProgressModel -> msg) -> (Validated -> msg) -> msg -> InProgressModel -> Element msg
-form modelChangedMsg submitMsg closeMsg model =
-    Element.column
-        formStyle
-        [ emailField model modelChangedMsg
-        , frequencyField model modelChangedMsg
-        , Element.row
-            [ Element.centerX, Element.spacing 16 ]
-            [ Element.Input.button
-                buttonStyle
-                { onPress =
-                    Just <|
-                        case validate model of
-                            Just validated ->
-                                submitMsg validated
-
-                            Nothing ->
-                                modelChangedMsg { model | status = FormWithError }
-                , label =
-                    case model.status of
-                        Form ->
-                            Element.text "Submit"
-
-                        FormWithError ->
-                            Element.text "Submit"
-
-                        WaitingOnConfirmation ->
-                            Element.text "Try again"
-
-                        SendingToBackend ->
-                            Element.text "Sending..."
-                }
-            , Element.Input.button
-                buttonStyle
-                { onPress = Just closeMsg, label = Element.text "Cancel" }
-            ]
-        , case model.status of
-            WaitingOnConfirmation ->
-                Element.paragraph
-                    [ paragraphWidth ]
-                    [ Element.text "A confirmation email has been sent. Click on the link in it to begin getting notifications. If you don't see it, check your spam folder or try sending it again." ]
-
-            _ ->
-                Element.none
-        ]
-
-
 field : Element msg -> Element msg -> Element msg
 field error fieldPart =
     Element.el
@@ -334,8 +338,16 @@ field error fieldPart =
         )
 
 
-emailField : InProgressModel -> (InProgressModel -> msg) -> Element msg
-emailField model modelChangedMsg =
+emailField : Quantity Float (Rate WorldPixel Pixels) -> InProgressModel -> (InProgressModel -> msg) -> Element msg
+emailField devicePixelRatio model modelChangedMsg =
+    let
+        rawDevicePixelRatio =
+            Quantity.unwrap devicePixelRatio
+
+        scale : Float
+        scale =
+            toFloat (round rawDevicePixelRatio) / rawDevicePixelRatio
+    in
     field
         (if model.status == FormWithError && Email.fromString model.email == Nothing then
             errorMessage "Invalid email address"
@@ -343,15 +355,29 @@ emailField model modelChangedMsg =
          else
             Element.none
         )
-        (Element.Input.email [ Element.width Element.fill ]
-            { onChange = \email -> modelChangedMsg { model | email = email }
-            , text = model.email
-            , placeholder = Nothing
-            , label =
-                Element.Input.labelAbove
-                    [ Element.paddingEach { noPadding | bottom = 8 } ]
-                    (Element.text "Email address")
-            }
+        (Element.el
+            [ borderWidth devicePixelRatio 1, padding devicePixelRatio 1, Element.width Element.fill ]
+            (Element.html
+                (Html.input
+                    [ Html.Events.onInput (\email -> modelChangedMsg { model | email = email })
+                    , Html.Attributes.value model.email
+                    , Html.Attributes.style
+                        "font-size"
+                        (String.fromFloat (18 * scale) ++ "px")
+                    , Html.Attributes.type_ "email"
+                    , Html.Attributes.style "font-family" "ascii"
+                    , borderWidthHtml devicePixelRatio 1
+                    , Html.Attributes.style "border-color" "#000"
+                    , Html.Attributes.style "outline" "none"
+                    , Html.Attributes.style "appearance" "none"
+                    , Html.Attributes.style "-moz-appearance" "none"
+                    , Html.Attributes.style "-webkit-appearance" "none"
+                    , Html.Attributes.style "border-image-width" "0"
+                    , paddingHtml devicePixelRatio 2
+                    ]
+                    []
+                )
+            )
         )
 
 
@@ -395,5 +421,51 @@ frequencyField model modelChangedMsg =
         )
 
 
-buttonStyle =
-    [ Element.padding 8, Element.Background.color UiColors.button ]
+button : Quantity Float (Rate WorldPixel Pixels) -> msg -> String -> Element msg
+button devicePixelRatio onPress labelText =
+    Element.el
+        [ padding devicePixelRatio 1, borderWidth devicePixelRatio 1 ]
+        (Element.Input.button
+            [ padding devicePixelRatio 8
+            , borderWidth devicePixelRatio 1
+            , Element.mouseOver [ Element.Border.color <| Element.rgb 0 0 0 ]
+            , Element.focused [ Element.Border.color <| Element.rgb 0 0 0 ]
+            , Element.Border.color <| Element.rgba 0 0 0 0
+            ]
+            { onPress = Just onPress
+            , label = Element.text labelText
+            }
+        )
+
+
+paddingHtml devicePixelRatio value =
+    let
+        rawDevicePixelRatio =
+            Quantity.unwrap devicePixelRatio
+
+        scale : Float
+        scale =
+            toFloat (round rawDevicePixelRatio) / rawDevicePixelRatio
+    in
+    Html.Attributes.style "padding" (String.fromFloat (value * scale) ++ "px")
+
+
+padding devicePixelRatio value =
+    paddingHtml devicePixelRatio value |> Element.htmlAttribute
+
+
+borderWidthHtml : Quantity Float (Rate WorldPixel Pixels) -> Float -> Html.Attribute msg
+borderWidthHtml devicePixelRatio value =
+    let
+        rawDevicePixelRatio =
+            Quantity.unwrap devicePixelRatio
+
+        scale : Float
+        scale =
+            toFloat (round rawDevicePixelRatio) / rawDevicePixelRatio
+    in
+    Html.Attributes.style "border-width" (String.fromFloat (value * scale) ++ "px")
+
+
+borderWidth devicePixelRatio value =
+    borderWidthHtml devicePixelRatio value |> Element.htmlAttribute

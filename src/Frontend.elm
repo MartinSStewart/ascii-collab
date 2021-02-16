@@ -1462,7 +1462,13 @@ view model =
         notifyMeView a =
             Element.inFront
                 (if a.showNotifyMe then
-                    NotifyMe.view
+                    (case model of
+                        Loading loading ->
+                            NotifyMe.view loading
+
+                        Loaded loaded ->
+                            NotifyMe.view loaded
+                    )
                         NotifyMeModelChanged
                         PressedSubmitNotifyMe
                         PressedCancelNotifyMe
@@ -1526,6 +1532,9 @@ view model =
                         ++ [ notifyMeView loadedModel ]
                     )
                     (Element.html (canvasView maybeHyperlink loadedModel))
+        , Html.node "style"
+            []
+            [ Html.text "@font-face { font-family: ascii; src: url('ascii.ttf'); }" ]
         ]
     }
 
