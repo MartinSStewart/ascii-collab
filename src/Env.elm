@@ -142,7 +142,7 @@ mapDrawAt =
 
 notifyAdminWaitInHours : String
 notifyAdminWaitInHours =
-    "0.005"
+    "0.05"
 
 
 hyperlinkWhitelist : String

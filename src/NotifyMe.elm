@@ -5,7 +5,7 @@ import Element.Background
 import Element.Border
 import Element.Events
 import Element.Font
-import Element.Input
+import Element.Input exposing (OptionState(..))
 import Email
 import Helper exposing (Coord)
 import Html
@@ -13,7 +13,6 @@ import Html.Attributes
 import Html.Events
 import Pixels exposing (Pixels)
 import Quantity exposing (Quantity(..), Rate)
-import UiColors
 import Units exposing (WorldPixel)
 
 
@@ -136,11 +135,19 @@ view config modelChangedMsg submitMsg closeMsg model =
         width value =
             Html.Attributes.style "width" (String.fromFloat (value * scale) ++ "px")
 
-        height value =
-            Element.htmlAttribute <| Html.Attributes.style "height" (String.fromFloat (value * scale) ++ "px")
+        errorMessage maybeText =
+            case maybeText of
+                Just text ->
+                    [ Element.text "   ,\n  /!\\\n  ¯¯¯ "
+                    , Element.paragraph
+                        [ Element.spacing 0
+                        , Element.width Element.fill
+                        ]
+                        [ Element.text text ]
+                    ]
 
-        spacing value =
-            Element.spacing (round (value * scale))
+                Nothing ->
+                    [ Element.el [ Element.transparent True ] (Element.text "   ,\n  /!\\\n  ¯¯¯ ") ]
     in
     Element.el
         [ Element.width Element.fill
@@ -153,7 +160,7 @@ view config modelChangedMsg submitMsg closeMsg model =
                 , Element.Background.color <| Element.rgba 0 0 0 0.5
                 ]
                 Element.none
-        , Element.Font.family [ Element.Font.typeface "ascii" ]
+        , Element.Font.family [ Element.Font.typeface "ascii", Element.Font.monospace ]
         , Element.htmlAttribute <|
             Html.Attributes.style
                 "font-size"
@@ -161,6 +168,13 @@ view config modelChangedMsg submitMsg closeMsg model =
         ]
         (Element.column
             [ padding config.devicePixelRatio 16
+            , if Quantity.modBy (Pixels.pixels 2) (Tuple.first config.windowSize) == Quantity.zero then
+                Element.moveRight 1
+
+              else
+                Element.moveRight 0
+            , Element.centerX
+            , Element.centerY
             , Element.Border.color <| Element.rgb 0 0 0
             , Element.Background.color <| Element.rgb 1 1 1
             , Element.behindContent <|
@@ -182,10 +196,10 @@ view config modelChangedMsg submitMsg closeMsg model =
             (case model of
                 InProgress inProgress_ ->
                     [ emailField config.devicePixelRatio inProgress_ (InProgress >> modelChangedMsg)
-                    , frequencyField inProgress_ (InProgress >> modelChangedMsg)
+                    , frequencyField config.devicePixelRatio inProgress_ (InProgress >> modelChangedMsg)
                     , Element.row
                         []
-                        [ button
+                        (button
                             config.devicePixelRatio
                             (case validate inProgress_ of
                                 Just validated ->
@@ -207,62 +221,67 @@ view config modelChangedMsg submitMsg closeMsg model =
                                 SendingToBackend ->
                                     "Sending..."
                             )
-                        , Element.el [] (Element.html <| Html.div [ width 16 ] [])
-                        , button config.devicePixelRatio closeMsg "Cancel"
-                        ]
-                    , case inProgress_.status of
-                        WaitingOnConfirmation ->
-                            Element.paragraph
-                                [ paragraphWidth ]
-                                [ Element.text "A confirmation email has been sent. Click on the link in it to begin getting notifications. If you don't see it, check your spam folder or try sending it again." ]
+                            :: Element.el [] (Element.html <| Html.div [ width 20 ] [])
+                            :: button config.devicePixelRatio closeMsg "Cancel"
+                            :: (errorMessage <|
+                                    if inProgress_.status == FormWithError then
+                                        case ( String.trim inProgress_.email, Email.fromString inProgress_.email ) of
+                                            ( "", _ ) ->
+                                                Just "Email missing"
 
-                        _ ->
-                            Element.none
+                                            ( _, Nothing ) ->
+                                                Just "Invalid email"
+
+                                            _ ->
+                                                case inProgress_.frequency of
+                                                    Just _ ->
+                                                        Nothing
+
+                                                    Nothing ->
+                                                        Just "Choose how often you want emails"
+
+                                    else
+                                        Nothing
+                               )
+                        )
+                    , --case inProgress_.status of
+                      --WaitingOnConfirmation ->
+                      Element.paragraph
+                        [ paragraphWidth, Element.spacing 0 ]
+                        [ Element.text "A confirmation email has been sent. Click on the link in it to begin getting notifications. If you don't see it, check your spam folder." ]
+
+                    --_ ->
+                    --   Element.none
                     ]
 
                 Completed ->
-                    [ Element.paragraph [] [ Element.text "Email confirmed! You should now receive notifications." ]
-                    , Element.el
-                        [ Element.centerX ]
-                        (button config.devicePixelRatio closeMsg "Done")
-                    ]
+                    simpleMessage config.devicePixelRatio closeMsg "Done" "Email confirmed! You should now receive notifications."
 
                 BackendError ->
-                    [ Element.paragraph [] [ Element.text "Something went wrong... try again later maybe?" ]
-                    , Element.el
-                        [ Element.centerX ]
-                        (button config.devicePixelRatio closeMsg "Close")
-                    ]
+                    simpleMessage config.devicePixelRatio closeMsg "Close" "Something went wrong... try again later maybe?"
 
                 Unsubscribed ->
-                    [ Element.paragraph [] [ Element.text "Your email is successfully unsubscribed." ]
-                    , Element.el
-                        [ Element.centerX ]
-                        (button config.devicePixelRatio closeMsg "Close")
-                    ]
+                    simpleMessage config.devicePixelRatio closeMsg "Close" "Your email is successfully unsubscribed."
 
                 Unsubscribing ->
-                    [ Element.paragraph [] [ Element.text "Unsubscribing..." ]
-                    , Element.el
-                        [ Element.centerX ]
-                        (button config.devicePixelRatio closeMsg "Close")
-                    ]
+                    simpleMessage config.devicePixelRatio closeMsg "Close" "Unsubscribing..."
             )
         )
 
 
+simpleMessage : Quantity Float (Rate WorldPixel Pixels) -> msg -> String -> String -> List (Element msg)
+simpleMessage devicePixelRatio msg buttonText message =
+    [ Element.paragraph
+        [ Element.spacing 0, paddingBottom devicePixelRatio 8 ]
+        [ Element.text message ]
+    , Element.el
+        [ Element.centerX ]
+        (button devicePixelRatio msg buttonText)
+    ]
+
+
 noPadding =
     { left = 0, right = 0, top = 0, bottom = 0 }
-
-
-errorMessage : String -> Element msg
-errorMessage message =
-    Element.el
-        [ Element.Font.color UiColors.error
-        , Element.Font.size 16
-        , Element.paddingEach { noPadding | top = 4 }
-        ]
-        (Element.text message)
 
 
 confirmSubmit : { isSuccessful : Bool } -> Model -> Model
@@ -348,41 +367,53 @@ emailField devicePixelRatio model modelChangedMsg =
         scale =
             toFloat (round rawDevicePixelRatio) / rawDevicePixelRatio
     in
-    field
-        (if model.status == FormWithError && Email.fromString model.email == Nothing then
-            errorMessage "Invalid email address"
+    Element.column
+        [ Element.width Element.fill, paddingBottom devicePixelRatio 18 ]
+        [ Element.el [ paddingBottom devicePixelRatio 5 ] (Element.text "Email address")
+        , Element.el
+            [ borderWidth devicePixelRatio 1
+            , padding devicePixelRatio 1
+            , Element.width Element.fill
+            , Element.behindContent <|
+                Element.html <|
+                    Html.node "style" [] [ Html.text """
 
-         else
-            Element.none
-        )
-        (Element.el
-            [ borderWidth devicePixelRatio 1, padding devicePixelRatio 1, Element.width Element.fill ]
+.emailInput {
+    font-family: ascii;
+    border-color: transparent;
+    box-shadow: none !important;
+    outline: none;
+}
+
+.emailInput:focus {
+    border-color: black
+}
+
+.emailInput:hover {
+    border-color: black
+}
+""" ]
+            ]
             (Element.html
                 (Html.input
                     [ Html.Events.onInput (\email -> modelChangedMsg { model | email = email })
                     , Html.Attributes.value model.email
+                    , Html.Attributes.class "emailInput"
                     , Html.Attributes.style
                         "font-size"
                         (String.fromFloat (18 * scale) ++ "px")
                     , Html.Attributes.type_ "email"
-                    , Html.Attributes.style "font-family" "ascii"
                     , borderWidthHtml devicePixelRatio 1
-                    , Html.Attributes.style "border-color" "#000"
-                    , Html.Attributes.style "outline" "none"
-                    , Html.Attributes.style "appearance" "none"
-                    , Html.Attributes.style "-moz-appearance" "none"
-                    , Html.Attributes.style "-webkit-appearance" "none"
-                    , Html.Attributes.style "border-image-width" "0"
                     , paddingHtml devicePixelRatio 2
                     ]
                     []
                 )
             )
-        )
+        ]
 
 
 paragraphWidth =
-    Element.width <| Element.maximum 600 Element.fill
+    Element.width <| Element.maximum 750 Element.fill
 
 
 privacyPolicy : Element msg
@@ -394,31 +425,36 @@ privacyPolicy =
         ]
 
 
-frequencyField : InProgressModel -> (InProgressModel -> msg) -> Element msg
-frequencyField model modelChangedMsg =
-    field
-        (if model.status == FormWithError && model.frequency == Nothing then
-            errorMessage "Pick an option"
+frequencyField : Quantity Float (Rate WorldPixel Pixels) -> InProgressModel -> (InProgressModel -> msg) -> Element msg
+frequencyField devicePixelRatio model modelChangedMsg =
+    Element.Input.radio [ paddingBottom devicePixelRatio 10 ]
+        { onChange = \frequency -> modelChangedMsg { model | frequency = Just frequency }
+        , options =
+            List.map
+                (\option ->
+                    Element.Input.optionWith option
+                        (\state ->
+                            case state of
+                                Idle ->
+                                    Element.text (" _\n(_) " ++ frequencyToString option)
 
-         else
-            Element.none
-        )
-        (Element.Input.radio [ Element.spacing 8 ]
-            { onChange = \frequency -> modelChangedMsg { model | frequency = Just frequency }
-            , options =
-                List.map
-                    (\option -> Element.Input.option option (Element.text (frequencyToString option)))
-                    frequencies
-            , selected = model.frequency
-            , label =
-                Element.Input.labelAbove
-                    [ Element.paddingEach { noPadding | bottom = 12 } ]
-                    (Element.paragraph
-                        []
-                        [ Element.text "How often do you want to be shown changes people have made?" ]
-                    )
-            }
-        )
+                                Focused ->
+                                    Element.text (" _\n(?) " ++ frequencyToString option)
+
+                                Selected ->
+                                    Element.text (" _\n(X) " ++ frequencyToString option)
+                        )
+                )
+                frequencies
+        , selected = model.frequency
+        , label =
+            Element.Input.labelAbove
+                []
+                (Element.paragraph
+                    [ Element.spacing 0 ]
+                    [ Element.text "How often do you want to be shown changes people have made?" ]
+                )
+        }
 
 
 button : Quantity Float (Rate WorldPixel Pixels) -> msg -> String -> Element msg
@@ -426,7 +462,7 @@ button devicePixelRatio onPress labelText =
     Element.el
         [ padding devicePixelRatio 1, borderWidth devicePixelRatio 1 ]
         (Element.Input.button
-            [ padding devicePixelRatio 8
+            [ padding devicePixelRatio 6
             , borderWidth devicePixelRatio 1
             , Element.mouseOver [ Element.Border.color <| Element.rgb 0 0 0 ]
             , Element.focused [ Element.Border.color <| Element.rgb 0 0 0 ]
@@ -452,6 +488,22 @@ paddingHtml devicePixelRatio value =
 
 padding devicePixelRatio value =
     paddingHtml devicePixelRatio value |> Element.htmlAttribute
+
+
+paddingBottomHtml devicePixelRatio value =
+    let
+        rawDevicePixelRatio =
+            Quantity.unwrap devicePixelRatio
+
+        scale : Float
+        scale =
+            toFloat (round rawDevicePixelRatio) / rawDevicePixelRatio
+    in
+    Html.Attributes.style "padding-bottom" (String.fromFloat (value * scale) ++ "px")
+
+
+paddingBottom devicePixelRatio value =
+    paddingBottomHtml devicePixelRatio value |> Element.htmlAttribute
 
 
 borderWidthHtml : Quantity Float (Rate WorldPixel Pixels) -> Float -> Html.Attribute msg

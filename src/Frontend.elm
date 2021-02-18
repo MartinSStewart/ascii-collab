@@ -623,7 +623,7 @@ closeNotifyMe : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 closeNotifyMe model =
     UrlHelper.internalRoute False (Units.worldToAscii (actualViewPoint model))
         |> UrlHelper.encodeUrl
-        |> (\a -> pushUrl a { model | showNotifyMe = False })
+        |> (\a -> pushUrl a { model | showNotifyMe = False, notifyMeModel = NotifyMe.init })
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
@@ -1191,15 +1191,6 @@ updateMeshes oldModel newModel =
         newHiddenForAll =
             LocalGrid.localModel newModel.localModel |> .adminHiddenUsers |> showHighlighted newModel
 
-        --hyperlinks : Coord CellUnit -> List Hyperlink
-        --hyperlinks (( Quantity x, Quantity y ) as coord) =
-        --    List.range -2 2
-        --        |> List.map
-        --            (\xOffset ->
-        --                Dict.get ( x + xOffset, y ) newCells
-        --                    |> Maybe.map (GridCell.flatten newHidden newHiddenForAll)
-        --            )
-        --        |> Hyperlink.hyperlinks (Helper.addTuple coord ( Quantity -2, Quantity.zero ))
         newMesh : GridCell.Cell -> ( Int, Int ) -> WebGL.Mesh Grid.Vertex
         newMesh newCell rawCoord =
             let
