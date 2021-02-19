@@ -244,14 +244,14 @@ view config modelChangedMsg submitMsg closeMsg model =
                                         Nothing
                                )
                         )
-                    , --case inProgress_.status of
-                      --WaitingOnConfirmation ->
-                      Element.paragraph
-                        [ paragraphWidth, Element.spacing 0 ]
-                        [ Element.text "A confirmation email has been sent. Click on the link in it to begin getting notifications. If you don't see it, check your spam folder." ]
+                    , case inProgress_.status of
+                        WaitingOnConfirmation ->
+                            Element.paragraph
+                                [ paragraphWidth, Element.spacing 0 ]
+                                [ Element.text "A confirmation email has been sent. Click on the link in it to begin getting notifications. If you don't see it, check your spam folder." ]
 
-                    --_ ->
-                    --   Element.none
+                        _ ->
+                            Element.none
                     ]
 
                 Completed ->
