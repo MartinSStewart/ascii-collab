@@ -17,12 +17,14 @@ import GridCell
 import Helper exposing (Coord, RawCellCoord)
 import Html.String
 import Html.String.Attributes
+import Image
 import Lamdera exposing (ClientId, SessionId)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import NonemptyExtra as Nonempty
 import NotifyMe
+import Pixels
 import Quantity exposing (Quantity(..))
 import RecentChanges
 import SendGrid
@@ -263,6 +265,9 @@ clusterToTextImage model actualChanges bounds =
                 |> UrlHelper.internalRoute False
                 |> UrlHelper.encodeUrl
                 |> (++) Env.domain
+
+        height =
+            Pixels.inPixels (Tuple.second Ascii.size)
     in
     Bounds.coordRangeFold
         (\coord ( value, a ) ->
@@ -303,83 +308,74 @@ clusterToTextImage model actualChanges bounds =
         ( List.repeat GridCell.cellSize [], [] )
         |> (\( a, b ) -> b ++ [ a ])
         |> List.concat
-        |> List.map
-            (\row ->
-                let
-                    startsWithChange =
-                        List.head row |> Maybe.map Tuple.first |> Maybe.withDefault Nothing
+        |> List.foldl
+            (\row pixels ->
+                List.range 0 height
+                    |> List.concatMap
+                        (\yIndex ->
+                            List.concatMap
+                                (\( maybeUser, ascii ) ->
+                                    let
+                                        bounds_ =
+                                            Ascii.texturePositionInt ascii
 
-                    textToHtml currentUserId text =
-                        let
-                            text_ =
-                                List.reverse text |> String.fromList
-                        in
-                        case currentUserId of
-                            Just userId ->
-                                let
-                                    { red, green, blue } =
-                                        Shaders.userColor userId
-                                            |> Shaders.lch2rgb
-                                            |> Element.toRgb
-                                in
-                                Html.String.span
-                                    [ Html.String.Attributes.style
-                                        "background-color"
-                                        ("rgb("
-                                            ++ (String.fromInt <| round <| red * 255)
-                                            ++ ","
-                                            ++ (String.fromInt <| round <| green * 255)
-                                            ++ ","
-                                            ++ (String.fromInt <| round <| blue * 255)
-                                            ++ ")"
-                                        )
-                                    ]
-                                    [ Html.String.text text_ ]
+                                        ( x0, y0 ) =
+                                            Bounds.minimum bounds_ |> Helper.toRawCoord
 
-                            Nothing ->
-                                Html.String.text text_
-                in
-                List.foldl
-                    (\( maybeUserId, ascii ) ( currentUserId, text, html ) ->
-                        let
-                            char =
-                                Ascii.toChar ascii
-                                    |> (\a ->
-                                            if a == ' ' then
-                                                '\u{00A0}'
+                                        ( x1, _ ) =
+                                            Bounds.maximum bounds_ |> Helper.toRawCoord
+                                    in
+                                    case Array.get (y0 + yIndex) Ascii.image of
+                                        Just imageRow ->
+                                            Array.slice x0 x1 imageRow
+                                                |> Array.toList
+                                                |> (\list ->
+                                                        case maybeUser of
+                                                            Just user ->
+                                                                let
+                                                                    userColor : Image.Pixel
+                                                                    userColor =
+                                                                        Shaders.userPixelColor user
+                                                                in
+                                                                List.map
+                                                                    (\pixel ->
+                                                                        if pixel + 1 == 0 then
+                                                                            userColor
 
-                                            else
-                                                a
-                                       )
-                        in
-                        if maybeUserId == currentUserId then
-                            ( currentUserId, char :: text, html )
+                                                                        else
+                                                                            pixel
+                                                                    )
+                                                                    list
 
-                        else
-                            ( maybeUserId
-                            , [ char ]
-                            , textToHtml currentUserId text :: html
-                            )
-                    )
-                    ( startsWithChange, [], [] )
-                    row
-                    |> (\( currentUserId, text, html ) ->
-                            textToHtml currentUserId text :: html |> List.reverse
-                       )
+                                                            Nothing ->
+                                                                list
+                                                   )
+
+                                        Nothing ->
+                                            []
+                                )
+                                row
+                        )
+                    |> (++) pixels
             )
-        |> List.intersperse [ Html.String.br [] [] ]
-        |> List.concat
+            []
+        --|> (\a -> Image.fromList 1 [ 0 ])
+        |> Image.fromList
+            (Bounds.width bounds
+                |> Quantity.unwrap
+                |> (*) GridCell.cellSize
+                |> (*) 2
+                |> (*) (Tuple.first Ascii.size |> Pixels.inPixels)
+            )
+        |> Image.toPngUrl
+        |> (\base64Image -> Html.String.img [ Html.String.Attributes.src base64Image ] [])
+        |> List.singleton
         |> Html.String.a
             [ Html.String.Attributes.href url
-            , Html.String.Attributes.style "color" "black"
-            , Html.String.Attributes.style "text-decoration" "none"
             ]
         |> List.singleton
         |> Html.String.div
-            [ Html.String.Attributes.style "background-color" "white"
-            , Html.String.Attributes.style "width" "max-content"
-            , Html.String.Attributes.style "margin" "8px 0"
-            , Html.String.Attributes.style "padding" "1px 0"
+            [ Html.String.Attributes.style "margin" "8px 0"
             ]
 
 

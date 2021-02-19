@@ -1,8 +1,10 @@
-module Shaders exposing (colorToVec3, fragmentShader, lch2rgb, userColor, vertexShader)
+module Shaders exposing (colorToVec3, fragmentShader, lch2rgb, userColor, userPixelColor, vertexShader)
 
 import Basics.Extra as Basics
+import Bitwise
 import Element
 import Grid
+import Image
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3
@@ -139,6 +141,14 @@ lab2rgb { lightness, labA, labB } =
             (0.0556434 * x) + (-0.2040259 * y) + (1.0572252 * z) |> xyz2rgb
     in
     Element.rgb (clamp 0 1 r) (clamp 0 1 g) (clamp 0 1 b)
+
+
+userPixelColor userId =
+    let
+        { red, green, blue } =
+            userColor userId |> lch2rgb |> Element.toRgb
+    in
+    (Bitwise.shiftLeftBy 24 <| round (255 * red)) + (Bitwise.shiftLeftBy 16 <| round (255 * green)) + (Bitwise.shiftLeftBy 8 <| round (255 * blue)) + 255
 
 
 lab2xyz : Float -> Float
