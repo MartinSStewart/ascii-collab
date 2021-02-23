@@ -304,10 +304,6 @@ apiKey apiKey_ =
 -}
 sendEmail : (Result Error () -> msg) -> ApiKey -> Email -> Cmd msg
 sendEmail msg (ApiKey apiKey_) email_ =
-    let
-        _ =
-            encodeSendEmail email_ |> JE.encode 0 |> Debug.log ""
-    in
     Http.request
         { method = "POST"
         , headers = [ Http.header "Authorization" ("Bearer " ++ apiKey_) ]
