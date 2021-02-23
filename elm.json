@@ -3,7 +3,9 @@
     "source-directories": [
         "src",
         "packages/elm-geometry/3.6.0/src",
-        "tools"
+        "tools",
+        "packages/sendgrid/src",
+        "packages/elm-image/src"
     ],
     "elm-version": "0.19.1",
     "dependencies": {
@@ -12,7 +14,6 @@
             "Gizra/elm-all-set": "1.0.1",
             "MartinSStewart/elm-nonempty-string": "2.0.0",
             "MartinSStewart/elm-serialize": "1.2.0",
-            "MartinSStewart/send-grid": "2.0.0",
             "danfishgold/base64-bytes": "1.1.0",
             "elm/browser": "1.0.2",
             "elm/bytes": "1.0.8",
@@ -37,7 +38,6 @@
             "ianmackenzie/elm-triangular-mesh": "1.0.4",
             "ianmackenzie/elm-units": "2.7.0",
             "ianmackenzie/elm-units-interval": "1.1.0",
-            "justgook/elm-image": "4.0.0",
             "ktonon/elm-crypto": "1.1.2",
             "lamdera/codecs": "1.0.0",
             "lamdera/core": "1.0.0",
@@ -47,7 +47,8 @@
             "ohanhi/keyboard": "2.0.1",
             "pzp1997/assoc-list": "1.0.0",
             "tricycle/elm-email": "1.0.4",
-            "zwilias/elm-html-string": "2.0.2"
+            "zwilias/elm-html-string": "2.0.2",
+            "folkertdev/elm-flate": "2.0.4"
         },
         "indirect": {
             "NoRedInk/elm-string-conversions": "1.0.1",
@@ -56,7 +57,6 @@
             "elm/file": "1.0.5",
             "elm/regex": "1.0.0",
             "elm/virtual-dom": "1.0.2",
-            "folkertdev/elm-flate": "2.0.4",
             "ianmackenzie/elm-geometry": "3.6.0",
             "ktonon/elm-word": "2.1.2"
         }

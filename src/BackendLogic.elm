@@ -8,15 +8,14 @@ import Cluster
 import Crypto.Hash
 import Dict
 import Duration exposing (Duration)
-import Element
 import Email
+import Email.Html
+import Email.Html.Attributes
 import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord, RawCellCoord)
-import Html.String
-import Html.String.Attributes
 import Image
 import Lamdera exposing (ClientId, SessionId)
 import List.Extra as List
@@ -41,7 +40,7 @@ import User exposing (UserId)
 
 type Effect
     = SendToFrontend ClientId ToFrontend
-    | SendEmail (Result SendGrid.Error () -> BackendMsg) NonemptyString (Html.String.Html Never) Email.Email
+    | SendEmail (Result SendGrid.Error () -> BackendMsg) NonemptyString Email.Html.Html Email.Email
 
 
 init : BackendModel
@@ -175,30 +174,30 @@ sendChangeEmails time model =
         content :
             Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
             -> UnsubscribeEmailKey
-            -> Html.String.Html msg
+            -> Email.Html.Html
         content actualChanges =
             let
                 images =
-                    List.map (\( bounds, _ ) -> clusterToTextImage model actualChanges bounds) (clusters actualChanges)
+                    List.map (\( bounds, _ ) -> clusterToImage model actualChanges bounds) (clusters actualChanges)
             in
             \unsubscribeKey ->
-                Html.String.div
-                    [ Html.String.Attributes.style "background-color" "rgb(230, 230, 225)"
-                    , Html.String.Attributes.style "padding" "8px"
-                    , Html.String.Attributes.style "font-size" "16px"
-                    , Html.String.Attributes.style "line-height" "100%"
+                Email.Html.div
+                    [ Email.Html.Attributes.style "background-color" "rgb(230, 230, 225)"
+                    , Email.Html.Attributes.style "padding" "8px"
+                    , Email.Html.Attributes.style "font-size" "16px"
+                    , Email.Html.Attributes.style "line-height" "100%"
                     ]
-                    [ Html.String.text "Click on an image to view it in ascii-collab"
-                    , Html.String.div
-                        [ Html.String.Attributes.style "font-family" "monospace" ]
+                    [ Email.Html.text "Click on an image to view it in ascii-collab"
+                    , Email.Html.div
+                        [ Email.Html.Attributes.style "font-family" "monospace" ]
                         images
-                    , Html.String.node "hr" [] []
-                    , Html.String.a
+                    , Email.Html.node "hr" [] []
+                    , Email.Html.a
                         [ UrlHelper.encodeUrl (EmailUnsubscribeRoute unsubscribeKey)
                             |> (++) (Env.domain ++ "/")
-                            |> Html.String.Attributes.href
+                            |> Email.Html.Attributes.href
                         ]
-                        [ Html.String.text "Click here to unsubscribe" ]
+                        [ Email.Html.text "Click here to unsubscribe" ]
                     ]
 
         subject frequency_ =
@@ -248,12 +247,12 @@ sendChangeEmails time model =
     )
 
 
-clusterToTextImage :
+clusterToImage :
     { a | grid : Grid, users : Dict.Dict Int { b | hiddenForAll : Bool } }
     -> Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
     -> Bounds CellUnit
-    -> Html.String.Html msg
-clusterToTextImage model actualChanges bounds =
+    -> Email.Html.Html
+clusterToImage model actualChanges bounds =
     let
         url : String
         url =
@@ -311,7 +310,7 @@ clusterToTextImage model actualChanges bounds =
         |> List.foldl
             (\row pixels ->
                 List.range 0 height
-                    |> List.concatMap
+                    |> List.map
                         (\yIndex ->
                             List.concatMap
                                 (\( maybeUser, ascii ) ->
@@ -359,23 +358,16 @@ clusterToTextImage model actualChanges bounds =
                     |> (++) pixels
             )
             []
-        --|> (\a -> Image.fromList 1 [ 0 ])
-        |> Image.fromList
-            (Bounds.width bounds
-                |> Quantity.unwrap
-                |> (*) GridCell.cellSize
-                |> (*) 2
-                |> (*) (Tuple.first Ascii.size |> Pixels.inPixels)
-            )
+        |> Image.fromList2d
         |> Image.toPngUrl
-        |> (\base64Image -> Html.String.img [ Html.String.Attributes.src base64Image ] [])
+        |> (\base64Image -> Email.Html.img [ Email.Html.Attributes.src base64Image ] [])
         |> List.singleton
-        |> Html.String.a
-            [ Html.String.Attributes.href url
+        |> Email.Html.a
+            [ Email.Html.Attributes.href url
             ]
         |> List.singleton
-        |> Html.String.div
-            [ Html.String.Attributes.style "margin" "8px 0"
+        |> Email.Html.div
+            [ Email.Html.Attributes.style "margin" "8px 0"
             ]
 
 
@@ -417,7 +409,7 @@ notifyAdmin model =
                     (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
                     " users hidden"
                 )
-                (Html.String.text hidden)
+                (Email.Html.text hidden)
                 Env.adminEmail
           ]
         )
@@ -995,16 +987,16 @@ sendConfirmationEmail validated model sessionId userId time =
                 generateKey ConfirmEmailKey model
 
             content =
-                Html.String.div []
-                    [ Html.String.a
-                        [ Html.String.Attributes.href
+                Email.Html.div []
+                    [ Email.Html.a
+                        [ Email.Html.Attributes.href
                             (Env.domain ++ "/" ++ UrlHelper.encodeUrl (EmailConfirmationRoute key))
                         ]
-                        [ Html.String.text "Click this link" ]
-                    , Html.String.text
+                        [ Email.Html.text "Click this link" ]
+                    , Email.Html.text
                         " to confirm you want to be notified about changes people make on ascii-collab."
-                    , Html.String.br [] []
-                    , Html.String.text "If this email was sent to you in error, you can safely ignore it."
+                    , Email.Html.br [] []
+                    , Email.Html.text "If this email was sent to you in error, you can safely ignore it."
                     ]
         in
         ( { model2

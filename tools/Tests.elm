@@ -10,13 +10,12 @@ import Duration
 import Element exposing (Element)
 import Element.Background
 import Email
+import Email.Html
 import EverySet
 import Frontend
 import Grid
 import GridCell
 import Helper exposing (Coord)
-import Html exposing (Html)
-import Html.String
 import Hyperlink exposing (Hyperlink)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
@@ -66,7 +65,7 @@ test2 () =
                             )
                             "sessionId0"
                             "clientId0"
-                            (changes ( Units.asciiUnit -1, Units.asciiUnit 0 ) "o  o\n  > \n\\__/" |> GridChange)
+                            (changes ( Units.asciiUnit 0, Units.asciiUnit 0 ) "o  oaaaaaaaaaaaaaaaaaaaaaaaa++++++++++++\n  > \n\\__/" |> GridChange)
                     )
                 |> testMap
                     (Tuple.first
@@ -83,7 +82,7 @@ test2 () =
                     (\( _, effect ) ->
                         case getEmails effect of
                             ( _, content, _ ) :: [] ->
-                                Html.String.toHtml content |> Element.html |> Inconclusive
+                                Email.Html.toHtml content |> Element.html |> Inconclusive
 
                             _ ->
                                 failed "Expected a single SendEmail effect"
@@ -548,7 +547,7 @@ tests () =
                     (\( _, effect ) ->
                         case getEmails effect of
                             ( _, content, _ ) :: [] ->
-                                Html.String.toHtml content |> Element.html |> Inconclusive
+                                Email.Html.toHtml content |> Element.html |> Inconclusive
 
                             _ ->
                                 failed "Expected a single SendEmail effect"
@@ -578,7 +577,7 @@ tests () =
                     (\( _, effect ) ->
                         case getEmails effect of
                             ( _, content, _ ) :: [] ->
-                                Html.String.toHtml content |> Element.html |> Inconclusive
+                                Email.Html.toHtml content |> Element.html |> Inconclusive
 
                             _ ->
                                 failed "Expected a single SendEmail effect"
@@ -664,7 +663,7 @@ tests () =
                     (\( _, effect ) ->
                         case getEmails effect of
                             ( _, content, _ ) :: [] ->
-                                Html.String.toHtml content |> Element.html |> Inconclusive
+                                Email.Html.toHtml content |> Element.html |> Inconclusive
 
                             _ ->
                                 failed "Expected a single SendEmail effect"
@@ -726,7 +725,7 @@ tests () =
                     (\( _, effect ) ->
                         case getEmails effect of
                             ( _, content, _ ) :: [] ->
-                                Html.String.toHtml content |> Element.html |> Inconclusive
+                                Email.Html.toHtml content |> Element.html |> Inconclusive
 
                             _ ->
                                 failed "Expected a single SendEmail effect"
@@ -768,7 +767,7 @@ tests () =
                     (\( _, effect ) ->
                         case getEmails effect of
                             ( _, content, _ ) :: [] ->
-                                Html.String.toHtml content |> Element.html |> Inconclusive
+                                Email.Html.toHtml content |> Element.html |> Inconclusive
 
                             _ ->
                                 failed "Expected a single SendEmail effect"
@@ -966,7 +965,7 @@ canvasChange coord text time_ =
         )
 
 
-getEmails : List Effect -> List ( NonemptyString, Html.String.Html Never, Email.Email )
+getEmails : List Effect -> List ( NonemptyString, Email.Html.Html, Email.Email )
 getEmails effects =
     List.filterMap
         (\effect ->

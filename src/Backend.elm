@@ -3,6 +3,7 @@ module Backend exposing (app)
 import BackendLogic exposing (Effect(..))
 import Duration
 import Email
+import Email.Html
 import Env
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty
@@ -34,7 +35,7 @@ effectToCmd effect =
             Lamdera.sendToFrontend clientId msg
 
         SendEmail msg subject content to ->
-            SendGrid.sendEmail msg Env.sendGridKey (asciiCollabEmail subject (SendGrid.htmlContent content) to)
+            SendGrid.sendEmail msg Env.sendGridKey (asciiCollabEmail subject content to)
 
 
 subscriptions : BackendModel -> Sub BackendMsg
@@ -45,13 +46,17 @@ subscriptions _ =
         ]
 
 
-asciiCollabEmail : NonemptyString -> SendGrid.Content a -> Email.Email -> SendGrid.Email a
+asciiCollabEmail : NonemptyString -> Email.Html.Html -> Email.Email -> SendGrid.Email
 asciiCollabEmail subject content to =
-    { subject = subject
-    , content = content
-    , to = Nonempty.fromElement (Email.toString to)
-    , cc = []
-    , bcc = []
-    , nameOfSender = "ascii-collab"
-    , emailAddressOfSender = "ascii-collab@lamdera.app"
-    }
+    SendGrid.htmlEmail
+        { subject = subject
+        , content = content
+        , to = Nonempty.fromElement to
+        , nameOfSender = "ascii-collab"
+        , emailAddressOfSender =
+            { localPart = "ascii-collab"
+            , tags = []
+            , domain = "lamdera"
+            , tld = [ "app" ]
+            }
+        }
