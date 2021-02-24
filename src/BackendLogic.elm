@@ -359,16 +359,12 @@ clusterToImage model actualChanges bounds =
             )
             []
         |> Image.fromList2d
-        |> Image.toPngUrl
-        |> (\base64Image -> Email.Html.img [ Email.Html.Attributes.src base64Image ] [])
+        |> Image.toPng
+        |> (\image -> Email.Html.inlinePngImg image [] [])
         |> List.singleton
-        |> Email.Html.a
-            [ Email.Html.Attributes.href url
-            ]
+        |> Email.Html.a [ Email.Html.Attributes.href url ]
         |> List.singleton
-        |> Email.Html.div
-            [ Email.Html.Attributes.style "margin" "8px 0"
-            ]
+        |> Email.Html.div [ Email.Html.Attributes.style "margin" "8px 0" ]
 
 
 addError : Time.Posix -> BackendError -> BackendModel -> BackendModel

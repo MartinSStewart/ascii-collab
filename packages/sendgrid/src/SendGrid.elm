@@ -1,6 +1,7 @@
 module SendGrid exposing
     ( Email, sendEmail, sendEmailTask, Error(..), ErrorMessage, ErrorMessage403
     , ApiKey, apiKey
+    , Content(..)
     , Attachment, addAttachments, addBcc, addCc, htmlEmail, textEmail
     )
 
@@ -120,19 +121,25 @@ htmlEmail :
     }
     -> Email
 htmlEmail config =
+    let
+        ( html, inlineImages ) =
+            Internal.Types.toString config.content
+    in
     Email
         { subject = config.subject
-        , content = Internal.Types.toString config.content |> HtmlContent
+        , content = HtmlContent html
         , to = config.to
         , cc = []
         , bcc = []
         , nameOfSender = config.nameOfSender
         , emailAddressOfSender = config.emailAddressOfSender
         , attachments =
-            getInlineImages config.content
+            inlineImages
                 |> List.map
-                    (\{ name, mimeType, content } ->
-                        ( name, { mimeType = mimeType, content = content, disposition = Inline } )
+                    (Tuple.mapSecond
+                        (\{ imageType, content } ->
+                            { mimeType = Internal.Types.mimeType imageType, content = content, disposition = Inline }
+                        )
                     )
                 |> Dict.fromList
         }
@@ -157,19 +164,6 @@ textEmail config =
         , emailAddressOfSender = config.emailAddressOfSender
         , attachments = Dict.empty
         }
-
-
-getInlineImages : Internal.Types.Html -> List { content : Bytes, mimeType : String, name : String }
-getInlineImages html =
-    case html of
-        Internal.Types.Node _ _ children ->
-            List.concatMap getInlineImages children
-
-        Internal.Types.InlineImage inlineImage _ children ->
-            inlineImage :: List.concatMap getInlineImages children
-
-        Internal.Types.TextNode _ ->
-            []
 
 
 addCc : List Email.Email -> Email -> Email
@@ -281,23 +275,6 @@ type ApiKey
 apiKey : String -> ApiKey
 apiKey apiKey_ =
     ApiKey apiKey_
-
-
-
---"{subject:Test
---,content:[{type:text/html,value:<div>test</div>}]
---,personalizations:[{to:[{email:m@gmail.com,name:}]}]
---,from:{email:test@test.com,name:test}}"
---
---"{subject:Test
---,content:[{type:text/html,value:<div>test</div>}]
---,personalizations:[{to:[{email:,name:}]}]
---,from:{email:test@test.test,name:test}}"
---
---"{subject:Test
---,content:[{type:text/html,value:<div>test</div>}]
---,personalizations:[{to:[{email:martinsstewart@gmail.com,name:}]}]
---,from:{email:test@test.com,name:test}}"
 
 
 {-| Send an email using the SendGrid API.

@@ -1,4 +1,4 @@
-module Internal.Types exposing (Attribute(..), Html(..), cid, toHtml, toString)
+module Internal.Types exposing (Attribute(..), Html(..), ImageType(..), cid, imageExtension, inlineImageName, mimeType, toHtml, toString)
 
 import Base64
 import Bytes exposing (Bytes)
@@ -8,7 +8,7 @@ import Html.Attributes
 
 type Html
     = Node String (List Attribute) (List Html)
-    | InlineImage { content : Bytes, mimeType : String, name : String } (List Attribute) (List Html)
+    | InlineImage { content : Bytes, imageType : ImageType } (List Attribute) (List Html)
     | TextNode String
 
 
@@ -23,9 +23,10 @@ toHtml html =
         Node tagName attributes children ->
             Html.node tagName (List.map toHtmlAttribute attributes) (List.map toHtml children)
 
-        InlineImage { content, mimeType } attributes children ->
+        InlineImage { content, imageType } attributes children ->
             Html.img
-                (Html.Attributes.src ("data:" ++ mimeType ++ ";base64," ++ Maybe.withDefault "" (Base64.fromBytes content))
+                (Html.Attributes.src
+                    ("data:" ++ mimeType imageType ++ ";base64," ++ Maybe.withDefault "" (Base64.fromBytes content))
                     :: List.map toHtmlAttribute attributes
                 )
                 (List.map toHtml children)
@@ -48,10 +49,11 @@ type alias Acc =
     { depth : Int
     , stack : List ( String, List Html )
     , result : List String
+    , inlineImages : List ( String, { content : Bytes, imageType : ImageType } )
     }
 
 
-toString : Html -> String
+toString : Html -> ( String, List ( String, { content : Bytes, imageType : ImageType } ) )
 toString html =
     let
         initialAcc : Acc
@@ -59,12 +61,13 @@ toString html =
             { depth = 0
             , stack = []
             , result = []
+            , inlineImages = []
             }
+
+        { result, inlineImages } =
+            toStringHelper [ html ] initialAcc
     in
-    toStringHelper [ html ] initialAcc
-        |> .result
-        |> List.reverse
-        |> String.concat
+    ( result |> List.reverse |> String.concat, inlineImages )
 
 
 toStringHelper : List Html -> Acc -> Acc
@@ -100,20 +103,31 @@ toStringHelper tags acc =
                             , stack = ( tagName, rest ) :: acc.stack
                         }
 
-        (InlineImage { name } attributes children) :: rest ->
+        (InlineImage { imageType, content } attributes children) :: rest ->
+            let
+                src =
+                    inlineImageName (List.length acc.inlineImages) imageType
+
+                inlineImages =
+                    ( src, { content = content, imageType = imageType } ) :: acc.inlineImages
+            in
             case children of
                 [] ->
                     toStringHelper
                         rest
-                        { acc | result = tag "img" (Attribute "src" (cid name) :: attributes) :: acc.result }
+                        { acc
+                            | result = tag "img" (Attribute "src" (cid src) :: attributes) :: acc.result
+                            , inlineImages = inlineImages
+                        }
 
                 childNodes ->
                     toStringHelper
                         childNodes
                         { acc
-                            | result = tag "img" (Attribute "src" (cid name) :: attributes) :: acc.result
+                            | result = tag "img" (Attribute "src" (cid src) :: attributes) :: acc.result
                             , depth = acc.depth + 1
                             , stack = ( "img", rest ) :: acc.stack
+                            , inlineImages = inlineImages
                         }
 
         (TextNode string) :: rest ->
@@ -122,13 +136,38 @@ toStringHelper tags acc =
                 { acc | result = escapeHtmlText string :: acc.result }
 
 
+type ImageType
+    = Jpeg
+    | Png
+    | Gif
+
+
+imageExtension : ImageType -> String
+imageExtension imageType =
+    case imageType of
+        Jpeg ->
+            "jpeg"
+
+        Png ->
+            "png"
+
+        Gif ->
+            "gif"
+
+
+mimeType : ImageType -> String
+mimeType imageType =
+    "image/" ++ imageExtension imageType
+
+
+inlineImageName : Int -> ImageType -> String
+inlineImageName count imageType =
+    "inline-image" ++ String.fromInt count ++ "." ++ imageExtension imageType
+
+
 cid : String -> String
 cid filename =
     "cid:" ++ filename
-
-
-
---++ filename
 
 
 tag : String -> List Attribute -> String

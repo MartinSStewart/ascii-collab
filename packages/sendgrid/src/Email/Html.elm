@@ -1,4 +1,4 @@
-module Email.Html exposing (Attribute, Html, a, br, div, img, inlineImg, node, table, td, text, th, toHtml, toString, tr)
+module Email.Html exposing (Attribute, Html, a, br, div, img, inlineGifImg, inlineJpegImg, inlinePngImg, node, table, td, text, th, toHtml, toString, tr)
 
 import Bytes exposing (Bytes)
 import Html
@@ -20,7 +20,7 @@ toHtml =
 
 toString : Html -> String
 toString =
-    Internal.Types.toString
+    Internal.Types.toString >> Tuple.first
 
 
 node : String -> List Attribute -> List Html -> Html
@@ -68,26 +68,35 @@ img =
     Internal.Types.Node "img"
 
 
-inlineImg : { name : String, content : Bytes, mimeType : String } -> List Attribute -> List Html -> Html
-inlineImg { name, content, mimeType } =
-    { name =
-        List.filterMap
-            (\( mimeType_, extension ) ->
-                if mimeType == mimeType_ && not (String.endsWith extension name) then
-                    Just (name ++ extension)
+{-| If you want to embed a png image within the email body, use this function.
+The normal approach of using a base64 string as the image src won't work with emails.
+-}
+inlinePngImg : Bytes -> List Attribute -> List Html -> Html
+inlinePngImg content =
+    { content = content
+    , imageType = Internal.Types.Png
+    }
+        |> Internal.Types.InlineImage
 
-                else
-                    Nothing
-            )
-            [ ( "image/jpeg", ".jpeg" )
-            , ( "image/jpg", ".jpg" )
-            , ( "image/png", ".png" )
-            , ( "image/gif", ".gif" )
-            ]
-            |> List.head
-            |> Maybe.withDefault name
-    , content = content
-    , mimeType = mimeType
+
+{-| If you want to embed a jpeg image within the email body, use this function.
+The normal approach of using a base64 string as the image src won't work with emails.
+-}
+inlineJpegImg : Bytes -> List Attribute -> List Html -> Html
+inlineJpegImg content =
+    { content = content
+    , imageType = Internal.Types.Jpeg
+    }
+        |> Internal.Types.InlineImage
+
+
+{-| If you want to embed a gif animation within the email body, use this function.
+The normal approach of using a base64 string as the image src won't work with emails.
+-}
+inlineGifImg : Bytes -> List Attribute -> List Html -> Html
+inlineGifImg content =
+    { content = content
+    , imageType = Internal.Types.Gif
     }
         |> Internal.Types.InlineImage
 
