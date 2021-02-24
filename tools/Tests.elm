@@ -65,7 +65,7 @@ test2 () =
                             )
                             "sessionId0"
                             "clientId0"
-                            (changes ( Units.asciiUnit 0, Units.asciiUnit 0 ) "o  oaaaaaaaaaaaaaaaaaaaaaaaa++++++++++++\n  > \n\\__/" |> GridChange)
+                            (changes ( Units.asciiUnit 0, Units.asciiUnit 0 ) "o  oaaa││││aaaaaaaaaaaaaaaa++++++++++++\n  > \n\\__/" |> GridChange)
                     )
                 |> testMap
                     (Tuple.first
@@ -560,7 +560,7 @@ tests () =
                             )
                             "sessionId0"
                             "clientId0"
-                            (changes ( Units.asciiUnit -2, Units.asciiUnit 1 ) "  < \n~~~~~~" |> GridChange)
+                            (changes ( Units.asciiUnit -2, Units.asciiUnit 1 ) "  < \n│~~~~│" |> GridChange)
                     )
                 |> testMap
                     (Tuple.first

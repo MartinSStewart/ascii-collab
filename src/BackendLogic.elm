@@ -309,7 +309,7 @@ clusterToImage model actualChanges bounds =
         |> List.concat
         |> List.foldl
             (\row pixels ->
-                List.range 0 height
+                List.range 0 (height - 1)
                     |> List.map
                         (\yIndex ->
                             List.concatMap
