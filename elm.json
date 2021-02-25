@@ -4,8 +4,7 @@
         "src",
         "packages/elm-geometry/3.6.0/src",
         "tools",
-        "packages/sendgrid/src",
-        "packages/elm-image/src"
+        "packages/sendgrid/src"
     ],
     "elm-version": "0.19.1",
     "dependencies": {
@@ -31,6 +30,7 @@
             "elm-community/maybe-extra": "5.2.0",
             "elm-explorations/linear-algebra": "1.0.3",
             "elm-explorations/webgl": "1.1.1",
+
             "ianmackenzie/elm-1d-parameter": "1.0.1",
             "ianmackenzie/elm-float-extra": "1.1.0",
             "ianmackenzie/elm-geometry-linear-algebra-interop": "2.0.2",
@@ -38,6 +38,7 @@
             "ianmackenzie/elm-triangular-mesh": "1.0.4",
             "ianmackenzie/elm-units": "2.7.0",
             "ianmackenzie/elm-units-interval": "1.1.0",
+            "justgook/elm-image": "5.0.0",
             "ktonon/elm-crypto": "1.1.2",
             "lamdera/codecs": "1.0.0",
             "lamdera/core": "1.0.0",
@@ -46,11 +47,10 @@
             "mpizenberg/elm-pointer-events": "4.0.2",
             "ohanhi/keyboard": "2.0.1",
             "pzp1997/assoc-list": "1.0.0",
-            "tricycle/elm-email": "1.0.4",
-            "zwilias/elm-html-string": "2.0.2",
-            "folkertdev/elm-flate": "2.0.4"
+            "tricycle/elm-email": "1.0.4"
         },
         "indirect": {
+            "folkertdev/elm-flate": "2.0.4",
             "NoRedInk/elm-string-conversions": "1.0.1",
             "avh4/elm-color": "1.0.0",
             "bburdette/toop": "1.0.1",
