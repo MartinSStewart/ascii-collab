@@ -155,6 +155,7 @@ urlParser offset =
                         |= Parser.oneOf
                             [ Parser.token "poster.png" |> Parser.getChompedString
                             , Parser.token "poster-color.png" |> Parser.getChompedString
+                            , Parser.token "poster-irl.jpg" |> Parser.getChompedString
                             ]
                         |. Parser.oneOf
                             [ Parser.chompIf ((==) '/')
