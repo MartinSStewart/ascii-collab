@@ -1,4 +1,4 @@
-module Email.Html exposing (Attribute, Html, a, br, div, img, inlineGifImg, inlineJpegImg, inlinePngImg, node, table, td, text, th, toHtml, toString, tr)
+module Email.Html exposing (Attribute, Html, a, br, div, hr, img, inlineGifImg, inlineJpegImg, inlinePngImg, node, table, td, text, th, toHtml, toString, tr)
 
 import Bytes exposing (Bytes)
 import Html
@@ -56,6 +56,11 @@ th =
 br : List Attribute -> List Html -> Html
 br =
     Internal.Types.Node "br"
+
+
+hr : List Attribute -> List Html -> Html
+hr =
+    Internal.Types.Node "hr"
 
 
 a : List Attribute -> List Html -> Html

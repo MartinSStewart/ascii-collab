@@ -1,6 +1,7 @@
-module Email.Html.Attributes exposing (alt, attribute, backgroundColor, backgroundImage, backgroundPosition, backgroundRepeat, backgroundSize, border, borderRadius, fontColor, fontFamily, fontStyle, fontVariant, height, href, letterSpacing, lineHeight, margin, padding, src, style, textAlign, width)
+module Email.Html.Attributes exposing (alt, attribute, backgroundColor, backgroundImage, backgroundPosition, backgroundRepeat, backgroundSize, border, borderRadius, fontColor, fontFamily, fontSize, fontStyle, fontVariant, height, href, letterSpacing, lineHeight, margin, padding, src, style, textAlign, width)
 
 {-| <https://caniuse.email/>
+<https://www.pinpointe.com/blog/email-campaign-html-and-css-support>
 -}
 
 import Internal.Types exposing (Attribute(..))
@@ -108,6 +109,12 @@ margin =
 lineHeight : String -> Attribute
 lineHeight =
     StyleAttribute "line-height"
+
+
+{-| -}
+fontSize : String -> Attribute
+fontSize =
+    StyleAttribute "font-size"
 
 
 {-| -}

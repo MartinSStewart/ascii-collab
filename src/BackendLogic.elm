@@ -137,6 +137,7 @@ update msg model =
                     ( addError time (SendGridError email error) model, [] )
 
 
+sendChangeEmails : Time.Posix -> BackendModel -> ( BackendModel, List Effect )
 sendChangeEmails time model =
     let
         ( frequencyChanges, recentChangeState ) =
@@ -182,22 +183,28 @@ sendChangeEmails time model =
             in
             \unsubscribeKey ->
                 Email.Html.div
-                    [ Email.Html.Attributes.style "background-color" "rgb(230, 230, 225)"
-                    , Email.Html.Attributes.style "padding" "8px"
-                    , Email.Html.Attributes.style "font-size" "16px"
-                    , Email.Html.Attributes.style "line-height" "100%"
+                    [ Email.Html.Attributes.backgroundColor "rgb(230, 230, 225)"
+                    , Email.Html.Attributes.padding "8px"
                     ]
                     [ Email.Html.text "Click on an image to view it in ascii-collab"
-                    , Email.Html.div
-                        [ Email.Html.Attributes.style "font-family" "monospace" ]
-                        images
-                    , Email.Html.node "hr" [] []
+                    , Email.Html.div [] images
+                    , Email.Html.hr [] []
                     , Email.Html.a
                         [ UrlHelper.encodeUrl (EmailUnsubscribeRoute unsubscribeKey)
                             |> (++) (Env.domain ++ "/")
                             |> Email.Html.Attributes.href
                         ]
                         [ Email.Html.text "Click here to unsubscribe" ]
+                    , Time.posixToMillis time
+                        |> String.fromInt
+                        |> (++) "Generated at "
+                        |> Email.Html.text
+                        |> List.singleton
+                        |> Email.Html.div
+                            [ Email.Html.Attributes.fontSize "12px"
+                            , Email.Html.Attributes.fontColor "rgb(160, 160, 155)"
+                            , Email.Html.Attributes.margin "8px 0px 0px 0px"
+                            ]
                     ]
 
         subject frequency_ =
