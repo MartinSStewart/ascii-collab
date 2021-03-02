@@ -173,7 +173,7 @@ addCc cc (Email email_) =
 
 addBcc : List Email.Email -> Email -> Email
 addBcc bcc (Email email_) =
-    Email { email_ | cc = email_.bcc ++ bcc }
+    Email { email_ | bcc = email_.bcc ++ bcc }
 
 
 addAttachments : Dict String { content : Bytes, mimeType : String } -> Email -> Email
