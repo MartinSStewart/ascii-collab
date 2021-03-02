@@ -202,8 +202,8 @@ sendChangeEmails time model =
                         |> List.singleton
                         |> Email.Html.div
                             [ Email.Html.Attributes.fontSize "12px"
-                            , Email.Html.Attributes.fontColor "rgb(160, 160, 155)"
-                            , Email.Html.Attributes.margin "8px 0px 0px 0px"
+                            , Email.Html.Attributes.color "rgb(160, 160, 155)"
+                            , Email.Html.Attributes.paddingTop "8px"
                             ]
                     ]
 

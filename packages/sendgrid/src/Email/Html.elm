@@ -1,4 +1,4 @@
-module Email.Html exposing (Attribute, Html, a, br, div, hr, img, inlineGifImg, inlineJpegImg, inlinePngImg, node, table, td, text, th, toHtml, toString, tr)
+module Email.Html exposing (Attribute, Html, a, b, br, div, font, h1, h2, h3, h4, h5, h6, hr, img, inlineGifImg, inlineJpegImg, inlinePngImg, label, li, node, ol, p, span, strong, table, td, text, th, toHtml, toString, tr, u, ul)
 
 import Bytes exposing (Bytes)
 import Html
@@ -68,9 +68,89 @@ a =
     Internal.Types.Node "a"
 
 
+b : List Attribute -> List Html -> Html
+b =
+    Internal.Types.Node "b"
+
+
+font : List Attribute -> List Html -> Html
+font =
+    Internal.Types.Node "font"
+
+
+h1 : List Attribute -> List Html -> Html
+h1 =
+    Internal.Types.Node "h1"
+
+
+h2 : List Attribute -> List Html -> Html
+h2 =
+    Internal.Types.Node "h2"
+
+
+h3 : List Attribute -> List Html -> Html
+h3 =
+    Internal.Types.Node "h3"
+
+
+h4 : List Attribute -> List Html -> Html
+h4 =
+    Internal.Types.Node "h4"
+
+
+h5 : List Attribute -> List Html -> Html
+h5 =
+    Internal.Types.Node "h5"
+
+
+h6 : List Attribute -> List Html -> Html
+h6 =
+    Internal.Types.Node "h6"
+
+
 img : List Attribute -> List Html -> Html
 img =
     Internal.Types.Node "img"
+
+
+label : List Attribute -> List Html -> Html
+label =
+    Internal.Types.Node "label"
+
+
+li : List Attribute -> List Html -> Html
+li =
+    Internal.Types.Node "li"
+
+
+ol : List Attribute -> List Html -> Html
+ol =
+    Internal.Types.Node "ol"
+
+
+p : List Attribute -> List Html -> Html
+p =
+    Internal.Types.Node "p"
+
+
+span : List Attribute -> List Html -> Html
+span =
+    Internal.Types.Node "span"
+
+
+strong : List Attribute -> List Html -> Html
+strong =
+    Internal.Types.Node "strong"
+
+
+u : List Attribute -> List Html -> Html
+u =
+    Internal.Types.Node "u"
+
+
+ul : List Attribute -> List Html -> Html
+ul =
+    Internal.Types.Node "ul"
 
 
 {-| If you want to embed a png image within the email body, use this function.

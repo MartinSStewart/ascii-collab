@@ -1,4 +1,50 @@
-module Email.Html.Attributes exposing (alt, attribute, backgroundColor, backgroundImage, backgroundPosition, backgroundRepeat, backgroundSize, border, borderRadius, fontColor, fontFamily, fontSize, fontStyle, fontVariant, height, href, letterSpacing, lineHeight, margin, padding, src, style, textAlign, width)
+module Email.Html.Attributes exposing
+    ( alt
+    , attribute
+    , backgroundColor
+    , backgroundImage
+    , backgroundPosition
+    , backgroundRepeat
+    , backgroundSize
+    , border
+    , borderBottom
+    , borderBottomColor
+    , borderBottomStyle
+    , borderBottomWidth
+    , borderColor
+    , borderLeft
+    , borderLeftColor
+    , borderLeftStyle
+    , borderLeftWidth
+    , borderRadius
+    , borderRight
+    , borderRightColor
+    , borderRightStyle
+    , borderRightWidth
+    , borderStyle
+    , borderTop
+    , borderTopColor
+    , borderWidth
+    , color
+    , fontFamily
+    , fontSize
+    , fontStyle
+    , fontVariant
+    , height
+    , href
+    , letterSpacing
+    , lineHeight
+    , padding
+    , paddingBottom
+    , paddingLeft
+    , paddingRight
+    , paddingTop
+    , src
+    , style
+    , textAlign
+    , verticalAlign
+    , width
+    )
 
 {-| <https://caniuse.email/>
 <https://www.pinpointe.com/blog/email-campaign-html-and-css-support>
@@ -21,12 +67,6 @@ Note that there's an increased risk that it isn't supported in many email client
 attribute : String -> String -> Attribute
 attribute =
     Attribute
-
-
-{-| -}
-fontColor : String -> Attribute
-fontColor =
-    StyleAttribute "color"
 
 
 {-| -}
@@ -65,9 +105,118 @@ border =
     StyleAttribute "border"
 
 
+{-| -}
 borderRadius : String -> Attribute
 borderRadius =
     StyleAttribute "border-radius"
+
+
+{-| -}
+borderBottom : String -> Attribute
+borderBottom =
+    StyleAttribute "border-bottom"
+
+
+{-| -}
+borderBottomColor : String -> Attribute
+borderBottomColor =
+    StyleAttribute "border-bottom-color"
+
+
+{-| -}
+borderBottomStyle : String -> Attribute
+borderBottomStyle =
+    StyleAttribute "border-bottom-style"
+
+
+{-| -}
+borderBottomWidth : String -> Attribute
+borderBottomWidth =
+    StyleAttribute "border-bottom-width"
+
+
+{-| -}
+borderColor : String -> Attribute
+borderColor =
+    StyleAttribute "border-color"
+
+
+{-| -}
+borderLeft : String -> Attribute
+borderLeft =
+    StyleAttribute "border-left"
+
+
+{-| -}
+borderLeftColor : String -> Attribute
+borderLeftColor =
+    StyleAttribute "border-left-color"
+
+
+{-| -}
+borderLeftStyle : String -> Attribute
+borderLeftStyle =
+    StyleAttribute "border-left-style"
+
+
+{-| -}
+borderLeftWidth : String -> Attribute
+borderLeftWidth =
+    StyleAttribute "border-left-width"
+
+
+{-| -}
+borderRight : String -> Attribute
+borderRight =
+    StyleAttribute "border-right"
+
+
+{-| -}
+borderRightColor : String -> Attribute
+borderRightColor =
+    StyleAttribute "border-right-color"
+
+
+{-| -}
+borderRightStyle : String -> Attribute
+borderRightStyle =
+    StyleAttribute "border-right-style"
+
+
+{-| -}
+borderRightWidth : String -> Attribute
+borderRightWidth =
+    StyleAttribute "border-right-width"
+
+
+{-| -}
+borderStyle : String -> Attribute
+borderStyle =
+    StyleAttribute "border-style"
+
+
+{-| -}
+borderTop : String -> Attribute
+borderTop =
+    StyleAttribute "border-top"
+
+
+{-| -}
+borderTopColor : String -> Attribute
+borderTopColor =
+    StyleAttribute "border-top-color"
+
+
+{-| -}
+borderWidth : String -> Attribute
+borderWidth =
+    StyleAttribute "border-width"
+
+
+{-| -}
+color : String -> Attribute
+color =
+    StyleAttribute "color"
 
 
 {-| -}
@@ -101,9 +250,27 @@ padding =
 
 
 {-| -}
-margin : String -> Attribute
-margin =
-    StyleAttribute "margin"
+paddingLeft : String -> Attribute
+paddingLeft =
+    StyleAttribute "padding-left"
+
+
+{-| -}
+paddingRight : String -> Attribute
+paddingRight =
+    StyleAttribute "padding-right"
+
+
+{-| -}
+paddingBottom : String -> Attribute
+paddingBottom =
+    StyleAttribute "padding-bottom"
+
+
+{-| -}
+paddingTop : String -> Attribute
+paddingTop =
+    StyleAttribute "padding-top"
 
 
 lineHeight : String -> Attribute
@@ -163,3 +330,9 @@ alt =
 href : String -> Attribute
 href =
     Attribute "href"
+
+
+{-| -}
+verticalAlign : String -> Attribute
+verticalAlign =
+    Attribute "vertical-align"
