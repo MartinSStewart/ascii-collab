@@ -1,191 +1,235 @@
-module Email.Html exposing (Attribute, Html, a, b, br, div, font, h1, h2, h3, h4, h5, h6, hr, img, inlineGifImg, inlineJpegImg, inlinePngImg, label, li, node, ol, p, span, strong, table, td, text, th, toHtml, toString, tr, u, ul)
+module Email.Html exposing (Attribute, Html, a, b, br, div, font, h1, h2, h3, h4, h5, h6, hr, img, inlineGifImg, inlineJpgImg, inlinePngImg, label, li, node, ol, p, span, strong, table, td, text, th, toHtml, tr, u, ul)
+
+{-| Only html tags that are supported by major all email clients are listed here.
+If you need something not that's included (and potentially not universally supported) use [`node`](#node).
+
+These sources were used to determine what should be included:
+<https://www.campaignmonitor.com/css/color-background/background/>
+<https://www.pinpointe.com/blog/email-campaign-html-and-css-support>
+
+Open an issue on github if there's something missing or incorrectly included.
+
+@docs Attribute, Html, a, b, br, div, font, h1, h2, h3, h4, h5, h6, hr, img, inlineGifImg, inlineJpgImg, inlinePngImg, label, li, node, ol, p, span, strong, table, td, text, th, toHtml, tr, u, ul
+
+-}
 
 import Bytes exposing (Bytes)
 import Html
-import Internal.Types
+import Internal
 
 
+{-| -}
 type alias Html =
-    Internal.Types.Html
+    Internal.Html
 
 
+{-| -}
 type alias Attribute =
-    Internal.Types.Attribute
+    Internal.Attribute
 
 
+{-| Convert Email.Html.Html into normal Html. Useful if you want to preview your email content.
+-}
 toHtml : Html -> Html.Html msg
 toHtml =
-    Internal.Types.toHtml
+    Internal.toHtml
 
 
-toString : Html -> String
-toString =
-    Internal.Types.toString >> Tuple.first
-
-
+{-| This allows you to create html tags not included in this module.
+It's best to avoid this if possible as your email might not render correctly on some clients.
+-}
 node : String -> List Attribute -> List Html -> Html
 node =
-    Internal.Types.Node
+    Internal.Node
 
 
+{-| -}
 div : List Attribute -> List Html -> Html
 div =
-    Internal.Types.Node "div"
+    Internal.Node "div"
 
 
+{-| -}
 table : List Attribute -> List Html -> Html
 table =
-    Internal.Types.Node "table"
+    Internal.Node "table"
 
 
+{-| -}
 tr : List Attribute -> List Html -> Html
 tr =
-    Internal.Types.Node "tr"
+    Internal.Node "tr"
 
 
+{-| -}
 td : List Attribute -> List Html -> Html
 td =
-    Internal.Types.Node "tr"
+    Internal.Node "tr"
 
 
+{-| -}
 th : List Attribute -> List Html -> Html
 th =
-    Internal.Types.Node "th"
+    Internal.Node "th"
 
 
+{-| -}
 br : List Attribute -> List Html -> Html
 br =
-    Internal.Types.Node "br"
+    Internal.Node "br"
 
 
+{-| -}
 hr : List Attribute -> List Html -> Html
 hr =
-    Internal.Types.Node "hr"
+    Internal.Node "hr"
 
 
+{-| -}
 a : List Attribute -> List Html -> Html
 a =
-    Internal.Types.Node "a"
+    Internal.Node "a"
 
 
+{-| -}
 b : List Attribute -> List Html -> Html
 b =
-    Internal.Types.Node "b"
+    Internal.Node "b"
 
 
+{-| -}
 font : List Attribute -> List Html -> Html
 font =
-    Internal.Types.Node "font"
+    Internal.Node "font"
 
 
+{-| -}
 h1 : List Attribute -> List Html -> Html
 h1 =
-    Internal.Types.Node "h1"
+    Internal.Node "h1"
 
 
+{-| -}
 h2 : List Attribute -> List Html -> Html
 h2 =
-    Internal.Types.Node "h2"
+    Internal.Node "h2"
 
 
+{-| -}
 h3 : List Attribute -> List Html -> Html
 h3 =
-    Internal.Types.Node "h3"
+    Internal.Node "h3"
 
 
+{-| -}
 h4 : List Attribute -> List Html -> Html
 h4 =
-    Internal.Types.Node "h4"
+    Internal.Node "h4"
 
 
+{-| -}
 h5 : List Attribute -> List Html -> Html
 h5 =
-    Internal.Types.Node "h5"
+    Internal.Node "h5"
 
 
+{-| -}
 h6 : List Attribute -> List Html -> Html
 h6 =
-    Internal.Types.Node "h6"
+    Internal.Node "h6"
 
 
+{-| -}
 img : List Attribute -> List Html -> Html
 img =
-    Internal.Types.Node "img"
+    Internal.Node "img"
 
 
+{-| -}
 label : List Attribute -> List Html -> Html
 label =
-    Internal.Types.Node "label"
+    Internal.Node "label"
 
 
+{-| -}
 li : List Attribute -> List Html -> Html
 li =
-    Internal.Types.Node "li"
+    Internal.Node "li"
 
 
+{-| -}
 ol : List Attribute -> List Html -> Html
 ol =
-    Internal.Types.Node "ol"
+    Internal.Node "ol"
 
 
+{-| -}
 p : List Attribute -> List Html -> Html
 p =
-    Internal.Types.Node "p"
+    Internal.Node "p"
 
 
+{-| -}
 span : List Attribute -> List Html -> Html
 span =
-    Internal.Types.Node "span"
+    Internal.Node "span"
 
 
+{-| -}
 strong : List Attribute -> List Html -> Html
 strong =
-    Internal.Types.Node "strong"
+    Internal.Node "strong"
 
 
+{-| -}
 u : List Attribute -> List Html -> Html
 u =
-    Internal.Types.Node "u"
+    Internal.Node "u"
 
 
+{-| -}
 ul : List Attribute -> List Html -> Html
 ul =
-    Internal.Types.Node "ul"
+    Internal.Node "ul"
 
 
 {-| If you want to embed a png image within the email body, use this function.
-The normal approach of using a base64 string as the image src won't work with emails.
+The normal approach of using a base64 string as the image src doesn't always work with emails.
 -}
 inlinePngImg : Bytes -> List Attribute -> List Html -> Html
 inlinePngImg content =
     { content = content
-    , imageType = Internal.Types.Png
+    , imageType = Internal.Png
     }
-        |> Internal.Types.InlineImage
+        |> Internal.InlineImage
 
 
-{-| If you want to embed a jpeg image within the email body, use this function.
-The normal approach of using a base64 string as the image src won't work with emails.
+{-| If you want to embed a jpg image within the email body, use this function.
+The normal approach of using a base64 string as the image src doesn't always with emails.
 -}
-inlineJpegImg : Bytes -> List Attribute -> List Html -> Html
-inlineJpegImg content =
+inlineJpgImg : Bytes -> List Attribute -> List Html -> Html
+inlineJpgImg content =
     { content = content
-    , imageType = Internal.Types.Jpeg
+    , imageType = Internal.Jpeg
     }
-        |> Internal.Types.InlineImage
+        |> Internal.InlineImage
 
 
 {-| If you want to embed a gif animation within the email body, use this function.
-The normal approach of using a base64 string as the image src won't work with emails.
+The normal approach of using a base64 string as the image doesn't always work with emails.
+
+Note that [some email clients](https://www.caniemail.com/search/?s=gif) won't animate the gif.
+
 -}
 inlineGifImg : Bytes -> List Attribute -> List Html -> Html
 inlineGifImg content =
     { content = content
-    , imageType = Internal.Types.Gif
+    , imageType = Internal.Gif
     }
-        |> Internal.Types.InlineImage
+        |> Internal.InlineImage
 
 
-text : String -> Internal.Types.Html
+{-| -}
+text : String -> Internal.Html
 text =
-    Internal.Types.TextNode
+    Internal.TextNode

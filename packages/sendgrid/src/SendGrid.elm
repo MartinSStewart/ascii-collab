@@ -1,16 +1,9 @@
 module SendGrid exposing
-    ( Email, sendEmail, sendEmailTask, Error(..), ErrorMessage, ErrorMessage403
-    , ApiKey, apiKey
-    , Content(..)
-    , Attachment, addAttachments, addBcc, addCc, htmlEmail, textEmail
+    ( ApiKey, apiKey
+    , textEmail, htmlEmail, addCc, addBcc, addAttachments, sendEmail, sendEmailTask, Email, Error(..), ErrorMessage, ErrorMessage403
     )
 
 {-|
-
-
-# Email
-
-@docs Email, sendEmail, sendEmailTask, Error, ErrorMessage, ErrorMessage403
 
 
 # API Key
@@ -27,9 +20,9 @@ Once you've done this you'll be given an API key. Store it in a password manager
 @docs ApiKey, apiKey
 
 
-# Email content
+# Email
 
-@docs Content, textContent, htmlContent
+@docs textEmail, htmlEmail, addCc, addBcc, addAttachments, sendEmail, sendEmailTask, Email, Error, ErrorMessage, ErrorMessage403
 
 -}
 
@@ -39,7 +32,7 @@ import Dict exposing (Dict)
 import Email
 import Email.Html
 import Http
-import Internal.Types
+import Internal
 import Json.Decode as JD
 import Json.Encode as JE
 import List.Nonempty exposing (Nonempty)
@@ -112,6 +105,13 @@ encodeNonemptyList encoder list =
     List.Nonempty.toList list |> JE.list encoder
 
 
+{-| Create an email that contains html.
+
+Note that email clients are quite limited in what html features are supported!
+To avoid accidentally using html that's unsupported by some email clients, the `Email.Html` and `Email.Html.Attributes` modules only define tags and attributes with universal support.
+You can still use `Email.Html.node` and `Email.Html.Attributes.attribute` if you want something that might not be universally supported though.
+
+-}
 htmlEmail :
     { subject : NonemptyString
     , content : Email.Html.Html
@@ -123,7 +123,7 @@ htmlEmail :
 htmlEmail config =
     let
         ( html, inlineImages ) =
-            Internal.Types.toString config.content
+            Internal.toString config.content
     in
     Email
         { subject = config.subject
@@ -138,13 +138,15 @@ htmlEmail config =
                 |> List.map
                     (Tuple.mapSecond
                         (\{ imageType, content } ->
-                            { mimeType = Internal.Types.mimeType imageType, content = content, disposition = Inline }
+                            { mimeType = Internal.mimeType imageType, content = content, disposition = Inline }
                         )
                     )
                 |> Dict.fromList
         }
 
 
+{-| Create an email that only contains plain text.
+-}
 textEmail :
     { subject : NonemptyString
     , content : NonemptyString
@@ -166,16 +168,39 @@ textEmail config =
         }
 
 
+{-| Add a list of [CC](https://en.wikipedia.org/wiki/Carbon_copy) recipients.
+-}
 addCc : List Email.Email -> Email -> Email
 addCc cc (Email email_) =
     Email { email_ | cc = email_.cc ++ cc }
 
 
+{-| Add a list of [BCC](https://en.wikipedia.org/wiki/Blind_carbon_copy) recipients.
+-}
 addBcc : List Email.Email -> Email -> Email
 addBcc bcc (Email email_) =
     Email { email_ | bcc = email_.bcc ++ bcc }
 
 
+{-| Attach files to the email. These will usually appear at the bottom of the email.
+
+    import Bytes exposing (Bytes)
+    import SendGrid
+
+    attachPngImage : String -> Bytes -> Email -> Email
+    attachPngImage name image email =
+        email
+            |> SendGrid.addAttachments
+                (Dict.fromList
+                    [ ( name ++ ".png"
+                      , { content = image, mimeType = "image/png" }
+                      )
+                    ]
+                )
+
+If you want to include an image file within the body of your email, use `Email.Html.inlinePngImg`, `Email.Html.inlineJpegImg`, or `Email.Html.inlineGifImg` instead.
+
+-}
 addAttachments : Dict String { content : Bytes, mimeType : String } -> Email -> Email
 addAttachments attachments (Email email_) =
     Email
@@ -376,7 +401,7 @@ decodeBadStatus metadata body =
 
 
 {-| Possible error codes we might get back when trying to send an email.
-Some are just normal HTTP errors, others are specific to the SendGrid API.
+Some are just normal HTTP errors and others are specific to the SendGrid API.
 -}
 type Error
     = StatusCode400 (List ErrorMessage)

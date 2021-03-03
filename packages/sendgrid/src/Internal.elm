@@ -1,4 +1,4 @@
-module Internal.Types exposing (Attribute(..), Html(..), ImageType(..), cid, imageExtension, inlineImageName, mimeType, toHtml, toString)
+module Internal exposing (Attribute(..), Html(..), ImageType(..), cid, imageExtension, inlineImageName, mimeType, toHtml, toString)
 
 import Base64
 import Bytes exposing (Bytes)

@@ -1,56 +1,19 @@
-module Email.Html.Attributes exposing
-    ( alt
-    , attribute
-    , backgroundColor
-    , backgroundImage
-    , backgroundPosition
-    , backgroundRepeat
-    , backgroundSize
-    , border
-    , borderBottom
-    , borderBottomColor
-    , borderBottomStyle
-    , borderBottomWidth
-    , borderColor
-    , borderLeft
-    , borderLeftColor
-    , borderLeftStyle
-    , borderLeftWidth
-    , borderRadius
-    , borderRight
-    , borderRightColor
-    , borderRightStyle
-    , borderRightWidth
-    , borderStyle
-    , borderTop
-    , borderTopColor
-    , borderWidth
-    , color
-    , fontFamily
-    , fontSize
-    , fontStyle
-    , fontVariant
-    , height
-    , href
-    , letterSpacing
-    , lineHeight
-    , padding
-    , paddingBottom
-    , paddingLeft
-    , paddingRight
-    , paddingTop
-    , src
-    , style
-    , textAlign
-    , verticalAlign
-    , width
-    )
+module Email.Html.Attributes exposing (alt, attribute, backgroundColor, border, borderBottom, borderBottomColor, borderBottomStyle, borderBottomWidth, borderColor, borderLeft, borderLeftColor, borderLeftStyle, borderLeftWidth, borderRadius, borderRight, borderRightColor, borderRightStyle, borderRightWidth, borderStyle, borderTop, borderTopColor, borderWidth, color, fontFamily, fontSize, fontStyle, fontVariant, height, href, letterSpacing, lineHeight, padding, paddingBottom, paddingLeft, paddingRight, paddingTop, src, style, textAlign, verticalAlign, width)
 
-{-| <https://caniuse.email/>
+{-| Only html attributes that are supported by all major email clients are listed here.
+If you need something not that's included (and potentially not universally supported) use [`attribute`](#attribute) or [`style`](#style).
+
+These sources were used to determine what should be included:
+<https://www.campaignmonitor.com/css/color-background/background/>
 <https://www.pinpointe.com/blog/email-campaign-html-and-css-support>
+
+Open an issue on github if there's something missing or incorrectly included.
+
+@docs alt, attribute, backgroundColor, border, borderBottom, borderBottomColor, borderBottomStyle, borderBottomWidth, borderColor, borderLeft, borderLeftColor, borderLeftStyle, borderLeftWidth, borderRadius, borderRight, borderRightColor, borderRightStyle, borderRightWidth, borderStyle, borderTop, borderTopColor, borderWidth, color, fontFamily, fontSize, fontStyle, fontVariant, height, href, letterSpacing, lineHeight, padding, paddingBottom, paddingLeft, paddingRight, paddingTop, src, style, textAlign, verticalAlign, width
+
 -}
 
-import Internal.Types exposing (Attribute(..))
+import Internal exposing (Attribute(..))
 
 
 {-| Use this if there's a style you want to add that isn't present in this module.
@@ -73,30 +36,6 @@ attribute =
 backgroundColor : String -> Attribute
 backgroundColor =
     StyleAttribute "background-color"
-
-
-{-| -}
-backgroundImage : String -> Attribute
-backgroundImage =
-    StyleAttribute "background-image"
-
-
-{-| -}
-backgroundPosition : String -> Attribute
-backgroundPosition =
-    StyleAttribute "background-position"
-
-
-{-| -}
-backgroundRepeat : String -> Attribute
-backgroundRepeat =
-    StyleAttribute "background-repeat"
-
-
-{-| -}
-backgroundSize : String -> Attribute
-backgroundSize =
-    StyleAttribute "background-size"
 
 
 {-| -}
@@ -273,6 +212,7 @@ paddingTop =
     StyleAttribute "padding-top"
 
 
+{-| -}
 lineHeight : String -> Attribute
 lineHeight =
     StyleAttribute "line-height"
