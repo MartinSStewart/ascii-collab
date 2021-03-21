@@ -40,35 +40,51 @@ varying vec2 vcoord;
 varying vec4 vcolor;
 varying float isHyperlink;
 
-const float kn = 18.0;
-const float xn = 0.95047;
-const float zn = 1.08883;
+const vec3 n = vec3(0.95047, 1.0, 1.08883);
 const float t0 = 4.0 / 29.0;
 const float t1 = 6.0 / 29.0;
 const float t2 = 3.0 * pow(t1, 2.0);
 const float t3 = pow(t1, 3.0);
+const mat3 coeffs = mat3(
+    3.2404542, -0.969266, 0.0556434, // first column
+    -1.5371385, 1.8760108, -0.2040259,
+    -0.4985314, 0.041556, 1.0572252
+);
 
-float lab2xyz( float t ) {
-    return t > t1 ? pow(t, 3.0) : t2 * (t - t0);
+vec3 lessThanForMix(vec3 l, vec3 r) {
+    return sign(r - l)/2.0 + vec3(0.5);
 }
 
-float xyz2rgb ( float r ) {
-    return r <= 0.00304 ? (12.92 * r) : (1.055 * pow(r, 1.0 / 2.4) - 0.055);
+vec3 lab2xyz( vec3 t ) {
+    return mix(
+        t2 * (t - t0),
+        pow(t, vec3(3.0)),
+        lessThanForMix(vec3(t1), t)
+    );
+}
+
+vec3 xyz2rgb(vec3 r) {
+    return mix(
+        1.055 * pow(r, vec3(1.0 / 2.4)) - 0.055,
+        12.92 * r,
+        lessThanForMix(r,vec3(0.00304))
+    );
 }
 
 vec3 lab2rgb(float lightness, float labA, float labB ) {
-    float startY = (lightness + 16.0) / 116.0;
-    float y = lab2xyz(startY);
-    float x = lab2xyz(startY + (labA / 500.0)) * xn;
-    float z = lab2xyz(startY - (labB / 200.0)) * zn;
-    float r = xyz2rgb((3.2404542 * x) + (-1.5371385 * y) + (-0.4985314 * z));
-    float g = xyz2rgb((-0.969266 * x) + (1.8760108 * y) + (0.041556 * z));
-    float b = xyz2rgb((0.0556434 * x) + (-0.2040259 * y) + (1.0572252 * z));
-    return vec3(clamp(r,0.0,1.0), clamp(g,0.0,1.0), clamp(b,0.0,1.0));
+    vec3 startY = vec3((lightness + 16.0) / 116.0);
+    vec3 lab = startY + vec3(
+        (labA / 500.0),
+        0,
+        -(labB / 200.0)
+    );
+    vec3 xyz = lab2xyz(lab) * n;
+    vec3 rgb = xyz2rgb(coeffs * xyz);
+    return clamp(rgb,0.0,1.0);
 }
 
-vec3 lch2rgb( float luminance, float chroma, float hue ) {
-    float hueInRadians = hue * (3.14159265 / 180.0);
+vec3 lch2rgb(float luminance, float chroma, float hue) {
+    float hueInRadians = radians(hue);
     return lab2rgb( luminance, cos(hueInRadians) * chroma, sin(hueInRadians) * chroma );
 }
 
