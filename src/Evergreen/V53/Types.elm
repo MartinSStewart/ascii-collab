@@ -4,10 +4,10 @@ import Browser
 import Browser.Navigation
 import Dict
 import Duration
-import Email
 import Evergreen.V53.Bounds
 import Evergreen.V53.Change
 import Evergreen.V53.Cursor
+import Evergreen.V53.Email exposing (Email)
 import Evergreen.V53.Grid
 import Evergreen.V53.Helper
 import Evergreen.V53.LocalGrid
@@ -33,64 +33,66 @@ import WebGL
 import WebGL.Texture
 
 
-type alias FrontendLoading = 
+type alias FrontendLoading =
     { key : Browser.Navigation.Key
-    , windowSize : (Evergreen.V53.Helper.Coord Pixels.Pixels)
-    , devicePixelRatio : (Quantity.Quantity Float (Quantity.Rate Evergreen.V53.Units.WorldPixel Pixels.Pixels))
+    , windowSize : Evergreen.V53.Helper.Coord Pixels.Pixels
+    , devicePixelRatio : Quantity.Quantity Float (Quantity.Rate Evergreen.V53.Units.WorldPixel Pixels.Pixels)
     , zoomFactor : Int
     , time : Time.Posix
-    , viewPoint : (Evergreen.V53.Helper.Coord Evergreen.V53.Units.AsciiUnit)
-    , mousePosition : (Evergreen.V53.Point2d.Point2d Pixels.Pixels Evergreen.V53.Units.ScreenCoordinate)
+    , viewPoint : Evergreen.V53.Helper.Coord Evergreen.V53.Units.AsciiUnit
+    , mousePosition : Evergreen.V53.Point2d.Point2d Pixels.Pixels Evergreen.V53.Units.ScreenCoordinate
     , showNotifyMe : Bool
     , notifyMeModel : Evergreen.V53.NotifyMe.Model
     }
 
 
 type MouseButtonState
-    = MouseButtonUp 
-    { current : (Evergreen.V53.Point2d.Point2d Pixels.Pixels Evergreen.V53.Units.ScreenCoordinate)
-    }
-    | MouseButtonDown 
-    { start : (Evergreen.V53.Point2d.Point2d Pixels.Pixels Evergreen.V53.Units.ScreenCoordinate)
-    , start_ : (Evergreen.V53.Point2d.Point2d Evergreen.V53.Units.WorldPixel Evergreen.V53.Units.WorldCoordinate)
-    , current : (Evergreen.V53.Point2d.Point2d Pixels.Pixels Evergreen.V53.Units.ScreenCoordinate)
-    }
+    = MouseButtonUp
+        { current : Evergreen.V53.Point2d.Point2d Pixels.Pixels Evergreen.V53.Units.ScreenCoordinate
+        }
+    | MouseButtonDown
+        { start : Evergreen.V53.Point2d.Point2d Pixels.Pixels Evergreen.V53.Units.ScreenCoordinate
+        , start_ : Evergreen.V53.Point2d.Point2d Evergreen.V53.Units.WorldPixel Evergreen.V53.Units.WorldCoordinate
+        , current : Evergreen.V53.Point2d.Point2d Pixels.Pixels Evergreen.V53.Units.ScreenCoordinate
+        }
 
 
 type ToolType
     = DragTool
     | SelectTool
-    | HighlightTool (Maybe (Evergreen.V53.User.UserId, (Evergreen.V53.Helper.Coord Evergreen.V53.Units.AsciiUnit)))
+    | HighlightTool (Maybe ( Evergreen.V53.User.UserId, Evergreen.V53.Helper.Coord Evergreen.V53.Units.AsciiUnit ))
 
 
-type alias FrontendLoaded = 
+type alias FrontendLoaded =
     { key : Browser.Navigation.Key
-    , localModel : (Evergreen.V53.LocalModel.LocalModel Evergreen.V53.Change.Change Evergreen.V53.LocalGrid.LocalGrid)
-    , meshes : (Dict.Dict Evergreen.V53.Helper.RawCellCoord (WebGL.Mesh Evergreen.V53.Grid.Vertex))
-    , cursorMesh : (WebGL.Mesh 
-    { position : Math.Vector2.Vec2
-    })
-    , viewPoint : (Evergreen.V53.Point2d.Point2d Evergreen.V53.Units.WorldPixel Evergreen.V53.Units.WorldCoordinate)
-    , viewPointLastInterval : (Evergreen.V53.Point2d.Point2d Evergreen.V53.Units.WorldPixel Evergreen.V53.Units.WorldCoordinate)
+    , localModel : Evergreen.V53.LocalModel.LocalModel Evergreen.V53.Change.Change Evergreen.V53.LocalGrid.LocalGrid
+    , meshes : Dict.Dict Evergreen.V53.Helper.RawCellCoord (WebGL.Mesh Evergreen.V53.Grid.Vertex)
+    , cursorMesh :
+        WebGL.Mesh
+            { position : Math.Vector2.Vec2
+            }
+    , viewPoint : Evergreen.V53.Point2d.Point2d Evergreen.V53.Units.WorldPixel Evergreen.V53.Units.WorldCoordinate
+    , viewPointLastInterval : Evergreen.V53.Point2d.Point2d Evergreen.V53.Units.WorldPixel Evergreen.V53.Units.WorldCoordinate
     , cursor : Evergreen.V53.Cursor.Cursor
-    , texture : (Maybe WebGL.Texture.Texture)
-    , pressedKeys : (List Keyboard.Key)
-    , windowSize : (Evergreen.V53.Helper.Coord Pixels.Pixels)
-    , devicePixelRatio : (Quantity.Quantity Float (Quantity.Rate Evergreen.V53.Units.WorldPixel Pixels.Pixels))
+    , texture : Maybe WebGL.Texture.Texture
+    , pressedKeys : List Keyboard.Key
+    , windowSize : Evergreen.V53.Helper.Coord Pixels.Pixels
+    , devicePixelRatio : Quantity.Quantity Float (Quantity.Rate Evergreen.V53.Units.WorldPixel Pixels.Pixels)
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
-    , lastMouseLeftUp : (Maybe (Time.Posix, (Evergreen.V53.Point2d.Point2d Pixels.Pixels Evergreen.V53.Units.ScreenCoordinate)))
+    , lastMouseLeftUp : Maybe ( Time.Posix, Evergreen.V53.Point2d.Point2d Pixels.Pixels Evergreen.V53.Units.ScreenCoordinate )
     , mouseMiddle : MouseButtonState
-    , pendingChanges : (List Evergreen.V53.Change.LocalChange)
+    , pendingChanges : List Evergreen.V53.Change.LocalChange
     , tool : ToolType
     , undoAddLast : Time.Posix
     , time : Time.Posix
-    , lastTouchMove : (Maybe Time.Posix)
-    , userHoverHighlighted : (Maybe Evergreen.V53.User.UserId)
-    , highlightContextMenu : (Maybe 
-    { userId : Evergreen.V53.User.UserId
-    , hidePoint : (Evergreen.V53.Helper.Coord Evergreen.V53.Units.AsciiUnit)
-    })
+    , lastTouchMove : Maybe Time.Posix
+    , userHoverHighlighted : Maybe Evergreen.V53.User.UserId
+    , highlightContextMenu :
+        Maybe
+            { userId : Evergreen.V53.User.UserId
+            , hidePoint : Evergreen.V53.Helper.Coord Evergreen.V53.Units.AsciiUnit
+            }
     , adminEnabled : Bool
     , animationElapsedTime : Duration.Duration
     , ignoreNextUrlChanged : Bool
@@ -104,17 +106,17 @@ type FrontendModel
     | Loaded FrontendLoaded
 
 
-type alias BackendUserData = 
-    { hiddenUsers : (EverySet.EverySet Evergreen.V53.User.UserId)
+type alias BackendUserData =
+    { hiddenUsers : EverySet.EverySet Evergreen.V53.User.UserId
     , hiddenForAll : Bool
-    , undoHistory : (List (Dict.Dict Evergreen.V53.Helper.RawCellCoord Int))
-    , redoHistory : (List (Dict.Dict Evergreen.V53.Helper.RawCellCoord Int))
-    , undoCurrent : (Dict.Dict Evergreen.V53.Helper.RawCellCoord Int)
+    , undoHistory : List (Dict.Dict Evergreen.V53.Helper.RawCellCoord Int)
+    , redoHistory : List (Dict.Dict Evergreen.V53.Helper.RawCellCoord Int)
+    , undoCurrent : Dict.Dict Evergreen.V53.Helper.RawCellCoord Int
     }
 
 
-type alias SubscribedEmail = 
-    { email : Email.Email
+type alias SubscribedEmail =
+    { email : Email
     , frequency : Evergreen.V53.NotifyMe.Frequency
     , confirmTime : Time.Posix
     , userId : Evergreen.V53.User.UserId
@@ -122,8 +124,8 @@ type alias SubscribedEmail =
     }
 
 
-type alias PendingEmail = 
-    { email : Email.Email
+type alias PendingEmail =
+    { email : Email
     , frequency : Evergreen.V53.NotifyMe.Frequency
     , creationTime : Time.Posix
     , userId : Evergreen.V53.User.UserId
@@ -132,26 +134,29 @@ type alias PendingEmail =
 
 
 type BackendError
-    = SendGridError Email.Email SendGrid.Error
+    = SendGridError Email SendGrid.Error
 
 
 type alias BackendModel =
     { grid : Evergreen.V53.Grid.Grid
-    , userSessions : (Dict.Dict Lamdera.SessionId 
-    { clientIds : (Dict.Dict Lamdera.ClientId (Evergreen.V53.Bounds.Bounds Evergreen.V53.Units.CellUnit))
-    , userId : Evergreen.V53.User.UserId
-    })
-    , users : (Dict.Dict Evergreen.V53.User.RawUserId BackendUserData)
-    , usersHiddenRecently : (List 
-    { reporter : Evergreen.V53.User.UserId
-    , hiddenUser : Evergreen.V53.User.UserId
-    , hidePoint : (Evergreen.V53.Helper.Coord Evergreen.V53.Units.AsciiUnit)
-    })
+    , userSessions :
+        Dict.Dict
+            Lamdera.SessionId
+            { clientIds : Dict.Dict Lamdera.ClientId (Evergreen.V53.Bounds.Bounds Evergreen.V53.Units.CellUnit)
+            , userId : Evergreen.V53.User.UserId
+            }
+    , users : Dict.Dict Evergreen.V53.User.RawUserId BackendUserData
+    , usersHiddenRecently :
+        List
+            { reporter : Evergreen.V53.User.UserId
+            , hiddenUser : Evergreen.V53.User.UserId
+            , hidePoint : Evergreen.V53.Helper.Coord Evergreen.V53.Units.AsciiUnit
+            }
     , userChangesRecently : Evergreen.V53.RecentChanges.RecentChanges
-    , subscribedEmails : (List SubscribedEmail)
-    , pendingEmails : (List PendingEmail)
+    , subscribedEmails : List SubscribedEmail
+    , pendingEmails : List PendingEmail
     , secretLinkCounter : Int
-    , errors : (List (Time.Posix, BackendError))
+    , errors : List ( Time.Posix, BackendError )
     }
 
 
@@ -182,10 +187,10 @@ type FrontendMsg
     | UserTagMouseExited Evergreen.V53.User.UserId
     | HideForAllTogglePressed Evergreen.V53.User.UserId
     | ToggleAdminEnabledPressed
-    | HideUserPressed 
-    { userId : Evergreen.V53.User.UserId
-    , hidePoint : (Evergreen.V53.Helper.Coord Evergreen.V53.Units.AsciiUnit)
-    }
+    | HideUserPressed
+        { userId : Evergreen.V53.User.UserId
+        , hidePoint : Evergreen.V53.Helper.Coord Evergreen.V53.Units.AsciiUnit
+        }
     | AnimationFrame Time.Posix
     | PressedCancelNotifyMe
     | PressedSubmitNotifyMe Evergreen.V53.NotifyMe.Validated
@@ -209,27 +214,27 @@ type BackendMsg
     | NotifyAdminTimeElapsed Time.Posix
     | NotifyAdminEmailSent
     | ConfirmationEmailSent Lamdera.SessionId Time.Posix (Result SendGrid.Error ())
-    | ChangeEmailSent Time.Posix Email.Email (Result SendGrid.Error ())
+    | ChangeEmailSent Time.Posix Email (Result SendGrid.Error ())
     | UpdateFromFrontend Lamdera.SessionId Lamdera.ClientId ToBackend Time.Posix
 
 
-type alias LoadingData_ = 
+type alias LoadingData_ =
     { user : Evergreen.V53.User.UserId
     , grid : Evergreen.V53.Grid.Grid
-    , hiddenUsers : (EverySet.EverySet Evergreen.V53.User.UserId)
-    , adminHiddenUsers : (EverySet.EverySet Evergreen.V53.User.UserId)
-    , undoHistory : (List (Dict.Dict Evergreen.V53.Helper.RawCellCoord Int))
-    , redoHistory : (List (Dict.Dict Evergreen.V53.Helper.RawCellCoord Int))
-    , undoCurrent : (Dict.Dict Evergreen.V53.Helper.RawCellCoord Int)
-    , viewBounds : (Evergreen.V53.Bounds.Bounds Evergreen.V53.Units.CellUnit)
+    , hiddenUsers : EverySet.EverySet Evergreen.V53.User.UserId
+    , adminHiddenUsers : EverySet.EverySet Evergreen.V53.User.UserId
+    , undoHistory : List (Dict.Dict Evergreen.V53.Helper.RawCellCoord Int)
+    , redoHistory : List (Dict.Dict Evergreen.V53.Helper.RawCellCoord Int)
+    , undoCurrent : Dict.Dict Evergreen.V53.Helper.RawCellCoord Int
+    , viewBounds : Evergreen.V53.Bounds.Bounds Evergreen.V53.Units.CellUnit
     }
 
 
 type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (List.Nonempty.Nonempty Evergreen.V53.Change.Change)
-    | NotifyMeEmailSent 
-    { isSuccessful : Bool
-    }
+    | NotifyMeEmailSent
+        { isSuccessful : Bool
+        }
     | NotifyMeConfirmed
     | UnsubscribeEmailConfirmed

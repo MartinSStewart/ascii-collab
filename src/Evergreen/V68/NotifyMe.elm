@@ -1,6 +1,6 @@
-module Evergreen.V53.NotifyMe exposing (..)
+module Evergreen.V68.NotifyMe exposing (..)
 
-import Evergreen.V53.Email exposing (Email)
+import EmailAddress
 
 
 type Status
@@ -38,6 +38,6 @@ type ThreeHours
 
 
 type alias Validated =
-    { email : Email
+    { email : EmailAddress.EmailAddress
     , frequency : Frequency
     }
