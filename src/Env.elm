@@ -4,8 +4,7 @@ module Env exposing (Mode(..), adminEmail, adminEmail_, adminUserId, adminUserId
 -- See https://dashboard.lamdera.app/docs/environment for more info.
 
 import Bounds exposing (Bounds)
-import Duration exposing (Duration)
-import Email
+import EmailAddress exposing (EmailAddress)
 import Helper exposing (Coord)
 import SendGrid
 import Units exposing (AsciiUnit)
@@ -45,15 +44,9 @@ adminEmail_ =
     ""
 
 
-adminEmail : Email.Email
+adminEmail : Maybe EmailAddress
 adminEmail =
-    Email.fromString adminEmail_
-        |> Maybe.withDefault
-            { localPart = ""
-            , tags = []
-            , domain = ""
-            , tld = []
-            }
+    EmailAddress.fromString adminEmail_
 
 
 sendGridKey_ : String

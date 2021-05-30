@@ -2,12 +2,12 @@ module Backend exposing (app)
 
 import BackendLogic exposing (Effect(..))
 import Duration
-import Email
 import Email.Html
+import EmailAddress exposing (EmailAddress)
 import Env
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty
-import SendGrid
+import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString)
 import Task
 import Time
@@ -46,7 +46,7 @@ subscriptions _ =
         ]
 
 
-asciiCollabEmail : NonemptyString -> Email.Html.Html -> Email.Email -> SendGrid.Email
+asciiCollabEmail : NonemptyString -> Email.Html.Html -> EmailAddress -> Email
 asciiCollabEmail subject content to =
     SendGrid.htmlEmail
         { subject = subject
@@ -54,9 +54,7 @@ asciiCollabEmail subject content to =
         , to = Nonempty.fromElement to
         , nameOfSender = "ascii-collab"
         , emailAddressOfSender =
-            { localPart = "ascii-collab"
-            , tags = []
-            , domain = "lamdera"
-            , tld = [ "app" ]
-            }
+            EmailAddress.fromString "ascii-collab@lamdera.app"
+                -- This should never happen
+                |> Maybe.withDefault to
         }

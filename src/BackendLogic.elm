@@ -8,9 +8,9 @@ import Cluster
 import Crypto.Hash
 import Dict
 import Duration exposing (Duration)
-import Email
 import Email.Html
 import Email.Html.Attributes
+import EmailAddress exposing (EmailAddress)
 import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
@@ -40,7 +40,7 @@ import User exposing (UserId)
 
 type Effect
     = SendToFrontend ClientId ToFrontend
-    | SendEmail (Result SendGrid.Error () -> BackendMsg) NonemptyString Email.Html.Html Email.Email
+    | SendEmail (Result SendGrid.Error () -> BackendMsg) NonemptyString Email.Html.Html EmailAddress
 
 
 init : BackendModel
@@ -113,7 +113,12 @@ update msg model =
                     model
 
                 Err error ->
-                    addError timeSent (SendGridError Env.adminEmail error) model
+                    case Env.adminEmail of
+                        Just adminEmail ->
+                            addError timeSent (SendGridError adminEmail error) model
+
+                        Nothing ->
+                            model
             , broadcast
                 (\sessionId_ _ ->
                     if sessionId_ == sessionId then
@@ -406,15 +411,20 @@ notifyAdmin model =
 
     else
         ( { model | usersHiddenRecently = [] }
-        , [ SendEmail
-                (always NotifyAdminEmailSent)
-                (String.Nonempty.append_
-                    (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
-                    " users hidden"
-                )
-                (Email.Html.text hidden)
-                Env.adminEmail
-          ]
+        , case Env.adminEmail of
+            Just adminEmail ->
+                [ SendEmail
+                    (always NotifyAdminEmailSent)
+                    (String.Nonempty.append_
+                        (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
+                        " users hidden"
+                    )
+                    (Email.Html.text hidden)
+                    adminEmail
+                ]
+
+            Nothing ->
+                []
         )
 
 

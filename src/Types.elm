@@ -24,7 +24,7 @@ import Change exposing (Change, ServerChange)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
-import Email
+import EmailAddress exposing (EmailAddress)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import Helper exposing (Coord, RawCellCoord)
@@ -128,7 +128,7 @@ type alias BackendModel =
 
 
 type alias SubscribedEmail =
-    { email : Email.Email
+    { email : EmailAddress
     , frequency : NotifyMe.Frequency
     , confirmTime : Time.Posix
     , userId : UserId
@@ -137,7 +137,7 @@ type alias SubscribedEmail =
 
 
 type alias PendingEmail =
-    { email : Email.Email
+    { email : EmailAddress
     , frequency : NotifyMe.Frequency
     , creationTime : Time.Posix
     , userId : UserId
@@ -146,7 +146,7 @@ type alias PendingEmail =
 
 
 type BackendError
-    = SendGridError Email.Email SendGrid.Error
+    = SendGridError EmailAddress SendGrid.Error
 
 
 type alias BackendUserData =
@@ -204,7 +204,7 @@ type BackendMsg
     | NotifyAdminTimeElapsed Time.Posix
     | NotifyAdminEmailSent
     | ConfirmationEmailSent SessionId Time.Posix (Result SendGrid.Error ())
-    | ChangeEmailSent Time.Posix Email.Email (Result SendGrid.Error ())
+    | ChangeEmailSent Time.Posix EmailAddress (Result SendGrid.Error ())
     | UpdateFromFrontend SessionId ClientId ToBackend Time.Posix
 
 
