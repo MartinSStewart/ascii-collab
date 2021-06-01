@@ -183,7 +183,7 @@ migrateBackendModel old =
     , userChangesRecently = recentChanges
     , pendingEmails = []
     , subscribedEmails = List.filterMap migratedSubscribedEmail old.subscribedEmails
-    , secretLinkCounter = 0
+    , secretLinkCounter = old.secretLinkCounter
     , errors = []
     }
 
