@@ -134,7 +134,11 @@ urlParser offset =
                 |= Parser.oneOf
                     (List.map (Parser.token >> Parser.getChompedString) hyperlinkWhitelist)
                 |= Parser.oneOf
-                    [ Parser.chompIf ((==) '/') |> Parser.getChompedString
+                    [ Parser.succeed (++)
+                        |= (Parser.chompIf ((==) '/') |> Parser.getChompedString)
+                        |= (Parser.chompWhile (\char -> char /= '.' && char /= ',' && char /= ' ' && char /= '\\')
+                                |> Parser.getChompedString
+                           )
                     , Parser.succeed ""
                     ]
                 |> Parser.backtrackable

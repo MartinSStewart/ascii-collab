@@ -140,7 +140,7 @@ notifyAdminWaitInHours =
 
 hyperlinkWhitelist : String
 hyperlinkWhitelist =
-    "www.patorjk.com/software/taag, ro-box.netlify.app, the-best-color.lamdera.app, agirg.com, yourworldoftext.com, www.yourworldoftext.com"
+    "www.patorjk.com/software/taag, ro-box.netlify.app, the-best-color.lamdera.app, agirg.com, yourworldoftext.com, www.yourworldoftext.com, meetdown.app, ellie-app.com"
 
 
 confirmationEmailKey : String
