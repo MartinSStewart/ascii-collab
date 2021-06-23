@@ -54,7 +54,7 @@ asciiCollabEmail subject content to =
         , to = Nonempty.fromElement to
         , nameOfSender = "ascii-collab"
         , emailAddressOfSender =
-            EmailAddress.fromString "ascii-collab@lamdera.app"
+            EmailAddress.fromString "no-reply@ascii-collab.app"
                 -- This should never happen
                 |> Maybe.withDefault to
         }

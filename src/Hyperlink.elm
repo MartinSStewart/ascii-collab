@@ -144,7 +144,7 @@ urlParser offset =
                 |> Parser.backtrackable
             , Parser.succeed identity
                 |. parseHttp
-                |. Parser.token "ascii-collab.lamdera.app/"
+                |. Parser.token "ascii-collab.app/"
                 |= Parser.oneOf
                     [ Parser.succeed Coordinate
                         |. Parser.token "?"

@@ -9,8 +9,8 @@ import Dict
 import Duration
 import Element exposing (Element)
 import Element.Background
-import Email
 import Email.Html
+import EmailAddress as Email exposing (EmailAddress)
 import EverySet
 import Frontend
 import Grid
@@ -443,9 +443,9 @@ tests () =
     , test "Parse coordinate hyperlink edge case 3" <|
         parseHyperlinkTest "testx=5&y=123456789" []
     , test "Parse coordinate hyperlink" <|
-        parseHyperlinkTest "http://ascii-collab.lamdera.app/?x=-5&y=99"
+        parseHyperlinkTest "http://ascii-collab.app/?x=-5&y=99"
             [ { position = ( Quantity 0, Quantity.zero )
-              , length = String.length "http://ascii-collab.lamdera.app/?x=-5&y=99"
+              , length = String.length "http://ascii-collab.app/?x=-5&y=99"
               , route = Hyperlink.Coordinate ( Quantity -5, Quantity 99 )
               }
             ]
@@ -457,30 +457,30 @@ tests () =
               }
             ]
     , test "Parse notify-me hyperlink" <|
-        parseHyperlinkTest "http://ascii-collab.lamdera.app/notify-me"
+        parseHyperlinkTest "http://ascii-collab.app/notify-me"
             [ { position = ( Quantity 0, Quantity.zero )
-              , length = String.length "http://ascii-collab.lamdera.app/notify-me"
+              , length = String.length "http://ascii-collab.app/notify-me"
               , route = Hyperlink.NotifyMe
               }
             ]
     , test "Parse notify-me hyperlink with trailing slash" <|
-        parseHyperlinkTest "http://ascii-collab.lamdera.app/notify-me/"
+        parseHyperlinkTest "http://ascii-collab.app/notify-me/"
             [ { position = ( Quantity 0, Quantity.zero )
-              , length = String.length "http://ascii-collab.lamdera.app/notify-me/"
+              , length = String.length "http://ascii-collab.app/notify-me/"
               , route = Hyperlink.NotifyMe
               }
             ]
     , test "Parse poster hyperlink" <|
-        parseHyperlinkTest "http://ascii-collab.lamdera.app/poster.png"
+        parseHyperlinkTest "http://ascii-collab.app/poster.png"
             [ { position = ( Quantity 0, Quantity.zero )
-              , length = String.length "http://ascii-collab.lamdera.app/poster.png"
+              , length = String.length "http://ascii-collab.app/poster.png"
               , route = Hyperlink.Resource "poster.png"
               }
             ]
     , test "Parse color poster hyperlink" <|
-        parseHyperlinkTest "http://ascii-collab.lamdera.app/poster-color.png"
+        parseHyperlinkTest "http://ascii-collab.app/poster-color.png"
             [ { position = ( Quantity 0, Quantity.zero )
-              , length = String.length "http://ascii-collab.lamdera.app/poster-color.png"
+              , length = String.length "http://ascii-collab.app/poster-color.png"
               , route = Hyperlink.Resource "poster-color.png"
               }
             ]
@@ -965,7 +965,7 @@ canvasChange coord text time_ =
         )
 
 
-getEmails : List Effect -> List ( NonemptyString, Email.Html.Html, Email.Email )
+getEmails : List Effect -> List ( NonemptyString, Email.Html.Html, EmailAddress )
 getEmails effects =
     List.filterMap
         (\effect ->
@@ -991,7 +991,7 @@ expectNoEmails =
         )
 
 
-notifyMeEvery : Frequency -> Email.Email -> Test ( BackendModel, List Effect )
+notifyMeEvery : Frequency -> EmailAddress -> Test ( BackendModel, List Effect )
 notifyMeEvery frequency email =
     testInit BackendLogic.init
         |> testMap
