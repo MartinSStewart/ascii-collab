@@ -120,6 +120,7 @@ loadedInit loading loadingData =
             , ignoreNextUrlChanged = False
             , showNotifyMe = loading.showNotifyMe
             , notifyMeModel = loading.notifyMeModel
+            , textAreaText = ""
             }
     in
     ( updateMeshes model model
@@ -308,15 +309,25 @@ updateLoaded msg model =
             devicePixelRatioUpdate devicePixelRatio model
 
         UserTyped text ->
-            if cursorEnabled model then
-                if text == "\n" || text == "\n\u{000D}" then
-                    ( resetTouchMove model |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
+            let
+                lastChar =
+                    String.right 1 text
+
+                model2 =
+                    { model | textAreaText = text }
+            in
+            if cursorEnabled model2 then
+                if lastChar == "\n" || lastChar == "\u{000D}" then
+                    ( resetTouchMove model2 |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
 
                 else
-                    ( resetTouchMove model |> changeText text, Cmd.none )
+                    ( resetTouchMove model2 |> changeText lastChar, Cmd.none )
 
             else
-                ( model, Cmd.none )
+                ( model2, Cmd.none )
+
+        TextAreaFocused ->
+            ( { model | textAreaText = "" }, Cmd.none )
 
         MouseDown button mousePosition ->
             let
@@ -1388,13 +1399,14 @@ textarea maybeHyperlink model =
     in
     if cursorEnabled model then
         Html.textarea
-            [ Html.Events.onInput UserTyped
-            , Html.Attributes.value ""
+            [ Html.Attributes.value model.textAreaText
+            , Html.Events.onInput UserTyped
             , Html.Attributes.style "width" "100%"
             , Html.Attributes.style "height" "100%"
             , Html.Attributes.style "resize" "none"
             , Html.Attributes.style "opacity" "0"
             , Html.Attributes.id "textareaId"
+            , Html.Events.onFocus TextAreaFocused
             , Html.Attributes.attribute "data-gramm" "false"
             , pointer
             , Html.Events.Extra.Touch.onWithOptions

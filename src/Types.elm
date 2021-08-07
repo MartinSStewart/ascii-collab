@@ -96,6 +96,7 @@ type alias FrontendLoaded =
     , ignoreNextUrlChanged : Bool
     , showNotifyMe : Bool
     , notifyMeModel : NotifyMe.Model
+    , textAreaText : String
     }
 
 
@@ -168,6 +169,7 @@ type FrontendMsg
     | WindowResized (Coord Pixels)
     | GotDevicePixelRatio (Quantity Float (Rate WorldPixel Pixels))
     | UserTyped String
+    | TextAreaFocused
     | MouseDown Button (Point2d Pixels ScreenCoordinate)
     | MouseUp Button (Point2d Pixels ScreenCoordinate)
     | MouseMove (Point2d Pixels ScreenCoordinate)
