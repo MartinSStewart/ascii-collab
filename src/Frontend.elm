@@ -300,7 +300,30 @@ updateLoaded msg model =
             )
 
         KeyDown rawKey ->
-            keyMsgCanvasUpdate rawKey model
+            case Keyboard.anyKeyOriginal rawKey of
+                Just key ->
+                    let
+                        model2 =
+                            if
+                                (key == Keyboard.Delete)
+                                    || (key == Keyboard.Alt)
+                                    || (key == Keyboard.Control)
+                                    || (key == Keyboard.Meta)
+                                    || (key == Keyboard.ArrowDown)
+                                    || (key == Keyboard.ArrowUp)
+                                    || (key == Keyboard.ArrowRight)
+                                    || (key == Keyboard.ArrowLeft)
+                                    || (key == Keyboard.Escape)
+                            then
+                                { model | textAreaText = "" }
+
+                            else
+                                model
+                    in
+                    keyMsgCanvasUpdate key model2
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         WindowResized windowSize ->
             windowResizedUpdate windowSize model
@@ -316,7 +339,12 @@ updateLoaded msg model =
                 model2 =
                     { model | textAreaText = text }
             in
-            if String.length model.textAreaText < String.length text && cursorEnabled model2 then
+            if
+                (String.length model.textAreaText < String.length text)
+                    && not (keyDown Keyboard.Control model)
+                    && not (keyDown Keyboard.Meta model)
+                    && cursorEnabled model2
+            then
                 if lastChar == "\n" || lastChar == "\u{000D}" then
                     ( resetTouchMove model2 |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
 
@@ -660,17 +688,17 @@ cursorEnabled model =
             True
 
 
-keyMsgCanvasUpdate : Keyboard.RawKey -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
-keyMsgCanvasUpdate rawKey model =
-    case Keyboard.anyKeyOriginal rawKey of
-        Just (Keyboard.Character "c") ->
+keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+keyMsgCanvasUpdate key model =
+    case key of
+        Keyboard.Character "c" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
                 copyText model
 
             else
                 ( model, Cmd.none )
 
-        Just (Keyboard.Character "x") ->
+        Keyboard.Character "x" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
                 if cursorEnabled model then
                     cutText model
@@ -681,28 +709,28 @@ keyMsgCanvasUpdate rawKey model =
             else
                 ( model, Cmd.none )
 
-        Just (Keyboard.Character "z") ->
+        Keyboard.Character "z" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
                 ( updateLocalModel Change.LocalUndo model, Cmd.none )
 
             else
                 ( model, Cmd.none )
 
-        Just (Keyboard.Character "Z") ->
+        Keyboard.Character "Z" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
                 ( updateLocalModel Change.LocalRedo model, Cmd.none )
 
             else
                 ( model, Cmd.none )
 
-        Just (Keyboard.Character "y") ->
+        Keyboard.Character "y" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
                 ( updateLocalModel Change.LocalRedo model, Cmd.none )
 
             else
                 ( model, Cmd.none )
 
-        Just Keyboard.Delete ->
+        Keyboard.Delete ->
             if cursorEnabled model then
                 let
                     bounds =
@@ -715,7 +743,7 @@ keyMsgCanvasUpdate rawKey model =
             else
                 ( model, Cmd.none )
 
-        Just Keyboard.ArrowLeft ->
+        Keyboard.ArrowLeft ->
             if cursorEnabled model then
                 ( { model
                     | cursor =
@@ -730,7 +758,7 @@ keyMsgCanvasUpdate rawKey model =
             else
                 ( model, Cmd.none )
 
-        Just Keyboard.ArrowRight ->
+        Keyboard.ArrowRight ->
             if cursorEnabled model then
                 ( { model
                     | cursor =
@@ -745,7 +773,7 @@ keyMsgCanvasUpdate rawKey model =
             else
                 ( model, Cmd.none )
 
-        Just Keyboard.ArrowUp ->
+        Keyboard.ArrowUp ->
             if cursorEnabled model then
                 ( { model
                     | cursor =
@@ -760,7 +788,7 @@ keyMsgCanvasUpdate rawKey model =
             else
                 ( model, Cmd.none )
 
-        Just Keyboard.ArrowDown ->
+        Keyboard.ArrowDown ->
             if cursorEnabled model then
                 ( { model
                     | cursor =
@@ -775,7 +803,7 @@ keyMsgCanvasUpdate rawKey model =
             else
                 ( model, Cmd.none )
 
-        Just Keyboard.Backspace ->
+        Keyboard.Backspace ->
             if cursorEnabled model then
                 let
                     newCursor =
