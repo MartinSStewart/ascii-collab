@@ -333,23 +333,18 @@ updateLoaded msg model =
 
         UserTyped text ->
             let
-                lastChar =
-                    String.right 1 text
+                newText =
+                    String.right (String.length text - String.length model.textAreaText) text |> Debug.log "typed"
 
                 model2 =
                     { model | textAreaText = text }
             in
-            if
-                (String.length model.textAreaText < String.length text)
-                    && not (keyDown Keyboard.Control model)
-                    && not (keyDown Keyboard.Meta model)
-                    && cursorEnabled model2
-            then
-                if lastChar == "\n" || lastChar == "\u{000D}" then
+            if newText /= "" && cursorEnabled model2 then
+                if newText == "\n" || newText == "\u{000D}" then
                     ( resetTouchMove model2 |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
 
                 else
-                    ( resetTouchMove model2 |> changeText lastChar, Cmd.none )
+                    ( resetTouchMove model2 |> changeText newText, Cmd.none )
 
             else
                 ( model2, Cmd.none )
