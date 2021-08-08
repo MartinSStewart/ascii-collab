@@ -334,7 +334,7 @@ updateLoaded msg model =
         UserTyped text ->
             let
                 newText =
-                    String.right (String.length text - String.length model.textAreaText) text |> Debug.log "typed"
+                    String.right (String.length text - String.length model.textAreaText) text
 
                 model2 =
                     { model | textAreaText = text }
