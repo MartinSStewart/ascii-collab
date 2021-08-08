@@ -316,7 +316,7 @@ updateLoaded msg model =
                 model2 =
                     { model | textAreaText = text }
             in
-            if cursorEnabled model2 then
+            if String.length model.textAreaText < String.length text && cursorEnabled model2 then
                 if lastChar == "\n" || lastChar == "\u{000D}" then
                     ( resetTouchMove model2 |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
 
