@@ -55,7 +55,7 @@ import WebGL.Texture exposing (Texture)
 
 
 type alias FrontendModel =
-    Audio.Model FrontendMsg_ FrontendModel
+    Audio.Model FrontendMsg_ FrontendModel_
 
 
 type FrontendModel_
@@ -107,7 +107,8 @@ type alias FrontendLoaded =
     , textAreaText : String
     , showMobileKeyboard : Bool
     , mobileKeyboardUppercase : Bool
-    , mobileKeyboardKeyHeld : Maybe Ascii
+    , mobileKeyboardKeyHeld : Maybe ( Time.Posix, Ascii )
+    , popSound : Maybe (Result Audio.LoadError Audio.Source)
     }
 
 
@@ -213,6 +214,7 @@ type FrontendMsg_
     | PressedKeyboardBackspace
     | PressedKeyboardLineBreak
     | TouchStartKeyboardAscii Ascii
+    | TouchStartKeyboardAsciiWithTime Ascii Time.Posix
     | TouchEndKeyboardAscii Ascii
     | PopSoundLoaded (Result LoadError Audio.Source)
 

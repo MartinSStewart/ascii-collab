@@ -2,7 +2,7 @@ port module Frontend exposing (app, init, selectionToString, update, updateFromB
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
-import Audio exposing (AudioCmd)
+import Audio exposing (Audio, AudioCmd)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest(..))
@@ -96,8 +96,19 @@ app =
         }
 
 
-audio audioData model =
-    Audio.silence
+audio : Audio.AudioData -> FrontendModel_ -> Audio
+audio _ model =
+    case model of
+        Loading _ ->
+            Audio.silence
+
+        Loaded loaded ->
+            case ( loaded.mobileKeyboardKeyHeld, loaded.popSound ) of
+                ( Just ( time, _ ), Just (Ok source) ) ->
+                    Audio.audio source time |> Audio.scaleVolume 0.05
+
+                _ ->
+                    Audio.silence
 
 
 loadedInit : FrontendLoading -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
@@ -139,6 +150,7 @@ loadedInit loading loadingData =
             , showMobileKeyboard = True
             , mobileKeyboardUppercase = False
             , mobileKeyboardKeyHeld = Nothing
+            , popSound = loading.popSound
             }
     in
     ( updateMeshes model model
@@ -234,7 +246,7 @@ init url key =
         , Task.perform ShortIntervalElapsed Time.now
         , cmd
         ]
-    , Audio.loadAudio PopSoundLoaded "/pop.mp3"
+    , Audio.loadAudio PopSoundLoaded "pop.mp3"
     )
 
 
@@ -637,6 +649,10 @@ updateLoaded msg model =
             ( model, Cmd.none )
 
         PressedKeyboardShift ->
+            let
+                _ =
+                    Debug.log "a" "b"
+            in
             ( { model | mobileKeyboardUppercase = not model.mobileKeyboardUppercase }, Cmd.none )
 
         PressedKeyboardBackspace ->
@@ -646,7 +662,10 @@ updateLoaded msg model =
             ( userTyped (model.textAreaText ++ "\n") model, Cmd.none )
 
         TouchStartKeyboardAscii ascii ->
-            ( { model | mobileKeyboardKeyHeld = Just ascii }, Cmd.none )
+            ( model, Time.now |> Task.perform (TouchStartKeyboardAsciiWithTime ascii) )
+
+        TouchStartKeyboardAsciiWithTime ascii time ->
+            ( { model | mobileKeyboardKeyHeld = Just ( time, ascii ) }, Cmd.none )
 
         TouchEndKeyboardAscii ascii ->
             ( userTyped
@@ -655,8 +674,8 @@ updateLoaded msg model =
             , Cmd.none
             )
 
-        PopSoundLoaded _ ->
-            ( model, Cmd.none )
+        PopSoundLoaded result ->
+            ( { model | popSound = Just result }, Cmd.none )
 
 
 userTyped : String -> FrontendLoaded -> FrontendLoaded
@@ -854,7 +873,7 @@ type KeyType
     | LineBreakKey
 
 
-keyboardView : Coord Pixels -> Maybe Ascii -> Bool -> Element FrontendMsg_
+keyboardView : Coord Pixels -> Maybe ( Time.Posix, Ascii ) -> Bool -> Element FrontendMsg_
 keyboardView ( windowWidth, _ ) maybeKeyHeld isUpperCase =
     let
         baseCharacters : List (List KeyType)
@@ -906,7 +925,7 @@ keyboardView ( windowWidth, _ ) maybeKeyHeld isUpperCase =
         )
 
 
-asciiKeyView : Float -> Bool -> Maybe Ascii -> Char -> Maybe (Element FrontendMsg_)
+asciiKeyView : Float -> Bool -> Maybe ( Time.Posix, Ascii ) -> Char -> Maybe (Element FrontendMsg_)
 asciiKeyView buttonWidth isUpperCase maybeKeyHeld char =
     let
         char_ : Char
@@ -919,13 +938,32 @@ asciiKeyView buttonWidth isUpperCase maybeKeyHeld char =
     in
     case Ascii.fromChar char_ of
         Just ascii ->
+            let
+                isHeld =
+                    case maybeKeyHeld of
+                        Just ( _, heldAscii ) ->
+                            Debug.log "123" heldAscii == ascii
+
+                        Nothing ->
+                            False
+            in
             (if Ascii.toChar ascii == ' ' then
                 Element.Input.button
-                    [ Element.Background.color UiColors.button
+                    [ Element.Background.color
+                        (if isHeld then
+                            UiColors.buttonActive
+
+                         else
+                            UiColors.button
+                        )
                     , Element.Border.rounded 3
                     , Element.width (Element.px (4 * round buttonWidth))
                     , Element.height (Element.px (round (1.4 * buttonWidth)))
                     , Element.Font.center
+                    , Html.Events.Extra.Touch.onStart (\_ -> TouchStartKeyboardAscii ascii)
+                        |> Element.htmlAttribute
+                    , Html.Events.Extra.Touch.onEnd (\_ -> TouchEndKeyboardAscii ascii)
+                        |> Element.htmlAttribute
                     ]
                     { onPress = Just (PressedKeyboardAscii ascii)
                     , label = Element.text "Space"
@@ -947,7 +985,7 @@ asciiKeyView buttonWidth isUpperCase maybeKeyHeld char =
                     , Html.Events.Extra.Touch.onEnd (\_ -> TouchEndKeyboardAscii ascii)
                         |> Element.htmlAttribute
                     , Element.above <|
-                        if maybeKeyHeld == Just ascii then
+                        if isHeld then
                             Element.el
                                 [ Element.width (Element.px (round (1.4 * buttonWidth)))
                                 , Element.height (Element.px (round (1.8 * buttonWidth)))
