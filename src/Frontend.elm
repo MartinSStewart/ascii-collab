@@ -112,7 +112,6 @@ loadedInit loading loadingData =
             , tool = DragTool
             , undoAddLast = Time.millisToPosix 0
             , time = loading.time
-            , lastTouchMove = Nothing
             , userHoverHighlighted = Nothing
             , highlightContextMenu = Nothing
             , adminEnabled = False
@@ -219,11 +218,6 @@ init url key =
         , cmd
         ]
     )
-
-
-isTouchDevice : FrontendLoaded -> Bool
-isTouchDevice model =
-    model.lastTouchMove /= Nothing
 
 
 update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
@@ -341,10 +335,10 @@ updateLoaded msg model =
             in
             if newText /= "" && cursorEnabled model2 then
                 if newText == "\n" || newText == "\u{000D}" then
-                    ( resetTouchMove model2 |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
+                    ( { model2 | cursor = Cursor.newLine model2.cursor }, Cmd.none )
 
                 else
-                    ( resetTouchMove model2 |> changeText newText, Cmd.none )
+                    ( changeText newText model2, Cmd.none )
 
             else
                 ( model2, Cmd.none )
@@ -353,22 +347,18 @@ updateLoaded msg model =
             ( { model | textAreaText = "" }, Cmd.none )
 
         MouseDown button mousePosition ->
-            let
-                model_ =
-                    resetTouchMove model
-            in
             ( if button == MainButton then
-                { model_
+                { model
                     | mouseLeft =
                         MouseButtonDown
-                            { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
+                            { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
                 }
 
               else if button == MiddleButton then
-                { model_
+                { model
                     | mouseMiddle =
                         MouseButtonDown
-                            { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
+                            { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
                 }
 
               else if button == SecondButton then
@@ -389,20 +379,20 @@ updateLoaded msg model =
                 in
                 case maybeUserId of
                     Just userId ->
-                        highlightUser userId position model_
+                        highlightUser userId position model
 
                     Nothing ->
-                        { model_ | highlightContextMenu = Nothing }
+                        { model | highlightContextMenu = Nothing }
 
               else
-                model_
+                model
             , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
             )
 
         MouseUp button mousePosition ->
             case ( button, model.mouseLeft, model.mouseMiddle ) of
                 ( MainButton, MouseButtonDown mouseState, _ ) ->
-                    mainMouseButtonUp mousePosition mouseState model
+                    mainMouseButtonUp False mousePosition mouseState model
 
                 ( MiddleButton, _, MouseButtonDown mouseState ) ->
                     let
@@ -437,59 +427,55 @@ updateLoaded msg model =
                     ( model, Cmd.none )
 
         MouseMove mousePosition ->
-            if isTouchDevice model then
-                ( model, Cmd.none )
+            ( { model
+                | mouseLeft =
+                    case model.mouseLeft of
+                        MouseButtonDown mouseState ->
+                            MouseButtonDown { mouseState | current = mousePosition }
 
-            else
-                ( { model
-                    | mouseLeft =
-                        case model.mouseLeft of
-                            MouseButtonDown mouseState ->
-                                MouseButtonDown { mouseState | current = mousePosition }
+                        MouseButtonUp _ ->
+                            MouseButtonUp { current = mousePosition }
+                , mouseMiddle =
+                    case model.mouseMiddle of
+                        MouseButtonDown mouseState ->
+                            MouseButtonDown { mouseState | current = mousePosition }
 
-                            MouseButtonUp _ ->
-                                MouseButtonUp { current = mousePosition }
-                    , mouseMiddle =
-                        case model.mouseMiddle of
-                            MouseButtonDown mouseState ->
-                                MouseButtonDown { mouseState | current = mousePosition }
+                        MouseButtonUp _ ->
+                            MouseButtonUp { current = mousePosition }
+                , cursor =
+                    case ( model.mouseLeft, model.tool ) of
+                        ( MouseButtonDown mouseState, SelectTool ) ->
+                            Cursor.selection
+                                (mouseState.start_ |> Units.worldToAscii)
+                                (screenToWorld model mousePosition |> Units.worldToAscii)
 
-                            MouseButtonUp _ ->
-                                MouseButtonUp { current = mousePosition }
-                    , cursor =
-                        case ( model.mouseLeft, model.tool ) of
-                            ( MouseButtonDown mouseState, SelectTool ) ->
-                                Cursor.selection
-                                    (mouseState.start_ |> Units.worldToAscii)
-                                    (screenToWorld model mousePosition |> Units.worldToAscii)
+                        _ ->
+                            model.cursor
+                , tool =
+                    case model.tool of
+                        HighlightTool _ ->
+                            let
+                                localModel =
+                                    LocalGrid.localModel model.localModel
 
-                            _ ->
-                                model.cursor
-                    , tool =
-                        case model.tool of
-                            HighlightTool _ ->
-                                let
-                                    localModel =
-                                        LocalGrid.localModel model.localModel
+                                position : Coord AsciiUnit
+                                position =
+                                    screenToWorld model mousePosition |> Units.worldToAscii
 
-                                    position : Coord AsciiUnit
-                                    position =
-                                        screenToWorld model mousePosition |> Units.worldToAscii
+                                ( hideUserId, _ ) =
+                                    selectionPoint
+                                        position
+                                        localModel.hiddenUsers
+                                        localModel.adminHiddenUsers
+                                        localModel.grid
+                            in
+                            hideUserId |> Maybe.map (\a -> ( a, position )) |> HighlightTool
 
-                                    ( hideUserId, _ ) =
-                                        selectionPoint
-                                            position
-                                            localModel.hiddenUsers
-                                            localModel.adminHiddenUsers
-                                            localModel.grid
-                                in
-                                hideUserId |> Maybe.map (\a -> ( a, position )) |> HighlightTool
-
-                            _ ->
-                                model.tool
-                  }
-                , Cmd.none
-                )
+                        _ ->
+                            model.tool
+              }
+            , Cmd.none
+            )
 
         ShortIntervalElapsed time ->
             let
@@ -522,16 +508,16 @@ updateLoaded msg model =
                     ( model3, urlChange )
 
         ZoomFactorPressed zoomFactor ->
-            ( resetTouchMove model |> (\m -> { m | zoomFactor = zoomFactor }), Cmd.none )
+            ( { model | zoomFactor = zoomFactor }, Cmd.none )
 
         SelectToolPressed toolType ->
-            ( resetTouchMove model |> (\m -> { m | tool = toolType }), Cmd.none )
+            ( { model | tool = toolType }, Cmd.none )
 
         UndoPressed ->
-            ( resetTouchMove model |> updateLocalModel Change.LocalUndo, Cmd.none )
+            ( updateLocalModel Change.LocalUndo model, Cmd.none )
 
         RedoPressed ->
-            ( resetTouchMove model |> updateLocalModel Change.LocalRedo, Cmd.none )
+            ( updateLocalModel Change.LocalRedo model, Cmd.none )
 
         CopyPressed ->
             copyText model
@@ -540,70 +526,42 @@ updateLoaded msg model =
             cutText model
 
         TouchMove touchPosition ->
-            let
-                mouseDown m =
-                    { m
+            case model.mouseLeft of
+                MouseButtonDown mouseState ->
+                    ( { model
+                        | mouseLeft = MouseButtonDown { mouseState | current = touchPosition }
+                        , cursor =
+                            case model.tool of
+                                SelectTool ->
+                                    Cursor.selection
+                                        (mouseState.start_ |> Units.worldToAscii)
+                                        (screenToWorld model touchPosition |> Units.worldToAscii)
+
+                                _ ->
+                                    model.cursor
+                      }
+                    , Cmd.none
+                    )
+
+                MouseButtonUp _ ->
+                    ( { model
                         | mouseLeft =
                             MouseButtonDown
                                 { start = touchPosition
                                 , start_ = screenToWorld model touchPosition
                                 , current = touchPosition
                                 }
-                        , lastTouchMove = Just model.time
-                    }
-            in
-            case model.mouseLeft of
-                MouseButtonDown mouseState ->
-                    let
-                        duration =
-                            case model.lastTouchMove of
-                                Just lastTouchMove ->
-                                    Duration.from lastTouchMove model.time
-
-                                Nothing ->
-                                    Quantity.zero
-
-                        rate : Quantity Float (Rate Pixels Duration.Seconds)
-                        rate =
-                            Quantity.per Duration.second (Pixels.pixels 30)
-
-                        snapDistance =
-                            Pixels.pixels 50 |> Quantity.minus (Quantity.for duration rate) |> Quantity.max (Pixels.pixels 10)
-                    in
-                    if Point2d.distanceFrom mouseState.current touchPosition |> Quantity.greaterThan snapDistance then
-                        mainMouseButtonUp mouseState.current mouseState model
-                            |> Tuple.mapFirst mouseDown
-
-                    else
-                        ( { model
-                            | mouseLeft = MouseButtonDown { mouseState | current = touchPosition }
-                            , cursor =
-                                case model.tool of
-                                    SelectTool ->
-                                        Cursor.selection
-                                            (mouseState.start_ |> Units.worldToAscii)
-                                            (screenToWorld model touchPosition |> Units.worldToAscii)
-
-                                    _ ->
-                                        model.cursor
-                            , lastTouchMove = Just model.time
-                          }
-                        , Cmd.none
-                        )
-
-                MouseButtonUp _ ->
-                    ( mouseDown model, Cmd.none )
+                      }
+                    , Cmd.none
+                    )
 
         TouchReleased touchPosition ->
             case model.mouseLeft of
                 MouseButtonDown mouseState ->
-                    mainMouseButtonUp touchPosition mouseState model
+                    mainMouseButtonUp True touchPosition mouseState model
 
                 MouseButtonUp _ ->
                     ( model, Cmd.none )
-
-        VeryShortIntervalElapsed time ->
-            ( { model | time = time }, Cmd.none )
 
         UnhideUserPressed userToUnhide ->
             ( updateLocalModel
@@ -827,11 +785,12 @@ keyMsgCanvasUpdate key model =
 
 
 mainMouseButtonUp :
-    Point2d Pixels ScreenCoordinate
+    Bool
+    -> Point2d Pixels ScreenCoordinate
     -> { a | start : Point2d Pixels ScreenCoordinate }
     -> FrontendLoaded
     -> ( FrontendLoaded, Cmd FrontendMsg )
-mainMouseButtonUp mousePosition mouseState model =
+mainMouseButtonUp isTouchEvent mousePosition mouseState model =
     let
         isSmallDistance =
             Vector2d.from mouseState.start mousePosition
@@ -978,32 +937,15 @@ highlightUser highlightUserId highlightPoint model =
     }
 
 
-resetTouchMove : FrontendLoaded -> FrontendLoaded
-resetTouchMove model =
-    case model.mouseLeft of
-        MouseButtonUp _ ->
-            model
-
-        MouseButtonDown mouseState ->
-            if isTouchDevice model then
-                mainMouseButtonUp mouseState.current mouseState model |> Tuple.first
-
-            else
-                model
-
-
 copyText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 copyText model =
     let
-        model_ =
-            resetTouchMove model
-
         localModel =
-            LocalGrid.localModel model_.localModel
+            LocalGrid.localModel model.localModel
     in
-    ( model_
+    ( model
     , localModel.grid
-        |> selectionToString (Cursor.bounds model_.cursor) localModel.hiddenUsers localModel.adminHiddenUsers
+        |> selectionToString (Cursor.bounds model.cursor) localModel.hiddenUsers localModel.adminHiddenUsers
         |> supermario_copy_to_clipboard_to_js
     )
 
@@ -1011,16 +953,13 @@ copyText model =
 cutText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 cutText model =
     let
-        model_ =
-            resetTouchMove model
-
         bounds =
-            Cursor.bounds model_.cursor
+            Cursor.bounds model.cursor
 
         localModel =
-            LocalGrid.localModel model_.localModel
+            LocalGrid.localModel model.localModel
     in
-    ( clearTextSelection bounds model_
+    ( clearTextSelection bounds model
     , localModel.grid
         |> selectionToString bounds localModel.hiddenUsers localModel.adminHiddenUsers
         |> supermario_copy_to_clipboard_to_js
@@ -1444,7 +1383,7 @@ textarea maybeHyperlink model =
                 "touchmove"
                 { stopPropagation = False, preventDefault = True }
                 (\event ->
-                    case event.touches of
+                    case event.changedTouches of
                         head :: _ ->
                             let
                                 ( x, y ) =
@@ -2312,13 +2251,7 @@ subscriptions model =
                 Sub.batch
                     [ Sub.map KeyMsg Keyboard.subscriptions
                     , Keyboard.downs KeyDown
-                    , Time.every 1000 ShortIntervalElapsed
-                    , case ( loadedModel.mouseLeft, isTouchDevice loadedModel ) of
-                        ( MouseButtonDown _, True ) ->
-                            Time.every 100 VeryShortIntervalElapsed
-
-                        _ ->
-                            Sub.none
+                    , Time.every 500 ShortIntervalElapsed
                     , if getHighlight loadedModel /= Nothing then
                         Browser.Events.onAnimationFrame AnimationFrame
 
