@@ -594,6 +594,14 @@ updateLoaded msg model =
                 MouseButtonUp _ ->
                     ( mouseDown model, Cmd.none )
 
+        TouchReleased touchPosition ->
+            case model.mouseLeft of
+                MouseButtonDown mouseState ->
+                    mainMouseButtonUp touchPosition mouseState model
+
+                MouseButtonUp _ ->
+                    ( model, Cmd.none )
+
         VeryShortIntervalElapsed time ->
             ( { model | time = time }, Cmd.none )
 
@@ -1443,6 +1451,19 @@ textarea maybeHyperlink model =
                                     head.pagePos
                             in
                             TouchMove (Point2d.pixels x y)
+
+                        [] ->
+                            NoOpFrontendMsg
+                )
+            , Html.Events.Extra.Touch.onEnd
+                (\event ->
+                    case event.changedTouches of
+                        head :: _ ->
+                            let
+                                ( x, y ) =
+                                    head.pagePos
+                            in
+                            TouchReleased (Point2d.pixels x y)
 
                         [] ->
                             NoOpFrontendMsg
