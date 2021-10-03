@@ -27,7 +27,7 @@ import Parser
 import Quantity exposing (Quantity(..))
 import String.Nonempty exposing (NonemptyString)
 import Time
-import Types exposing (BackendModel, BackendMsg(..), EmailEvent(..), FrontendModel, ToBackend(..), ToFrontend(..))
+import Types exposing (BackendModel, BackendMsg(..), EmailEvent(..), FrontendModel_, ToBackend(..), ToFrontend(..))
 import Units exposing (AsciiUnit, CellUnit)
 import UrlHelper exposing (ConfirmEmailKey(..), UnsubscribeEmailKey(..))
 import User

@@ -6,8 +6,10 @@ module Types exposing
     , EmailEvent(..)
     , FrontendLoaded
     , FrontendLoading
-    , FrontendModel(..)
-    , FrontendMsg(..)
+    , FrontendModel
+    , FrontendModel_(..)
+    , FrontendMsg
+    , FrontendMsg_(..)
     , LoadingData_
     , MouseButtonState(..)
     , PendingEmail
@@ -18,6 +20,7 @@ module Types exposing
     )
 
 import Ascii exposing (Ascii)
+import Audio exposing (Audio, LoadError)
 import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
@@ -51,7 +54,11 @@ import WebGL
 import WebGL.Texture exposing (Texture)
 
 
-type FrontendModel
+type alias FrontendModel =
+    Audio.Model FrontendMsg_ FrontendModel
+
+
+type FrontendModel_
     = Loading FrontendLoading
     | Loaded FrontendLoaded
 
@@ -66,6 +73,7 @@ type alias FrontendLoading =
     , mousePosition : Point2d Pixels ScreenCoordinate
     , showNotifyMe : Bool
     , notifyMeModel : NotifyMe.Model
+    , popSound : Maybe (Result Audio.LoadError Audio.Source)
     }
 
 
@@ -162,7 +170,11 @@ type alias BackendUserData =
     }
 
 
-type FrontendMsg
+type alias FrontendMsg =
+    Audio.Msg FrontendMsg_
+
+
+type FrontendMsg_
     = UrlClicked UrlRequest
     | UrlChanged Url
     | NoOpFrontendMsg
@@ -202,6 +214,7 @@ type FrontendMsg
     | PressedKeyboardLineBreak
     | TouchStartKeyboardAscii Ascii
     | TouchEndKeyboardAscii Ascii
+    | PopSoundLoaded (Result LoadError Audio.Source)
 
 
 type ToBackend
