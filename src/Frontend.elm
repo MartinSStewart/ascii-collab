@@ -123,18 +123,15 @@ loadedInit loading loadingData =
             }
     in
     ( updateMeshes model model
-    , Cmd.batch
-        [ WebGL.Texture.loadWith
-            { magnify = WebGL.Texture.nearest
-            , minify = WebGL.Texture.nearest
-            , horizontalWrap = WebGL.Texture.clampToEdge
-            , verticalWrap = WebGL.Texture.clampToEdge
-            , flipY = False
-            }
-            Ascii.textureData
-            |> Task.attempt TextureLoaded
-        , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
-        ]
+    , WebGL.Texture.loadWith
+        { magnify = WebGL.Texture.nearest
+        , minify = WebGL.Texture.nearest
+        , horizontalWrap = WebGL.Texture.clampToEdge
+        , verticalWrap = WebGL.Texture.clampToEdge
+        , flipY = False
+        }
+        Ascii.textureData
+        |> Task.attempt TextureLoaded
     )
         |> viewBoundsUpdate
         |> Tuple.mapFirst Loaded
@@ -386,7 +383,7 @@ updateLoaded msg model =
 
               else
                 model
-            , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
+            , Browser.Dom.focus textareaId |> Task.attempt (\_ -> NoOpFrontendMsg)
             )
 
         MouseUp button mousePosition ->
@@ -525,6 +522,23 @@ updateLoaded msg model =
         CutPressed ->
             cutText model
 
+        TouchStart touchPosition ->
+            case model.mouseLeft of
+                MouseButtonDown _ ->
+                    ( model, Cmd.none )
+
+                MouseButtonUp _ ->
+                    ( { model
+                        | mouseLeft =
+                            MouseButtonDown
+                                { start = touchPosition
+                                , start_ = screenToWorld model touchPosition
+                                , current = touchPosition
+                                }
+                      }
+                    , Browser.Dom.focus textareaId |> Task.attempt (\_ -> NoOpFrontendMsg)
+                    )
+
         TouchMove touchPosition ->
             case model.mouseLeft of
                 MouseButtonDown mouseState ->
@@ -544,16 +558,7 @@ updateLoaded msg model =
                     )
 
                 MouseButtonUp _ ->
-                    ( { model
-                        | mouseLeft =
-                            MouseButtonDown
-                                { start = touchPosition
-                                , start_ = screenToWorld model touchPosition
-                                , current = touchPosition
-                                }
-                      }
-                    , Cmd.none
-                    )
+                    ( model, Cmd.none )
 
         TouchReleased touchPosition ->
             case model.mouseLeft of
@@ -561,7 +566,7 @@ updateLoaded msg model =
                     mainMouseButtonUp True touchPosition mouseState model
 
                 MouseButtonUp _ ->
-                    ( model, Cmd.none )
+                    mainMouseButtonUp True touchPosition { start = touchPosition } model
 
         UnhideUserPressed userToUnhide ->
             ( updateLocalModel
@@ -797,6 +802,7 @@ mainMouseButtonUp isTouchEvent mousePosition mouseState model =
                 |> Vector2d.length
                 |> Quantity.lessThan (Pixels.pixels 5)
 
+        model_ : FrontendLoaded
         model_ =
             { model
                 | mouseLeft = MouseButtonUp { current = mousePosition }
@@ -825,7 +831,7 @@ mainMouseButtonUp isTouchEvent mousePosition mouseState model =
 
                     else
                         model.highlightContextMenu
-                , lastMouseLeftUp = Just ( model.time, mousePosition )
+                , lastMouseLeftUp = Just ( model.time, mousePosition ) |> Debug.log "a"
             }
 
         pressedHyperlink : Maybe Hyperlink
@@ -1356,6 +1362,11 @@ updateLoadedFromBackend msg model =
             ( { model | notifyMeModel = NotifyMe.unsubscribed model.notifyMeModel }, Cmd.none )
 
 
+textareaId : String
+textareaId =
+    "textareaId"
+
+
 textarea : Maybe Hyperlink -> FrontendLoaded -> Element.Attribute FrontendMsg
 textarea maybeHyperlink model =
     let
@@ -1375,10 +1386,25 @@ textarea maybeHyperlink model =
             , Html.Attributes.style "height" "100%"
             , Html.Attributes.style "resize" "none"
             , Html.Attributes.style "opacity" "0"
-            , Html.Attributes.id "textareaId"
+            , Html.Attributes.id textareaId
             , Html.Events.onFocus TextAreaFocused
             , Html.Attributes.attribute "data-gramm" "false"
             , pointer
+            , Html.Events.Extra.Touch.onWithOptions
+                "touchstart"
+                { stopPropagation = False, preventDefault = True }
+                (\event ->
+                    case event.changedTouches of
+                        head :: _ ->
+                            let
+                                ( x, y ) =
+                                    head.pagePos
+                            in
+                            TouchStart (Point2d.pixels x y)
+
+                        [] ->
+                            NoOpFrontendMsg
+                )
             , Html.Events.Extra.Touch.onWithOptions
                 "touchmove"
                 { stopPropagation = False, preventDefault = True }
@@ -1394,7 +1420,9 @@ textarea maybeHyperlink model =
                         [] ->
                             NoOpFrontendMsg
                 )
-            , Html.Events.Extra.Touch.onEnd
+            , Html.Events.Extra.Touch.onWithOptions
+                "touchend"
+                { stopPropagation = False, preventDefault = True }
                 (\event ->
                     case event.changedTouches of
                         head :: _ ->
