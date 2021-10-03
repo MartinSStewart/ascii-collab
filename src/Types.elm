@@ -99,6 +99,7 @@ type alias FrontendLoaded =
     , textAreaText : String
     , showMobileKeyboard : Bool
     , mobileKeyboardUppercase : Bool
+    , mobileKeyboardKeyHeld : Maybe Ascii
     }
 
 
@@ -199,6 +200,8 @@ type FrontendMsg
     | PressedKeyboardShift
     | PressedKeyboardBackspace
     | PressedKeyboardLineBreak
+    | TouchStartKeyboardAscii Ascii
+    | TouchEndKeyboardAscii Ascii
 
 
 type ToBackend

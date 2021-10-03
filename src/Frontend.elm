@@ -123,6 +123,7 @@ loadedInit loading loadingData =
             , textAreaText = ""
             , showMobileKeyboard = True
             , mobileKeyboardUppercase = False
+            , mobileKeyboardKeyHeld = Nothing
             }
     in
     ( updateMeshes model model
@@ -611,8 +612,9 @@ updateLoaded msg model =
         NotifyMeModelChanged notifyMeModel ->
             ( { model | notifyMeModel = notifyMeModel }, Cmd.none )
 
-        PressedKeyboardAscii ascii ->
-            ( userTyped (model.textAreaText ++ String.fromChar (Ascii.toChar ascii)) model, Cmd.none )
+        PressedKeyboardAscii _ ->
+            -- Don't do anything here. We handle the press with TouchEndKeyboardAscii
+            ( model, Cmd.none )
 
         PressedKeyboardShift ->
             ( { model | mobileKeyboardUppercase = not model.mobileKeyboardUppercase }, Cmd.none )
@@ -622,6 +624,16 @@ updateLoaded msg model =
 
         PressedKeyboardLineBreak ->
             ( userTyped (model.textAreaText ++ "\n") model, Cmd.none )
+
+        TouchStartKeyboardAscii ascii ->
+            ( { model | mobileKeyboardKeyHeld = Just ascii }, Cmd.none )
+
+        TouchEndKeyboardAscii ascii ->
+            ( userTyped
+                (model.textAreaText ++ String.fromChar (Ascii.toChar ascii))
+                { model | mobileKeyboardKeyHeld = Nothing }
+            , Cmd.none
+            )
 
 
 userTyped : String -> FrontendLoaded -> FrontendLoaded
@@ -819,8 +831,8 @@ type KeyType
     | LineBreakKey
 
 
-keyboardView : Coord Pixels -> Bool -> Element FrontendMsg
-keyboardView ( windowWidth, _ ) isUpperCase =
+keyboardView : Coord Pixels -> Maybe Ascii -> Bool -> Element FrontendMsg
+keyboardView ( windowWidth, _ ) maybeKeyHeld isUpperCase =
     let
         baseCharacters : List (List KeyType)
         baseCharacters =
@@ -854,7 +866,7 @@ keyboardView ( windowWidth, _ ) isUpperCase =
                 (\key ->
                     case key of
                         AsciiKey char ->
-                            asciiKeyView buttonWidth isUpperCase char
+                            asciiKeyView buttonWidth isUpperCase maybeKeyHeld char
 
                         ShiftKey ->
                             shiftKeyView buttonWidth isUpperCase |> Just
@@ -871,8 +883,8 @@ keyboardView ( windowWidth, _ ) isUpperCase =
         )
 
 
-asciiKeyView : Float -> Bool -> Char -> Maybe (Element FrontendMsg)
-asciiKeyView buttonWidth isUpperCase char =
+asciiKeyView : Float -> Bool -> Maybe Ascii -> Char -> Maybe (Element FrontendMsg)
+asciiKeyView buttonWidth isUpperCase maybeKeyHeld char =
     let
         char_ : Char
         char_ =
@@ -897,15 +909,38 @@ asciiKeyView buttonWidth isUpperCase char =
                     }
 
              else
+                let
+                    textElement =
+                        Ascii.toChar ascii |> String.fromChar |> Element.text
+                in
                 Element.Input.button
                     [ Element.Background.color UiColors.button
                     , Element.Border.rounded 3
                     , Element.width (Element.px (round buttonWidth))
                     , Element.height (Element.px (round (1.4 * buttonWidth)))
                     , Element.Font.center
+                    , Html.Events.Extra.Touch.onStart (\_ -> TouchStartKeyboardAscii ascii)
+                        |> Element.htmlAttribute
+                    , Html.Events.Extra.Touch.onEnd (\_ -> TouchEndKeyboardAscii ascii)
+                        |> Element.htmlAttribute
+                    , Element.above <|
+                        if maybeKeyHeld == Just ascii then
+                            Element.el
+                                [ Element.width (Element.px (round (1.4 * buttonWidth)))
+                                , Element.height (Element.px (round (1.8 * buttonWidth)))
+                                , Element.Background.color UiColors.buttonActive
+                                , Element.Border.rounded 6
+                                , Element.Font.size 24
+                                , Element.centerX
+                                , Element.moveUp 4
+                                ]
+                                (Element.el [ Element.centerX, Element.centerY ] textElement)
+
+                        else
+                            Element.none
                     ]
                     { onPress = Just (PressedKeyboardAscii ascii)
-                    , label = Ascii.toChar ascii |> String.fromChar |> Element.text
+                    , label = textElement
                     }
             )
                 |> Just
@@ -916,36 +951,42 @@ asciiKeyView buttonWidth isUpperCase char =
 
 shiftKeyView : Float -> Bool -> Element FrontendMsg
 shiftKeyView buttonWidth isUpperCase =
-    Element.Input.button
-        [ Element.Background.color
-            (if isUpperCase then
-                UiColors.buttonActive
+    Element.el
+        [ Element.paddingXY (round (buttonWidth * 0.1)) 0 ]
+        (Element.Input.button
+            [ Element.Background.color
+                (if isUpperCase then
+                    UiColors.buttonActive
 
-             else
-                UiColors.button
-            )
-        , Element.Border.rounded 3
-        , Element.width (Element.px (round (1.4 * buttonWidth)))
-        , Element.height (Element.px (round (1.4 * buttonWidth)))
-        , Element.Font.center
-        ]
-        { onPress = Just PressedKeyboardShift
-        , label = Element.text "🠕"
-        }
+                 else
+                    UiColors.button
+                )
+            , Element.Border.rounded 3
+            , Element.width (Element.px (round (1.4 * buttonWidth)))
+            , Element.height (Element.px (round (1.4 * buttonWidth)))
+            , Element.Font.center
+            ]
+            { onPress = Just PressedKeyboardShift
+            , label = Element.text "🠕"
+            }
+        )
 
 
 backspaceKeyView : Float -> Element FrontendMsg
 backspaceKeyView buttonWidth =
-    Element.Input.button
-        [ Element.Background.color UiColors.button
-        , Element.Border.rounded 3
-        , Element.width (Element.px (round (1.4 * buttonWidth)))
-        , Element.height (Element.px (round (1.4 * buttonWidth)))
-        , Element.Font.center
-        ]
-        { onPress = Just PressedKeyboardBackspace
-        , label = Element.text "🠔"
-        }
+    Element.el
+        [ Element.paddingXY (round (buttonWidth * 0.1)) 0 ]
+        (Element.Input.button
+            [ Element.Background.color UiColors.button
+            , Element.Border.rounded 3
+            , Element.width (Element.px (round (1.4 * buttonWidth)))
+            , Element.height (Element.px (round (1.4 * buttonWidth)))
+            , Element.Font.center
+            ]
+            { onPress = Just PressedKeyboardBackspace
+            , label = Element.text "🠔"
+            }
+        )
 
 
 lineBreakKeyView : Float -> Element FrontendMsg
@@ -1729,9 +1770,10 @@ view model =
                         ++ [ notifyMeView loadedModel
                            , Element.inFront <|
                                 if loadedModel.showMobileKeyboard then
-                                    Element.Lazy.lazy2
+                                    Element.Lazy.lazy3
                                         keyboardView
                                         loadedModel.windowSize
+                                        loadedModel.mobileKeyboardKeyHeld
                                         loadedModel.mobileKeyboardUppercase
 
                                 else
