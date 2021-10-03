@@ -17,6 +17,7 @@ module Types exposing
     , ToolType(..)
     )
 
+import Ascii exposing (Ascii)
 import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
@@ -96,6 +97,8 @@ type alias FrontendLoaded =
     , showNotifyMe : Bool
     , notifyMeModel : NotifyMe.Model
     , textAreaText : String
+    , showMobileKeyboard : Bool
+    , mobileKeyboardUppercase : Bool
     }
 
 
@@ -192,6 +195,10 @@ type FrontendMsg
     | PressedCancelNotifyMe
     | PressedSubmitNotifyMe NotifyMe.Validated
     | NotifyMeModelChanged NotifyMe.Model
+    | PressedKeyboardAscii Ascii
+    | PressedKeyboardShift
+    | PressedKeyboardBackspace
+    | PressedKeyboardLineBreak
 
 
 type ToBackend

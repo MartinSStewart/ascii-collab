@@ -18,6 +18,7 @@ import Element.Border
 import Element.Events
 import Element.Font
 import Element.Input
+import Element.Lazy
 import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
@@ -120,6 +121,8 @@ loadedInit loading loadingData =
             , showNotifyMe = loading.showNotifyMe
             , notifyMeModel = loading.notifyMeModel
             , textAreaText = ""
+            , showMobileKeyboard = True
+            , mobileKeyboardUppercase = False
             }
     in
     ( updateMeshes model model
@@ -323,22 +326,7 @@ updateLoaded msg model =
             devicePixelRatioUpdate devicePixelRatio model
 
         UserTyped text ->
-            let
-                newText =
-                    String.right (String.length text - String.length model.textAreaText) text
-
-                model2 =
-                    { model | textAreaText = text }
-            in
-            if newText /= "" && cursorEnabled model2 then
-                if newText == "\n" || newText == "\u{000D}" then
-                    ( { model2 | cursor = Cursor.newLine model2.cursor }, Cmd.none )
-
-                else
-                    ( changeText newText model2, Cmd.none )
-
-            else
-                ( model2, Cmd.none )
+            ( userTyped text model, Cmd.none )
 
         TextAreaFocused ->
             ( { model | textAreaText = "" }, Cmd.none )
@@ -623,6 +611,38 @@ updateLoaded msg model =
         NotifyMeModelChanged notifyMeModel ->
             ( { model | notifyMeModel = notifyMeModel }, Cmd.none )
 
+        PressedKeyboardAscii ascii ->
+            ( userTyped (model.textAreaText ++ String.fromChar (Ascii.toChar ascii)) model, Cmd.none )
+
+        PressedKeyboardShift ->
+            ( { model | mobileKeyboardUppercase = not model.mobileKeyboardUppercase }, Cmd.none )
+
+        PressedKeyboardBackspace ->
+            ( pressedBackspace model, Cmd.none )
+
+        PressedKeyboardLineBreak ->
+            ( userTyped (model.textAreaText ++ "\n") model, Cmd.none )
+
+
+userTyped : String -> FrontendLoaded -> FrontendLoaded
+userTyped text model =
+    let
+        newText =
+            String.right (String.length text - String.length model.textAreaText) text
+
+        model2 =
+            { model | textAreaText = text }
+    in
+    if newText /= "" && cursorEnabled model2 then
+        if newText == "\n" || newText == "\u{000D}" then
+            { model2 | cursor = Cursor.newLine model2.cursor }
+
+        else
+            changeText newText model2
+
+    else
+        model2
+
 
 closeNotifyMe : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
 closeNotifyMe model =
@@ -770,23 +790,176 @@ keyMsgCanvasUpdate key model =
                 ( model, Cmd.none )
 
         Keyboard.Backspace ->
-            if cursorEnabled model then
-                let
-                    newCursor =
-                        Cursor.moveCursor
-                            False
-                            ( Units.asciiUnit -1, Units.asciiUnit 0 )
-                            model.cursor
-                in
-                ( { model | cursor = newCursor } |> changeText " " |> (\m -> { m | cursor = newCursor })
-                , Cmd.none
-                )
-
-            else
-                ( model, Cmd.none )
+            ( pressedBackspace model, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
+
+
+pressedBackspace : FrontendLoaded -> FrontendLoaded
+pressedBackspace model =
+    if cursorEnabled model then
+        let
+            newCursor =
+                Cursor.moveCursor
+                    False
+                    ( Units.asciiUnit -1, Units.asciiUnit 0 )
+                    model.cursor
+        in
+        { model | cursor = newCursor } |> changeText " " |> (\m -> { m | cursor = newCursor })
+
+    else
+        model
+
+
+type KeyType
+    = AsciiKey Char
+    | BackspaceKey
+    | ShiftKey
+    | LineBreakKey
+
+
+keyboardView : Coord Pixels -> Bool -> Element FrontendMsg
+keyboardView ( windowWidth, _ ) isUpperCase =
+    let
+        baseCharacters : List (List KeyType)
+        baseCharacters =
+            [ [ AsciiKey '1', AsciiKey '2', AsciiKey '3', AsciiKey '4', AsciiKey '5', AsciiKey '6', AsciiKey '7', AsciiKey '8', AsciiKey '9', AsciiKey '0' ]
+            , [ AsciiKey 'q', AsciiKey 'w', AsciiKey 'e', AsciiKey 'r', AsciiKey 't', AsciiKey 'y', AsciiKey 'u', AsciiKey 'i', AsciiKey 'o', AsciiKey 'p' ]
+            , [ AsciiKey 'a', AsciiKey 's', AsciiKey 'd', AsciiKey 'f', AsciiKey 'g', AsciiKey 'h', AsciiKey 'j', AsciiKey 'k', AsciiKey 'l' ]
+            , [ ShiftKey, AsciiKey 'z', AsciiKey 'x', AsciiKey 'c', AsciiKey 'v', AsciiKey 'b', AsciiKey 'n', AsciiKey 'm', BackspaceKey ]
+            , [ AsciiKey ' ', LineBreakKey ]
+            ]
+
+        edgePaddingX =
+            4
+
+        keyboardContentWidth =
+            Pixels.inPixels windowWidth - edgePaddingX |> toFloat
+
+        buttonWidth =
+            0.9 * keyboardContentWidth / 10
+
+        buttonXSpacing =
+            0.1 * keyboardContentWidth / 10
+    in
+    Element.column
+        [ Element.width Element.fill
+        , Element.Background.color UiColors.background
+        , Element.alignBottom
+        , Element.spacing <| round (1.4 * buttonXSpacing)
+        ]
+        (List.map
+            (List.filterMap
+                (\key ->
+                    case key of
+                        AsciiKey char ->
+                            asciiKeyView buttonWidth isUpperCase char
+
+                        ShiftKey ->
+                            shiftKeyView buttonWidth isUpperCase |> Just
+
+                        BackspaceKey ->
+                            backspaceKeyView buttonWidth |> Just
+
+                        LineBreakKey ->
+                            lineBreakKeyView buttonWidth |> Just
+                )
+                >> Element.row [ Element.centerX, Element.spacing (round buttonXSpacing) ]
+            )
+            baseCharacters
+        )
+
+
+asciiKeyView : Float -> Bool -> Char -> Maybe (Element FrontendMsg)
+asciiKeyView buttonWidth isUpperCase char =
+    let
+        char_ : Char
+        char_ =
+            if isUpperCase then
+                Char.toUpper char
+
+            else
+                char
+    in
+    case Ascii.fromChar char_ of
+        Just ascii ->
+            (if Ascii.toChar ascii == ' ' then
+                Element.Input.button
+                    [ Element.Background.color UiColors.button
+                    , Element.Border.rounded 3
+                    , Element.width (Element.px (4 * round buttonWidth))
+                    , Element.height (Element.px (round (1.4 * buttonWidth)))
+                    , Element.Font.center
+                    ]
+                    { onPress = Just (PressedKeyboardAscii ascii)
+                    , label = Element.text "Space"
+                    }
+
+             else
+                Element.Input.button
+                    [ Element.Background.color UiColors.button
+                    , Element.Border.rounded 3
+                    , Element.width (Element.px (round buttonWidth))
+                    , Element.height (Element.px (round (1.4 * buttonWidth)))
+                    , Element.Font.center
+                    ]
+                    { onPress = Just (PressedKeyboardAscii ascii)
+                    , label = Ascii.toChar ascii |> String.fromChar |> Element.text
+                    }
+            )
+                |> Just
+
+        Nothing ->
+            Nothing
+
+
+shiftKeyView : Float -> Bool -> Element FrontendMsg
+shiftKeyView buttonWidth isUpperCase =
+    Element.Input.button
+        [ Element.Background.color
+            (if isUpperCase then
+                UiColors.buttonActive
+
+             else
+                UiColors.button
+            )
+        , Element.Border.rounded 3
+        , Element.width (Element.px (round (1.4 * buttonWidth)))
+        , Element.height (Element.px (round (1.4 * buttonWidth)))
+        , Element.Font.center
+        ]
+        { onPress = Just PressedKeyboardShift
+        , label = Element.text "🠕"
+        }
+
+
+backspaceKeyView : Float -> Element FrontendMsg
+backspaceKeyView buttonWidth =
+    Element.Input.button
+        [ Element.Background.color UiColors.button
+        , Element.Border.rounded 3
+        , Element.width (Element.px (round (1.4 * buttonWidth)))
+        , Element.height (Element.px (round (1.4 * buttonWidth)))
+        , Element.Font.center
+        ]
+        { onPress = Just PressedKeyboardBackspace
+        , label = Element.text "🠔"
+        }
+
+
+lineBreakKeyView : Float -> Element FrontendMsg
+lineBreakKeyView buttonWidth =
+    Element.Input.button
+        [ Element.Background.color UiColors.button
+        , Element.Border.rounded 3
+        , Element.width (Element.px (round (1.4 * buttonWidth)))
+        , Element.height (Element.px (round (1.4 * buttonWidth)))
+        , Element.Font.center
+        ]
+        { onPress = Just PressedKeyboardLineBreak
+        , label = Element.text "↵"
+        }
 
 
 mainMouseButtonUp :
@@ -1110,31 +1283,41 @@ changeText text model =
         |> String.filter ((/=) '\u{000D}')
         |> String.split "\n"
         |> List.Nonempty.fromList
-        |> Maybe.map (List.Nonempty.map (String.toList >> List.map (Ascii.fromChar >> Maybe.withDefault Ascii.default)))
         |> Maybe.map
-            (\lines ->
-                let
-                    model_ =
-                        if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 2) then
-                            updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
-
-                        else
-                            model
-                in
-                Grid.textToChange (Cursor.position model_.cursor) lines
-                    |> List.Nonempty.map Change.LocalGridChange
-                    |> List.Nonempty.foldl updateLocalModel
-                        { model_
-                            | cursor =
-                                Cursor.moveCursor
-                                    False
-                                    ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
-                                    , Units.asciiUnit (List.Nonempty.length lines - 1)
-                                    )
-                                    model_.cursor
-                        }
+            (List.Nonempty.map
+                (String.toList
+                    >> List.map
+                        (Ascii.fromChar
+                            >> Maybe.withDefault Ascii.default
+                        )
+                )
+                >> changeText_ model
             )
         |> Maybe.withDefault model
+
+
+changeText_ : FrontendLoaded -> Nonempty (List Ascii) -> FrontendLoaded
+changeText_ model lines =
+    let
+        model_ =
+            if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 2) then
+                updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
+
+            else
+                model
+    in
+    Grid.textToChange (Cursor.position model_.cursor) lines
+        |> List.Nonempty.map Change.LocalGridChange
+        |> List.Nonempty.foldl updateLocalModel
+            { model_
+                | cursor =
+                    Cursor.moveCursor
+                        False
+                        ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
+                        , Units.asciiUnit (List.Nonempty.length lines - 1)
+                        )
+                        model_.cursor
+            }
 
 
 keyDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
@@ -1543,7 +1726,17 @@ view model =
                                 Nothing ->
                                     []
                            )
-                        ++ [ notifyMeView loadedModel ]
+                        ++ [ notifyMeView loadedModel
+                           , Element.inFront <|
+                                if loadedModel.showMobileKeyboard then
+                                    Element.Lazy.lazy2
+                                        keyboardView
+                                        loadedModel.windowSize
+                                        loadedModel.mobileKeyboardUppercase
+
+                                else
+                                    Element.none
+                           ]
                     )
                     (Element.html (canvasView maybeHyperlink loadedModel))
         , Html.node "style"
