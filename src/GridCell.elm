@@ -1,4 +1,4 @@
-module GridCell exposing (Cell(..), addLine, cellSize, changeCount, empty, flatten, hasChangesBy, moveUndoPoint)
+module GridCell exposing (Cell(..), addLine, cellSize, changeCount, empty, flatten, hasChangesBy, moveUndoPoint, removeUser)
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
@@ -9,7 +9,10 @@ import User exposing (RawUserId, UserId)
 
 
 type Cell
-    = Cell { history : List { userId : UserId, position : Int, line : Nonempty Ascii }, undoPoint : Dict RawUserId Int }
+    = Cell
+        { history : List { userId : UserId, position : Int, line : Nonempty Ascii }
+        , undoPoint : Dict RawUserId Int
+        }
 
 
 addLine : UserId -> Int -> Nonempty Ascii -> Cell -> Cell
@@ -44,18 +47,17 @@ addLine userId position line (Cell cell) =
         }
 
 
+removeUser : UserId -> Cell -> Cell
+removeUser userId (Cell cell) =
+    Cell
+        { history = List.filter (.userId >> (==) userId) cell.history
+        , undoPoint = Dict.remove (User.rawId userId) cell.undoPoint
+        }
+
+
 hasChangesBy : UserId -> Cell -> Bool
 hasChangesBy userId (Cell cell) =
     Dict.member (User.rawId userId) cell.undoPoint
-
-
-
---setUndoPoint : UserId -> Int -> Cell -> Cell
---setUndoPoint userId newUndoPoint (Cell cell) =
---    Cell
---        { history = cell.history
---        , undoPoint = Dict.update (User.rawId userId) (\_ -> Just newUndoPoint) cell.undoPoint
---        }
 
 
 moveUndoPoint : UserId -> Int -> Cell -> Cell

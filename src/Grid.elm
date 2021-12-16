@@ -17,6 +17,7 @@ module Grid exposing
     , mesh
     , moveUndoPoint
     , region
+    , removeUser
     , textToChange
     )
 
@@ -299,3 +300,10 @@ mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
         baseMesh.boxes
         |> List.concat
         |> (\vertices -> WebGL.indexedTriangles vertices baseMesh.indices)
+
+
+removeUser : UserId -> Grid -> Grid
+removeUser userId grid =
+    allCellsDict grid
+        |> Dict.map (\_ cell -> GridCell.removeUser userId cell)
+        |> from
