@@ -2,7 +2,6 @@ module Evergreen.Migrate.V77 exposing (..)
 
 import AssocList
 import Dict
-import EmailAddress exposing (EmailAddress)
 import Evergreen.V73.Ascii
 import Evergreen.V73.Grid
 import Evergreen.V73.GridCell
@@ -127,7 +126,7 @@ removeUser userId (Grid.Grid grid) =
 cellRemoveUser : User.UserId -> GridCell.Cell -> GridCell.Cell
 cellRemoveUser userId (GridCell.Cell cell) =
     GridCell.Cell
-        { history = List.filter (.userId >> (==) userId) cell.history
+        { history = List.filter (.userId >> (/=) userId) cell.history
         , undoPoint = Dict.remove (rawUserId userId) cell.undoPoint
         }
 
@@ -143,17 +142,6 @@ migrateBackendModel old =
         adminHiddenUsers : List User.UserId
         adminHiddenUsers =
             Dict.toList old.users
-                |> List.map
-                    (\( userId, user ) ->
-                        ( userId
-                        , { hiddenUsers = EverySet.map migrateUserId user.hiddenUsers
-                          , hiddenForAll = user.hiddenForAll
-                          , undoHistory = []
-                          , redoHistory = []
-                          , undoCurrent = Dict.empty
-                          }
-                        )
-                    )
                 |> List.filter (\( _, user ) -> user.hiddenForAll)
                 |> List.map (Tuple.first >> User.UserId)
     in
