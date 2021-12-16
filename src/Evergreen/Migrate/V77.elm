@@ -17,12 +17,12 @@ import Evergreen.V77.Helper as Helper
 import Evergreen.V77.NotifyMe as NotifyMe exposing (Frequency(..))
 import Evergreen.V77.RecentChanges exposing (RecentChanges(..))
 import Evergreen.V77.Types as New exposing (SubscribedEmail)
-import Evergreen.V77.UrlHelper exposing (UnsubscribeEmailKey)
+import Evergreen.V77.UrlHelper exposing (UnsubscribeEmailKey(..))
 import Evergreen.V77.User as User
 import EverySet exposing (EverySet)
 import Lamdera.Migrations exposing (..)
 import List.Nonempty
-import Quantity exposing (Quantity)
+import Quantity exposing (Quantity(..))
 
 
 migrateUserId : Evergreen.V73.User.UserId -> User.UserId
