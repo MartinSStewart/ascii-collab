@@ -125,7 +125,6 @@ type alias BackendModel =
     , pendingEmails : List PendingEmail
     , secretLinkCounter : Int
     , errors : List ( Time.Posix, BackendError )
-    , dummyField : ()
     }
 
 
