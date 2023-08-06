@@ -55,6 +55,7 @@ init =
     , pendingEmails = []
     , secretLinkCounter = 0
     , errors = []
+    , dummyField = 0
     }
 
 
