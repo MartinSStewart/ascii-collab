@@ -155,7 +155,6 @@ useful when writing generic/library code.
 -}
 
 import Angle exposing (Angle)
-import Float.Extra as Float
 import Geometry.Types as Types exposing (Axis2d, Direction2d, Frame2d, Point2d)
 import Length exposing (Meters)
 import Pixels exposing (Pixels)

@@ -18,10 +18,10 @@ module Helper exposing
     , toggleSet
     )
 
-import EverySet exposing (EverySet)
 import Math.Vector2 exposing (Vec2)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
+import SeqSet exposing (SeqSet)
 import Vector2d exposing (Vector2d)
 
 
@@ -111,10 +111,10 @@ type alias Coord units =
     ( Quantity Int units, Quantity Int units )
 
 
-toggleSet : a -> EverySet a -> EverySet a
+toggleSet : a -> SeqSet a -> SeqSet a
 toggleSet value set =
-    if EverySet.member value set then
-        EverySet.remove value set
+    if SeqSet.member value set then
+        SeqSet.remove value set
 
     else
-        EverySet.insert value set
+        SeqSet.insert value set

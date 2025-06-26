@@ -6,7 +6,7 @@ import Evergreen.V79.Grid
 import Evergreen.V79.Helper
 import Evergreen.V79.Units
 import Evergreen.V79.User
-import EverySet
+import SeqSet
 
 
 type alias LocalGrid_ =
@@ -14,8 +14,8 @@ type alias LocalGrid_ =
     , undoHistory : List (Dict.Dict Evergreen.V79.Helper.RawCellCoord Int)
     , redoHistory : List (Dict.Dict Evergreen.V79.Helper.RawCellCoord Int)
     , user : Evergreen.V79.User.UserId
-    , hiddenUsers : EverySet.EverySet Evergreen.V79.User.UserId
-    , adminHiddenUsers : EverySet.EverySet Evergreen.V79.User.UserId
+    , hiddenUsers : SeqSet.SeqSet Evergreen.V79.User.UserId
+    , adminHiddenUsers : SeqSet.SeqSet Evergreen.V79.User.UserId
     , viewBounds : Evergreen.V79.Bounds.Bounds Evergreen.V79.Units.CellUnit
     , undoCurrent : Dict.Dict Evergreen.V79.Helper.RawCellCoord Int
     }

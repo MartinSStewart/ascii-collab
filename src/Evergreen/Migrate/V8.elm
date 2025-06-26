@@ -13,9 +13,9 @@ import Evergreen.V8.Grid
 import Evergreen.V8.GridCell
 import Evergreen.V8.Types as New
 import Evergreen.V8.User
-import EverySet
 import Lamdera.Migrations exposing (..)
 import List.Nonempty
+import SeqSet
 
 
 frontendModel : Old.FrontendModel -> ModelMigration New.FrontendModel New.FrontendMsg
@@ -106,7 +106,7 @@ migrateBackendModel old =
                                 |> (\(Evergreen.V4.User.User { color }) -> color)
                                 |> migrateColorIndex
                                 |> (\a -> Evergreen.V8.User.User { color = a })
-                      , hiddenUsers = EverySet.empty
+                      , hiddenUsers = SeqSet.empty
                       , undoHistory = []
                       , redoHistory = []
                       , undoCurrent = Dict.empty

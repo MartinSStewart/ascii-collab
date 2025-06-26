@@ -25,7 +25,6 @@ import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import EmailAddress exposing (EmailAddress)
-import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import Helper exposing (Coord, RawCellCoord)
 import Html.Events.Extra.Mouse exposing (Button)
@@ -41,6 +40,7 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
 import RecentChanges exposing (RecentChanges)
 import SendGrid
+import SeqSet exposing (SeqSet)
 import Time
 import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
@@ -152,7 +152,7 @@ type BackendError
 
 
 type alias BackendUserData =
-    { hiddenUsers : EverySet UserId
+    { hiddenUsers : SeqSet UserId
     , hiddenForAll : Bool
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
@@ -227,8 +227,8 @@ type EmailEvent
 type alias LoadingData_ =
     { user : UserId
     , grid : Grid
-    , hiddenUsers : EverySet UserId
-    , adminHiddenUsers : EverySet UserId
+    , hiddenUsers : SeqSet UserId
+    , adminHiddenUsers : SeqSet UserId
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int

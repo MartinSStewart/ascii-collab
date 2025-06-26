@@ -11,7 +11,6 @@ import Element exposing (Element)
 import Element.Background
 import Email.Html
 import EmailAddress as Email exposing (EmailAddress)
-import EverySet
 import Frontend
 import Grid
 import GridCell
@@ -25,6 +24,7 @@ import NonemptyExtra as Nonempty
 import NotifyMe exposing (Frequency(..))
 import Parser
 import Quantity exposing (Quantity(..))
+import SeqSet
 import String.Nonempty exposing (NonemptyString)
 import Time
 import Types exposing (BackendModel, BackendMsg(..), EmailEvent(..), FrontendModel, ToBackend(..), ToFrontend(..))
@@ -140,8 +140,8 @@ tests () =
         (LocalGrid.init
             { user = User.userId 0
             , grid = Grid.empty
-            , hiddenUsers = EverySet.empty
-            , adminHiddenUsers = EverySet.empty
+            , hiddenUsers = SeqSet.empty
+            , adminHiddenUsers = SeqSet.empty
             , undoHistory = []
             , redoHistory = []
             , undoCurrent = Dict.empty
@@ -167,8 +167,8 @@ tests () =
         (LocalGrid.init
             { user = User.userId 0
             , grid = Grid.empty
-            , hiddenUsers = EverySet.empty
-            , adminHiddenUsers = EverySet.empty
+            , hiddenUsers = SeqSet.empty
+            , adminHiddenUsers = SeqSet.empty
             , undoHistory = []
             , redoHistory = []
             , undoCurrent = Dict.empty
@@ -219,8 +219,8 @@ tests () =
         (LocalGrid.init
             { user = User.userId 0
             , grid = Grid.empty
-            , hiddenUsers = EverySet.empty
-            , adminHiddenUsers = EverySet.empty
+            , hiddenUsers = SeqSet.empty
+            , adminHiddenUsers = SeqSet.empty
             , undoHistory = []
             , redoHistory = []
             , undoCurrent = Dict.empty
@@ -265,7 +265,7 @@ tests () =
         (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 1, 1 )))
     , test "statistics empty 1x1" <|
         (BackendLogic.statistics
-            EverySet.empty
+            SeqSet.empty
             (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity 1, Quantity 1 ))
             Grid.empty
             |> (\a ->
@@ -279,7 +279,7 @@ tests () =
         )
     , test "statistics single a" <|
         (BackendLogic.statistics
-            EverySet.empty
+            SeqSet.empty
             (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -15, Quantity -15 ))
             (Grid.empty
                 |> Grid.addChange
@@ -304,7 +304,7 @@ tests () =
                 Grid.asciiToCellAndLocalCoord ( Quantity -16, Quantity -16 )
         in
         BackendLogic.statistics
-            EverySet.empty
+            SeqSet.empty
             (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -16, Quantity -16 ))
             (Grid.empty
                 |> Grid.addChange
@@ -328,7 +328,7 @@ tests () =
                 Grid.asciiToCellAndLocalCoord ( Quantity -16, Quantity -15 )
         in
         BackendLogic.statistics
-            EverySet.empty
+            SeqSet.empty
             (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -16, Quantity -15 ))
             (Grid.empty
                 |> Grid.addChange
@@ -352,7 +352,7 @@ tests () =
                 Grid.asciiToCellAndLocalCoord ( Quantity -15, Quantity -16 )
         in
         BackendLogic.statistics
-            EverySet.empty
+            SeqSet.empty
             (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -15, Quantity -16 ))
             (Grid.empty
                 |> Grid.addChange
@@ -376,7 +376,7 @@ tests () =
                 Grid.asciiToCellAndLocalCoord ( Quantity 1, Quantity 0 )
         in
         BackendLogic.statistics
-            EverySet.empty
+            SeqSet.empty
             (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -15, Quantity -16 ))
             (Grid.empty
                 |> Grid.addChange
@@ -400,7 +400,7 @@ tests () =
                 Grid.asciiToCellAndLocalCoord ( Quantity 0, Quantity 1 )
         in
         BackendLogic.statistics
-            EverySet.empty
+            SeqSet.empty
             (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -1, Quantity -1 ))
             (Grid.empty
                 |> Grid.addChange
@@ -499,8 +499,8 @@ tests () =
                 }
             |> Frontend.selectionToString
                 (Bounds.bounds ( Quantity.zero, Quantity 1 ) ( Quantity 4, Quantity 1 ))
-                EverySet.empty
-                EverySet.empty
+                SeqSet.empty
+                SeqSet.empty
             |> (\a ->
                     if a == "bbbbb" then
                         testSingle Passed
@@ -1260,7 +1260,7 @@ checkGridValue ( cellPosition, localPosition ) value =
     LocalGrid.localModel
         >> .grid
         >> Grid.getCell cellPosition
-        >> Maybe.andThen (GridCell.flatten EverySet.empty EverySet.empty >> Array.get localPosition >> Maybe.map Tuple.second)
+        >> Maybe.andThen (GridCell.flatten SeqSet.empty SeqSet.empty >> Array.get localPosition >> Maybe.map Tuple.second)
         >> (\ascii ->
                 if ascii == value then
                     Passed
