@@ -7,11 +7,12 @@ import EmailAddress exposing (EmailAddress)
 import Env
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty
-import SendGrid exposing (Email)
+import Postmark exposing (PostmarkSend)
 import String.Nonempty exposing (NonemptyString)
 import Task
 import Time
 import Types exposing (..)
+import Dict
 
 
 app =
@@ -35,7 +36,7 @@ effectToCmd effect =
             Lamdera.sendToFrontend clientId msg
 
         SendEmail msg subject content to ->
-            SendGrid.sendEmail msg Env.sendGridKey (asciiCollabEmail subject content to)
+            Postmark.sendEmail msg Env.postmarkKey (asciiCollabEmail subject content to)
 
 
 subscriptions : BackendModel -> Sub BackendMsg
@@ -46,15 +47,15 @@ subscriptions _ =
         ]
 
 
-asciiCollabEmail : NonemptyString -> Email.Html.Html -> EmailAddress -> Email
+asciiCollabEmail : NonemptyString -> Email.Html.Html -> EmailAddress -> PostmarkSend
 asciiCollabEmail subject content to =
-    SendGrid.htmlEmail
-        { subject = subject
-        , content = content
-        , to = Nonempty.fromElement to
-        , nameOfSender = "ascii-collab"
-        , emailAddressOfSender =
-            EmailAddress.fromString "no-reply@ascii-collab.app"
-                -- This should never happen
-                |> Maybe.withDefault to
-        }
+    { from = { name = "ascii-collab", email = 
+        EmailAddress.fromString "no-reply@ascii-collab.app"
+            -- This should never happen
+            |> Maybe.withDefault to }
+    , to = Nonempty.fromElement { name = "", email = to }
+    , subject = subject
+    , body = Postmark.BodyHtml content
+    , messageStream = "outbound"
+    , attachments = Dict.empty
+    }

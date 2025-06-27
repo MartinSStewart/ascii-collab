@@ -37,9 +37,9 @@ import Math.Vector2 exposing (Vec2)
 import NotifyMe
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
+import Postmark
 import Quantity exposing (Quantity, Rate)
 import RecentChanges exposing (RecentChanges)
-import SendGrid
 import SeqSet exposing (SeqSet)
 import Time
 import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
@@ -148,7 +148,7 @@ type alias PendingEmail =
 
 
 type BackendError
-    = SendGridError EmailAddress SendGrid.Error
+    = PostmarkError EmailAddress Postmark.SendEmailError
 
 
 type alias BackendUserData =
@@ -206,8 +206,8 @@ type BackendMsg
     = UserDisconnected SessionId ClientId
     | NotifyAdminTimeElapsed Time.Posix
     | NotifyAdminEmailSent
-    | ConfirmationEmailSent SessionId Time.Posix (Result SendGrid.Error ())
-    | ChangeEmailSent Time.Posix EmailAddress (Result SendGrid.Error ())
+    | ConfirmationEmailSent SessionId Time.Posix (Result Postmark.SendEmailError ())
+    | ChangeEmailSent Time.Posix EmailAddress (Result Postmark.SendEmailError ())
     | UpdateFromFrontend SessionId ClientId ToBackend Time.Posix
 
 

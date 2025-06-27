@@ -96,13 +96,62 @@ sendEmailTask (ApiKey token) d =
 
 encodeEmail : PostmarkSend -> E.Value
 encodeEmail d =
-    E.object <|
-        [ ( "From", E.string <| emailToString d.from )
-        , ( "To", E.string <| emailsToString d.to )
-        , ( "Subject", E.string <| String.Nonempty.toString d.subject )
-        , ( "MessageStream", E.string d.messageStream )
-        ]
-            ++ bodyToJsonValues d.body
+    let
+        ( htmlContent, inlineImages ) =
+            case d.body of
+                BodyHtml html ->
+                    Internal.toString html
+
+                BodyBoth html _ ->
+                    Internal.toString html
+
+                BodyText _ ->
+                    ( "", [] )
+
+        inlineAttachments =
+            inlineImages
+                |> List.map
+                    (\( filename, { content, imageType } ) ->
+                        ( filename
+                        , { content = VendoredBase64.fromBytes content |> Maybe.withDefault ""
+                          , mimeType = Internal.mimeType imageType
+                          }
+                        )
+                    )
+                |> Dict.fromList
+
+        allAttachments =
+            Dict.union inlineAttachments d.attachments
+
+        attachmentsList =
+            Dict.toList allAttachments
+    in
+    E.object
+        ([ ( "From", E.string <| emailToString d.from )
+         , ( "To", E.string <| emailsToString d.to )
+         , ( "Subject", E.string <| String.Nonempty.toString d.subject )
+         , ( "MessageStream", E.string d.messageStream )
+         ]
+            ++ (case d.body of
+                    BodyHtml _ ->
+                        [ ( "HtmlBody", E.string htmlContent ) ]
+
+                    BodyText text ->
+                        [ ( "TextBody", E.string text ) ]
+
+                    BodyBoth _ text ->
+                        [ ( "HtmlBody", E.string htmlContent )
+                        , ( "TextBody", E.string text )
+                        ]
+               )
+            ++ (case attachmentsList of
+                    [] ->
+                        []
+
+                    _ ->
+                        [ ( "Attachments", E.list encodeAttachment attachmentsList ) ]
+               )
+        )
 
 
 {-| Send multiple emails in a single API request. See more here <https://postmarkapp.com/developer/user-guide/send-email-with-api/batch-emails>
@@ -293,21 +342,6 @@ decodeEmails =
 -- Helpers
 
 
-bodyToJsonValues : PostmarkEmailBody -> List ( String, E.Value )
-bodyToJsonValues body =
-    case body of
-        BodyHtml html ->
-            [ ( "HtmlBody", E.string <| Tuple.first <| Internal.toString html ) ]
-
-        BodyText text ->
-            [ ( "TextBody", E.string text ) ]
-
-        BodyBoth html text ->
-            [ ( "HtmlBody", E.string <| Tuple.first <| Internal.toString html )
-            , ( "TextBody", E.string text )
-            ]
-
-
 jsonResolver : Http.Resolver SendEmailError ()
 jsonResolver =
     let
@@ -424,3 +458,13 @@ jsonResolver2 =
                 Http.BadStatus_ metadata body ->
                     decodeBody metadata body
         )
+
+
+encodeAttachment : ( String, { content : String, mimeType : String } ) -> E.Value
+encodeAttachment ( filename, attachment ) =
+    E.object
+        [ ( "Name", E.string filename )
+        , ( "Content", E.string attachment.content )
+        , ( "ContentType", E.string attachment.mimeType )
+        , ( "ContentID", E.string ("cid:" ++ filename) )
+        ]

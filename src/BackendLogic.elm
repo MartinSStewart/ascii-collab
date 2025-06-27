@@ -23,9 +23,9 @@ import LocalGrid
 import NonemptyExtra as Nonempty
 import NotifyMe
 import Pixels
+import Postmark
 import Quantity exposing (Quantity(..))
 import RecentChanges
-import SendGrid
 import SeqSet exposing (SeqSet)
 import Set
 import Shaders
@@ -40,7 +40,7 @@ import User exposing (UserId)
 
 type Effect
     = SendToFrontend ClientId ToFrontend
-    | SendEmail (Result SendGrid.Error () -> BackendMsg) NonemptyString Email.Html.Html EmailAddress
+    | SendEmail (Result Postmark.SendEmailError () -> BackendMsg) NonemptyString Email.Html.Html EmailAddress
 
 
 init : BackendModel
@@ -116,14 +116,14 @@ update msg model =
                 Err error ->
                     case Env.adminEmail of
                         Just adminEmail ->
-                            addError timeSent (SendGridError adminEmail error) model
+                            addError timeSent (PostmarkError adminEmail error) model
 
                         Nothing ->
                             model
             , broadcast
                 (\sessionId_ _ ->
                     if sessionId_ == sessionId then
-                        NotifyMeEmailSent { isSuccessful = result == Ok () } |> Just
+                        Just (NotifyMeEmailSent { isSuccessful = result == Ok () })
 
                     else
                         Nothing
@@ -135,12 +135,14 @@ update msg model =
             updateFromFrontend time sessionId clientId toBackendMsg model
 
         ChangeEmailSent time email result ->
-            case result of
-                Ok _ ->
-                    ( model, [] )
+            ( case result of
+                Ok () ->
+                    model
 
                 Err error ->
-                    ( addError time (SendGridError email error) model, [] )
+                    addError time (PostmarkError email error) model
+            , []
+            )
 
 
 sendChangeEmails : Time.Posix -> BackendModel -> ( BackendModel, List Effect )
