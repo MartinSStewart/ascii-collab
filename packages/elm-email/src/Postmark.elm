@@ -1,5 +1,6 @@
 module Postmark exposing
     ( ApiKey
+    , MessageStream(..)
     , PostmarkEmailBody(..)
     , PostmarkSend
     , SendEmailError(..)
@@ -58,9 +59,17 @@ type alias PostmarkSend =
     , to : Nonempty { name : String, email : EmailAddress }
     , subject : NonemptyString
     , body : PostmarkEmailBody
-    , messageStream : String
+    , messageStream : MessageStream
     , attachments : Dict String { content : String, mimeType : String }
     }
+
+
+{-| What type of email are you sending? `TransactionalEmail` is for high priority email intended for a single recipient (a login link for example). `BroadcastEmail` is for emails to be sent to many recipients (a product announcement or a terms of service change). `OtherMessageStream` is in case you have created additional message streams.
+-}
+type MessageStream
+    = TransactionalEmail
+    | BroadcastEmail
+    | OtherMessageStream String
 
 
 {-| Possible error codes we might get back when trying to send an email.
@@ -130,7 +139,19 @@ encodeEmail d =
         ([ ( "From", E.string <| emailToString d.from )
          , ( "To", E.string <| emailsToString d.to )
          , ( "Subject", E.string <| String.Nonempty.toString d.subject )
-         , ( "MessageStream", E.string d.messageStream )
+         , ( "MessageStream"
+           , E.string
+                (case d.messageStream of
+                    TransactionalEmail ->
+                        "outbound"
+
+                    BroadcastEmail ->
+                        "broadcast"
+
+                    OtherMessageStream stream ->
+                        stream
+                )
+           )
          ]
             ++ (case d.body of
                     BodyHtml _ ->
