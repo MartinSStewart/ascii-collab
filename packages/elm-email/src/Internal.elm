@@ -134,6 +134,7 @@ toStringHelper tags acc =
                     children
                     { acc
                         | result = tag "img" (Attribute "src" (cid src) :: attributes) :: acc.result
+                        , inlineImages = inlineImages
                     }
 
             else

@@ -1,6 +1,7 @@
 module Backend exposing (app)
 
 import BackendLogic exposing (Effect(..))
+import Dict
 import Duration
 import Email.Html
 import EmailAddress exposing (EmailAddress)
@@ -12,7 +13,6 @@ import String.Nonempty exposing (NonemptyString)
 import Task
 import Time
 import Types exposing (..)
-import Dict
 
 
 app =
@@ -49,13 +49,16 @@ subscriptions _ =
 
 asciiCollabEmail : NonemptyString -> Email.Html.Html -> EmailAddress -> PostmarkSend
 asciiCollabEmail subject content to =
-    { from = { name = "ascii-collab", email = 
-        EmailAddress.fromString "no-reply@ascii-collab.app"
-            -- This should never happen
-            |> Maybe.withDefault to }
+    { from =
+        { name = "ascii-collab"
+        , email =
+            EmailAddress.fromString "no-reply@ascii-collab.app"
+                -- This should never happen
+                |> Maybe.withDefault to
+        }
     , to = Nonempty.fromElement { name = "", email = to }
     , subject = subject
     , body = Postmark.BodyHtml content
-    , messageStream = "outbound"
+    , messageStream = Postmark.BroadcastEmail
     , attachments = Dict.empty
     }

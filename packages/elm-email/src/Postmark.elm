@@ -117,6 +117,7 @@ encodeEmail d =
                 BodyText _ ->
                     ( "", [] )
 
+        inlineAttachments : Dict String { content : String, mimeType : String }
         inlineAttachments =
             inlineImages
                 |> List.map
@@ -129,9 +130,11 @@ encodeEmail d =
                     )
                 |> Dict.fromList
 
+        allAttachments : Dict String { content : String, mimeType : String }
         allAttachments =
             Dict.union inlineAttachments d.attachments
 
+        attachmentsList : List ( String, { content : String, mimeType : String } )
         attachmentsList =
             Dict.toList allAttachments
     in
