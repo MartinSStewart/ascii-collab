@@ -124,12 +124,34 @@ userColor userId =
     in
     { luminance =
         (userIdFloat * 0.5219)
-            |> Basics.fractionalModBy 1
+            |> fractionalModBy 1
             |> (*) 20
             |> (+) 75
-    , chroma = userIdFloat * 0.4237 |> Basics.fractionalModBy 1 |> (*) 60 |> (+) 0
+    , chroma = userIdFloat * 0.4237 |> fractionalModBy 1 |> (*) 60 |> (+) 0
     , hue = userIdFloat * 101.93
     }
+
+
+{-| Perform [modular arithmetic](https://en.wikipedia.org/wiki/Modular_arithmetic)
+involving floating point numbers.
+
+The sign of the result is the same as the sign of the `modulus`
+in `fractionalModBy modulus x`.
+
+    fractionalModBy 2.5 5 --> 0
+
+    fractionalModBy 2 4.5 == 0.5
+
+    fractionalModBy 2 -4.5 == 1.5
+
+    fractionalModBy -2 4.5 == -1.5
+
+Copied from here <https://github.com/elm-community/basics-extra/blob/8081dfb51115a0fe3c483f9bcf1e2428d7e80aec/src/Basics/Extra.elm#L203C1-L220C48>
+
+-}
+fractionalModBy : Float -> Float -> Float
+fractionalModBy modulus x =
+    x - modulus * toFloat (floor (x / modulus))
 
 
 lab2rgb : { lightness : Float, labA : Float, labB : Float } -> Element.Color

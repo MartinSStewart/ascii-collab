@@ -19,7 +19,6 @@ import Element.Events
 import Element.Font
 import Element.Input
 import Env
-import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord)
@@ -43,6 +42,7 @@ import Parser
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
+import SeqSet exposing (SeqSet)
 import Shaders
 import Task
 import Time
@@ -1065,7 +1065,7 @@ worldToScreen model =
         << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
 
 
-selectionToString : Bounds AsciiUnit -> EverySet UserId -> EverySet UserId -> Grid -> String
+selectionToString : Bounds AsciiUnit -> SeqSet UserId -> SeqSet UserId -> Grid -> String
 selectionToString bounds hiddenUsers hiddenUsersForAll grid =
     let
         minCell =
@@ -1113,7 +1113,7 @@ selectionToString bounds hiddenUsers hiddenUsersForAll grid =
         |> String.fromList
 
 
-selectionPoint : Coord AsciiUnit -> EverySet UserId -> EverySet UserId -> Grid -> ( Maybe UserId, Ascii )
+selectionPoint : Coord AsciiUnit -> SeqSet UserId -> SeqSet UserId -> Grid -> ( Maybe UserId, Ascii )
 selectionPoint position hiddenUsers hiddenUsersForAll grid =
     let
         ( cellPosition, localPosition ) =
@@ -1196,20 +1196,20 @@ updateMeshes oldModel newModel =
         oldCells =
             LocalGrid.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
 
-        showHighlighted : { a | userHoverHighlighted : Maybe b } -> EverySet b -> EverySet b
+        showHighlighted : { a | userHoverHighlighted : Maybe b } -> SeqSet b -> SeqSet b
         showHighlighted model hidden =
-            EverySet.diff
+            SeqSet.diff
                 hidden
                 ([ model.userHoverHighlighted ]
                     |> List.filterMap identity
-                    |> EverySet.fromList
+                    |> SeqSet.fromList
                 )
 
-        oldHidden : EverySet UserId
+        oldHidden : SeqSet UserId
         oldHidden =
             LocalGrid.localModel oldModel.localModel |> .hiddenUsers |> showHighlighted oldModel
 
-        oldHiddenForAll : EverySet UserId
+        oldHiddenForAll : SeqSet UserId
         oldHiddenForAll =
             LocalGrid.localModel oldModel.localModel |> .adminHiddenUsers |> showHighlighted oldModel
 
@@ -1217,11 +1217,11 @@ updateMeshes oldModel newModel =
         newCells =
             LocalGrid.localModel newModel.localModel |> .grid |> Grid.allCellsDict
 
-        newHidden : EverySet UserId
+        newHidden : SeqSet UserId
         newHidden =
             LocalGrid.localModel newModel.localModel |> .hiddenUsers |> showHighlighted newModel
 
-        newHiddenForAll : EverySet UserId
+        newHiddenForAll : SeqSet UserId
         newHiddenForAll =
             LocalGrid.localModel newModel.localModel |> .adminHiddenUsers |> showHighlighted newModel
 
@@ -1242,10 +1242,10 @@ updateMeshes oldModel newModel =
 
         hiddenChanges : List UserId
         hiddenChanges =
-            EverySet.union (EverySet.diff newHidden oldHidden) (EverySet.diff oldHidden newHidden)
-                |> EverySet.union (EverySet.diff newHiddenForAll oldHiddenForAll)
-                |> EverySet.union (EverySet.diff oldHiddenForAll newHiddenForAll)
-                |> EverySet.toList
+            SeqSet.union (SeqSet.diff newHidden oldHidden) (SeqSet.diff oldHidden newHidden)
+                |> SeqSet.union (SeqSet.diff newHiddenForAll oldHiddenForAll)
+                |> SeqSet.union (SeqSet.diff oldHiddenForAll newHiddenForAll)
+                |> SeqSet.toList
     in
     { newModel
         | meshes =
@@ -1818,8 +1818,8 @@ userListView model =
 
         hiddenUserList : List UserId
         hiddenUserList =
-            EverySet.diff localModel.hiddenUsers localModel.adminHiddenUsers
-                |> EverySet.toList
+            SeqSet.diff localModel.hiddenUsers localModel.adminHiddenUsers
+                |> SeqSet.toList
 
         isActive : UserId -> Bool
         isActive userId =
@@ -1845,7 +1845,7 @@ userListView model =
 
         hiddenusersForAllList : List UserId
         hiddenusersForAllList =
-            EverySet.toList localModel.adminHiddenUsers
+            SeqSet.toList localModel.adminHiddenUsers
 
         hiddenUsersForAll : List (Element FrontendMsg)
         hiddenUsersForAll =

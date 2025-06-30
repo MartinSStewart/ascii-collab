@@ -18,7 +18,6 @@ import Evergreen.V78.RecentChanges
 import Evergreen.V78.Units
 import Evergreen.V78.UrlHelper
 import Evergreen.V78.User
-import EverySet
 import Html.Events.Extra.Mouse
 import Keyboard
 import Lamdera
@@ -27,6 +26,7 @@ import Math.Vector2
 import Pixels
 import Quantity
 import SendGrid
+import SeqSet
 import Time
 import Url
 import WebGL
@@ -108,7 +108,7 @@ type FrontendModel
 
 
 type alias BackendUserData =
-    { hiddenUsers : EverySet.EverySet Evergreen.V78.User.UserId
+    { hiddenUsers : SeqSet.SeqSet Evergreen.V78.User.UserId
     , hiddenForAll : Bool
     , undoHistory : List (Dict.Dict Evergreen.V78.Helper.RawCellCoord Int)
     , redoHistory : List (Dict.Dict Evergreen.V78.Helper.RawCellCoord Int)
@@ -223,8 +223,8 @@ type BackendMsg
 type alias LoadingData_ =
     { user : Evergreen.V78.User.UserId
     , grid : Evergreen.V78.Grid.Grid
-    , hiddenUsers : EverySet.EverySet Evergreen.V78.User.UserId
-    , adminHiddenUsers : EverySet.EverySet Evergreen.V78.User.UserId
+    , hiddenUsers : SeqSet.SeqSet Evergreen.V78.User.UserId
+    , adminHiddenUsers : SeqSet.SeqSet Evergreen.V78.User.UserId
     , undoHistory : List (Dict.Dict Evergreen.V78.Helper.RawCellCoord Int)
     , redoHistory : List (Dict.Dict Evergreen.V78.Helper.RawCellCoord Int)
     , undoCurrent : Dict.Dict Evergreen.V78.Helper.RawCellCoord Int

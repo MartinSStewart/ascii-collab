@@ -1,4 +1,4 @@
-module Env exposing (Mode(..), adminEmail, adminEmail_, adminUserId, adminUserId_, confirmationEmailKey, domain, hyperlinkWhitelist, isProduction, isProduction_, mapDrawAt, mapDrawAtX, mapDrawAtY, mode, notifyAdminWaitInHours, sendGridKey, sendGridKey_, startPointAt, startPointX, startPointY, statisticsBounds, statisticsDrawAt, statisticsDrawAtX, statisticsDrawAtY, statisticsX0, statisticsX1, statisticsY0, statisticsY1)
+module Env exposing (Mode(..), adminEmail, adminEmail_, adminUserId, adminUserId_, confirmationEmailKey, domain, hyperlinkWhitelist, isProduction, isProduction_, mapDrawAt, mapDrawAtX, mapDrawAtY, mode, notifyAdminWaitInHours, postmarkKey, postmarkKey_, startPointAt, startPointX, startPointY, statisticsBounds, statisticsDrawAt, statisticsDrawAtX, statisticsDrawAtY, statisticsX0, statisticsX1, statisticsY0, statisticsY1)
 
 -- The Env.elm file is for per-environment configuration.
 -- See https://dashboard.lamdera.app/docs/environment for more info.
@@ -6,6 +6,7 @@ module Env exposing (Mode(..), adminEmail, adminEmail_, adminUserId, adminUserId
 import Bounds exposing (Bounds)
 import EmailAddress exposing (EmailAddress)
 import Helper exposing (Coord)
+import Postmark
 import SendGrid
 import Units exposing (AsciiUnit)
 import User exposing (UserId)
@@ -49,14 +50,14 @@ adminEmail =
     EmailAddress.fromString adminEmail_
 
 
-sendGridKey_ : String
-sendGridKey_ =
+postmarkKey_ : String
+postmarkKey_ =
     ""
 
 
-sendGridKey : SendGrid.ApiKey
-sendGridKey =
-    SendGrid.apiKey sendGridKey_
+postmarkKey : Postmark.ApiKey
+postmarkKey =
+    Postmark.apiKey postmarkKey_
 
 
 domain : String

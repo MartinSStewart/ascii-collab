@@ -21,10 +21,10 @@ import Evergreen.V68.RecentChanges exposing (RecentChanges(..))
 import Evergreen.V68.Types as New exposing (SubscribedEmail)
 import Evergreen.V68.UrlHelper exposing (UnsubscribeEmailKey(..))
 import Evergreen.V68.User as User
-import EverySet
 import Lamdera.Migrations exposing (..)
 import List.Nonempty
 import Quantity exposing (Quantity(..))
+import SeqSet
 
 
 migrateUserId : Evergreen.V53.User.UserId -> User.UserId
@@ -162,7 +162,7 @@ migrateBackendModel old =
             |> List.map
                 (\( userId, user ) ->
                     ( userId
-                    , { hiddenUsers = EverySet.map migrateUserId user.hiddenUsers
+                    , { hiddenUsers = SeqSet.map migrateUserId user.hiddenUsers
                       , hiddenForAll = user.hiddenForAll
                       , undoHistory = []
                       , redoHistory = []

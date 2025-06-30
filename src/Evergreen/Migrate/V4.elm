@@ -13,10 +13,10 @@ import Evergreen.V4.Grid
 import Evergreen.V4.GridCell
 import Evergreen.V4.Types as New
 import Evergreen.V4.User
-import EverySet
 import Lamdera.Migrations exposing (..)
 import List.Extra as List
 import List.Nonempty
+import SeqSet
 import Set
 
 
@@ -120,7 +120,7 @@ backendModel old =
                         in
                         ( rawId
                         , { userData = Evergreen.V4.User.User { color = migrateColorIndex color }
-                          , hiddenUsers = EverySet.empty
+                          , hiddenUsers = SeqSet.empty
                           }
                         )
                     )

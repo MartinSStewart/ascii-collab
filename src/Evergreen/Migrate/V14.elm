@@ -15,10 +15,10 @@ import Evergreen.V14.GridCell
 import Evergreen.V14.Helper
 import Evergreen.V14.Types as New
 import Evergreen.V14.User
-import EverySet
 import Lamdera.Migrations exposing (..)
 import List.Nonempty
 import Quantity exposing (Quantity(..))
+import SeqSet
 
 
 migrateUserId : Evergreen.V13.User.UserId -> Evergreen.V14.User.UserId
@@ -141,7 +141,7 @@ migrateBackendModel old =
                                 |> (\(Evergreen.V13.User.User { color }) -> color)
                                 |> migrateColorIndex
                                 |> (\a -> Evergreen.V14.User.User { color = a })
-                      , hiddenUsers = EverySet.map migrateUserId user.hiddenUsers
+                      , hiddenUsers = SeqSet.map migrateUserId user.hiddenUsers
                       , hiddenForAll = user.hiddenForAll
                       , undoHistory = []
                       , redoHistory = []

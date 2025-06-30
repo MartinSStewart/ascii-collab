@@ -12,7 +12,6 @@ import Evergreen.V4.LocalModel
 import Evergreen.V4.Point2d
 import Evergreen.V4.Units
 import Evergreen.V4.User
-import EverySet
 import Html.Events.Extra.Mouse
 import Keyboard
 import Lamdera
@@ -20,6 +19,7 @@ import List.Nonempty
 import Math.Vector2
 import Pixels
 import Quantity
+import SeqSet
 import Set
 import Time
 import Url
@@ -85,19 +85,22 @@ type FrontendModel
 type alias BackendModel =
     { grid : Evergreen.V4.Grid.Grid
     , undoPoints :
-        Dict.Dict Evergreen.V4.User.RawUserId
+        Dict.Dict
+            Evergreen.V4.User.RawUserId
             { undoHistory : List (Dict.Dict ( Int, Int ) Int)
             , redoHistory : List (Dict.Dict ( Int, Int ) Int)
             }
     , userSessions :
-        Dict.Dict Lamdera.SessionId
+        Dict.Dict
+            Lamdera.SessionId
             { clientIds : Set.Set Lamdera.ClientId
             , userId : Evergreen.V4.User.UserId
             }
     , users :
-        Dict.Dict Evergreen.V4.User.RawUserId
+        Dict.Dict
+            Evergreen.V4.User.RawUserId
             { userData : Evergreen.V4.User.UserData
-            , hiddenUsers : EverySet.EverySet Evergreen.V4.User.UserId
+            , hiddenUsers : SeqSet.SeqSet Evergreen.V4.User.UserId
             }
     }
 
@@ -145,7 +148,7 @@ type alias LoadingData_ =
     { user : ( Evergreen.V4.User.UserId, Evergreen.V4.User.UserData )
     , grid : Evergreen.V4.Grid.Grid
     , otherUsers : List ( Evergreen.V4.User.UserId, Evergreen.V4.User.UserData )
-    , hiddenUsers : EverySet.EverySet Evergreen.V4.User.UserId
+    , hiddenUsers : SeqSet.SeqSet Evergreen.V4.User.UserId
     , undoHistory : List (Dict.Dict ( Int, Int ) Int)
     , redoHistory : List (Dict.Dict ( Int, Int ) Int)
     }

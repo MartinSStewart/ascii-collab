@@ -25,7 +25,6 @@ import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import EmailAddress exposing (EmailAddress)
-import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import Helper exposing (Coord, RawCellCoord)
 import Html.Events.Extra.Mouse exposing (Button)
@@ -38,9 +37,10 @@ import Math.Vector2 exposing (Vec2)
 import NotifyMe
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
+import Postmark
 import Quantity exposing (Quantity, Rate)
 import RecentChanges exposing (RecentChanges)
-import SendGrid
+import SeqSet exposing (SeqSet)
 import Time
 import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
@@ -148,11 +148,11 @@ type alias PendingEmail =
 
 
 type BackendError
-    = SendGridError EmailAddress SendGrid.Error
+    = PostmarkError EmailAddress Postmark.SendEmailError
 
 
 type alias BackendUserData =
-    { hiddenUsers : EverySet UserId
+    { hiddenUsers : SeqSet UserId
     , hiddenForAll : Bool
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
@@ -206,8 +206,8 @@ type BackendMsg
     = UserDisconnected SessionId ClientId
     | NotifyAdminTimeElapsed Time.Posix
     | NotifyAdminEmailSent
-    | ConfirmationEmailSent SessionId Time.Posix (Result SendGrid.Error ())
-    | ChangeEmailSent Time.Posix EmailAddress (Result SendGrid.Error ())
+    | ConfirmationEmailSent SessionId Time.Posix (Result Postmark.SendEmailError ())
+    | ChangeEmailSent Time.Posix EmailAddress (Result Postmark.SendEmailError ())
     | UpdateFromFrontend SessionId ClientId ToBackend Time.Posix
 
 
@@ -227,8 +227,8 @@ type EmailEvent
 type alias LoadingData_ =
     { user : UserId
     , grid : Grid
-    , hiddenUsers : EverySet UserId
-    , adminHiddenUsers : EverySet UserId
+    , hiddenUsers : SeqSet UserId
+    , adminHiddenUsers : SeqSet UserId
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int

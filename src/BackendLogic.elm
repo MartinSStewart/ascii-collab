@@ -12,7 +12,6 @@ import Email.Html
 import Email.Html.Attributes
 import EmailAddress exposing (EmailAddress)
 import Env
-import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord, RawCellCoord)
@@ -24,9 +23,10 @@ import LocalGrid
 import NonemptyExtra as Nonempty
 import NotifyMe
 import Pixels
+import Postmark
 import Quantity exposing (Quantity(..))
 import RecentChanges
-import SendGrid
+import SeqSet exposing (SeqSet)
 import Set
 import Shaders
 import String.Nonempty exposing (NonemptyString(..))
@@ -40,7 +40,7 @@ import User exposing (UserId)
 
 type Effect
     = SendToFrontend ClientId ToFrontend
-    | SendEmail (Result SendGrid.Error () -> BackendMsg) NonemptyString Email.Html.Html EmailAddress
+    | SendEmail (Result Postmark.SendEmailError () -> BackendMsg) NonemptyString Email.Html.Html EmailAddress
 
 
 init : BackendModel
@@ -116,14 +116,14 @@ update msg model =
                 Err error ->
                     case Env.adminEmail of
                         Just adminEmail ->
-                            addError timeSent (SendGridError adminEmail error) model
+                            addError timeSent (PostmarkError adminEmail error) model
 
                         Nothing ->
                             model
             , broadcast
                 (\sessionId_ _ ->
                     if sessionId_ == sessionId then
-                        NotifyMeEmailSent { isSuccessful = result == Ok () } |> Just
+                        Just (NotifyMeEmailSent { isSuccessful = result == Ok () })
 
                     else
                         Nothing
@@ -135,12 +135,14 @@ update msg model =
             updateFromFrontend time sessionId clientId toBackendMsg model
 
         ChangeEmailSent time email result ->
-            case result of
-                Ok _ ->
-                    ( model, [] )
+            ( case result of
+                Ok () ->
+                    model
 
                 Err error ->
-                    ( addError time (SendGridError email error) model, [] )
+                    addError time (PostmarkError email error) model
+            , []
+            )
 
 
 sendChangeEmails : Time.Posix -> BackendModel -> ( BackendModel, List Effect )
@@ -296,7 +298,7 @@ clusterToImage model actualChanges bounds =
                         Nothing ->
                             Grid.getCell coord model.grid
                                 |> Maybe.withDefault GridCell.empty
-                                |> GridCell.flatten EverySet.empty (hiddenUsers Nothing model)
+                                |> GridCell.flatten SeqSet.empty (hiddenUsers Nothing model)
                                 |> Array.map (\( _, ascii ) -> ( Nothing, ascii ))
 
                 slices : List (List ( Maybe UserId, Ascii ))
@@ -439,8 +441,8 @@ diffCells model before after =
             else
                 after_
         )
-        (GridCell.flatten EverySet.empty (hiddenUsers Nothing model) before |> Array.toList)
-        (GridCell.flatten EverySet.empty (hiddenUsers Nothing model) after |> Array.toList)
+        (GridCell.flatten SeqSet.empty (hiddenUsers Nothing model) before |> Array.toList)
+        (GridCell.flatten SeqSet.empty (hiddenUsers Nothing model) after |> Array.toList)
         |> Array.fromList
 
 
@@ -567,7 +569,7 @@ timestamp currentTime nextUpdate =
         ++ "."
 
 
-statistics : EverySet UserId -> Bounds AsciiUnit -> Grid -> Nonempty ( Ascii, Int )
+statistics : SeqSet UserId -> Bounds AsciiUnit -> Grid -> Nonempty ( Ascii, Int )
 statistics hiddenUsers_ bounds grid =
     let
         cells =
@@ -598,7 +600,7 @@ statistics hiddenUsers_ bounds grid =
 
         countCell : Coord CellUnit -> GridCell.Cell -> Nonempty ( Ascii, Int ) -> Nonempty ( Ascii, Int )
         countCell coord cell acc =
-            GridCell.flatten EverySet.empty hiddenUsers_ cell
+            GridCell.flatten SeqSet.empty hiddenUsers_ cell
                 |> Array.foldl
                     (\( _, value ) ( acc_, index ) ->
                         ( if Bounds.contains (Grid.cellAndLocalCoordToAscii ( coord, index )) bounds then
@@ -629,7 +631,7 @@ statistics hiddenUsers_ bounds grid =
                         countCell coord cell acc
 
                     else
-                        GridCell.flatten EverySet.empty hiddenUsers_ cell
+                        GridCell.flatten SeqSet.empty hiddenUsers_ cell
                             |> Array.foldl
                                 (\( _, value ) acc_ ->
                                     Nonempty.updateFirst (Tuple.first >> (==) value) (Tuple.mapSecond ((+) 1)) acc_
@@ -651,7 +653,7 @@ statistics hiddenUsers_ bounds grid =
         initialCount
 
 
-generateMap : EverySet UserId -> Bounds CellUnit -> Grid -> Nonempty (List Ascii)
+generateMap : SeqSet UserId -> Bounds CellUnit -> Grid -> Nonempty (List Ascii)
 generateMap hiddenUsers_ bounds grid =
     let
         cells =
@@ -662,7 +664,7 @@ generateMap hiddenUsers_ bounds grid =
                         if Bounds.contains (Helper.fromRawCoord ( x, y )) bounds then
                             let
                                 flattened =
-                                    GridCell.flatten EverySet.empty hiddenUsers_ cell |> Array.toList
+                                    GridCell.flatten SeqSet.empty hiddenUsers_ cell |> Array.toList
 
                                 halfCell =
                                     GridCell.cellSize // 2
@@ -1196,7 +1198,7 @@ updateUser userId updateUserFunc model =
 hiddenUsers :
     Maybe UserId
     -> { a | users : Dict.Dict Int { b | hiddenForAll : Bool } }
-    -> EverySet UserId
+    -> SeqSet UserId
 hiddenUsers userId model =
     model.users
         |> Dict.toList
@@ -1208,7 +1210,7 @@ hiddenUsers userId model =
                 else
                     Nothing
             )
-        |> EverySet.fromList
+        |> SeqSet.fromList
 
 
 requestDataUpdate : SessionId -> ClientId -> Bounds CellUnit -> BackendModel -> ( BackendModel, List Effect )
@@ -1271,7 +1273,7 @@ createUser userId model =
     let
         userBackendData : BackendUserData
         userBackendData =
-            { hiddenUsers = EverySet.empty
+            { hiddenUsers = SeqSet.empty
             , hiddenForAll = False
             , undoHistory = []
             , redoHistory = []
