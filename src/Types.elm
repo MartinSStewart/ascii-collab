@@ -20,11 +20,13 @@ module Types exposing
 import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
+import Bytes exposing (Bytes)
 import Change exposing (Change, ServerChange)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import EmailAddress exposing (EmailAddress)
+import File
 import Grid exposing (Grid)
 import Helper exposing (Coord, RawCellCoord)
 import Html.Events.Extra.Mouse exposing (Button)
@@ -193,6 +195,10 @@ type FrontendMsg
     | PressedCancelNotifyMe
     | PressedSubmitNotifyMe NotifyMe.Validated
     | NotifyMeModelChanged NotifyMe.Model
+    | ExportBackendPressed
+    | ImportBackendPressed
+    | FileSelected File.File
+    | FileLoaded Bytes
 
 
 type ToBackend
@@ -200,6 +206,8 @@ type ToBackend
     | GridChange (Nonempty Change.LocalChange)
     | ChangeViewBounds (Bounds CellUnit)
     | NotifyMeSubmitted NotifyMe.Validated
+    | ExportBackend
+    | ImportBackend Bytes
 
 
 type BackendMsg
@@ -217,6 +225,8 @@ type ToFrontend
     | NotifyMeEmailSent { isSuccessful : Bool }
     | NotifyMeConfirmed
     | UnsubscribeEmailConfirmed
+    | BackendExported Bytes
+    | BackendImported (Result () ())
 
 
 type EmailEvent

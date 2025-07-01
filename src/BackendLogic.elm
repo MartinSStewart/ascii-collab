@@ -16,6 +16,7 @@ import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord, RawCellCoord)
 import Image
+import Json.Encode as Encode
 import Lamdera exposing (ClientId, SessionId)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
@@ -26,7 +27,9 @@ import Pixels
 import Postmark
 import Quantity exposing (Quantity(..))
 import RecentChanges
+import SeqDict
 import SeqSet exposing (SeqSet)
+import Serialize
 import Set
 import Shaders
 import String.Nonempty exposing (NonemptyString(..))
@@ -921,6 +924,44 @@ updateFromFrontend currentTime sessionId clientId msg model =
                 Nothing ->
                     ( model, [] )
 
+        ExportBackend ->
+            case Dict.get sessionId model.userSessions of
+                Just { userId } ->
+                    if Just userId == Env.adminUserId then
+                        ( model
+                        , [ Serialize.encodeToBytes backendModelToJson model
+                                |> BackendExported
+                                |> SendToFrontend clientId
+                          ]
+                        )
+
+                    else
+                        ( model, [] )
+
+                Nothing ->
+                    ( model, [] )
+
+        ImportBackend bytes ->
+            case Dict.get sessionId model.userSessions of
+                Just { userId } ->
+                    if Just userId == Env.adminUserId && not Env.isProduction then
+                        case Serialize.decodeFromBytes backendModelToJson bytes of
+                            Ok model2 ->
+                                ( model2
+                                , [ BackendImported (Ok ()) |> SendToFrontend clientId ]
+                                )
+
+                            Err _ ->
+                                ( model
+                                , [ BackendImported (Err ()) |> SendToFrontend clientId ]
+                                )
+
+                    else
+                        ( model, [] )
+
+                Nothing ->
+                    ( model, [] )
+
 
 confirmationEmailConfirmed : SessionId -> Time.Posix -> ConfirmEmailKey -> BackendModel -> ( BackendModel, List Effect )
 confirmationEmailConfirmed sessionId currentTime confirmEmailKey model =
@@ -1289,3 +1330,254 @@ broadcast msgFunc model =
         |> Dict.toList
         |> List.concatMap (\( sessionId, { clientIds } ) -> Dict.keys clientIds |> List.map (Tuple.pair sessionId))
         |> List.filterMap (\( sessionId, clientId ) -> msgFunc sessionId clientId |> Maybe.map (SendToFrontend clientId))
+
+
+backendModelToJson : Serialize.Codec String BackendModel
+backendModelToJson =
+    Serialize.record BackendModel
+        |> Serialize.field .grid Grid.gridCodec
+        |> Serialize.field
+            .userSessions
+            (Serialize.dict
+                Serialize.string
+                (Serialize.record (\clientIds userId -> { clientIds = clientIds, userId = userId })
+                    |> Serialize.field .clientIds (Serialize.dict Serialize.string Bounds.codec)
+                    |> Serialize.field .userId User.codec
+                    |> Serialize.finishRecord
+                )
+            )
+        |> Serialize.field .users (Serialize.dict Serialize.int backendUserDataCodec)
+        |> Serialize.field
+            .usersHiddenRecently
+            (Serialize.list
+                (Serialize.record
+                    (\reporter hiddenUser hidePoint ->
+                        { reporter = reporter, hiddenUser = hiddenUser, hidePoint = hidePoint }
+                    )
+                    |> Serialize.field .reporter User.codec
+                    |> Serialize.field .hiddenUser User.codec
+                    |> Serialize.field
+                        .hidePoint
+                        (Serialize.tuple (quantityCodec Serialize.int) (quantityCodec Serialize.int))
+                    |> Serialize.finishRecord
+                )
+            )
+        |> Serialize.field .userChangesRecently recentChangesCodec
+        |> Serialize.field .subscribedEmails (Serialize.list subscribedEmailCodec)
+        |> Serialize.field .pendingEmails (Serialize.list pendingEmailCodec)
+        |> Serialize.field .secretLinkCounter Serialize.int
+        |> Serialize.field .errors (Serialize.list (Serialize.tuple posixCodec backendErrorCodec))
+        |> Serialize.field .dummyField Serialize.int
+        |> Serialize.finishRecord
+
+
+backendUserDataCodec : Serialize.Codec e BackendUserData
+backendUserDataCodec =
+    Serialize.record BackendUserData
+        |> Serialize.field .hiddenUsers (seqSetCodec User.codec)
+        |> Serialize.field .hiddenForAll Serialize.bool
+        |> Serialize.field
+            .undoHistory
+            (Serialize.list (Serialize.dict (Serialize.tuple Serialize.int Serialize.int) Serialize.int))
+        |> Serialize.field
+            .redoHistory
+            (Serialize.list (Serialize.dict (Serialize.tuple Serialize.int Serialize.int) Serialize.int))
+        |> Serialize.field .undoCurrent (Serialize.dict (Serialize.tuple Serialize.int Serialize.int) Serialize.int)
+        |> Serialize.finishRecord
+
+
+seqSetCodec : Serialize.Codec e a -> Serialize.Codec e (SeqSet a)
+seqSetCodec a =
+    Serialize.map
+        SeqSet.fromList
+        SeqSet.toList
+        (Serialize.list a)
+
+
+quantityCodec : Serialize.Codec e number -> Serialize.Codec e (Quantity number units)
+quantityCodec number =
+    Serialize.customType
+        (\quantityEncoder value ->
+            case value of
+                Quantity.Quantity arg0 ->
+                    quantityEncoder arg0
+        )
+        |> Serialize.variant1 Quantity number
+        |> Serialize.finishCustomType
+
+
+recentChangesCodec : Serialize.Codec e RecentChanges.RecentChanges
+recentChangesCodec =
+    Serialize.customType
+        (\recentChangesEncoder value ->
+            case value of
+                RecentChanges.RecentChanges arg0 ->
+                    recentChangesEncoder arg0
+        )
+        |> Serialize.variant1
+            RecentChanges.RecentChanges
+            (Serialize.record
+                (\frequencies threeHoursElapsed -> { frequencies = frequencies, threeHoursElapsed = threeHoursElapsed })
+                |> Serialize.field
+                    .frequencies
+                    (seqDictCodec
+                        frequencyCodec
+                        (Serialize.dict (Serialize.tuple Serialize.int Serialize.int) Grid.cellCodec)
+                    )
+                |> Serialize.field .threeHoursElapsed (quantityCodec Serialize.int)
+                |> Serialize.finishRecord
+            )
+        |> Serialize.finishCustomType
+
+
+seqDictCodec : Serialize.Codec e a -> Serialize.Codec e b -> Serialize.Codec e (SeqDict.SeqDict a b)
+seqDictCodec a b =
+    Serialize.map
+        SeqDict.fromList
+        SeqDict.toList
+        (Serialize.list (Serialize.tuple a b))
+
+
+subscribedEmailCodec : Serialize.Codec String SubscribedEmail
+subscribedEmailCodec =
+    Serialize.record SubscribedEmail
+        |> Serialize.field .email emailAddressCodec
+        |> Serialize.field .frequency frequencyCodec
+        |> Serialize.field .confirmTime posixCodec
+        |> Serialize.field .userId User.codec
+        |> Serialize.field .unsubscribeKey unsubscribeEmailKeyCodec
+        |> Serialize.finishRecord
+
+
+emailAddressCodec : Serialize.Codec String EmailAddress
+emailAddressCodec =
+    Serialize.mapValid
+        (\a -> EmailAddress.fromString a |> Result.fromMaybe "Invalid email")
+        EmailAddress.toString
+        Serialize.string
+
+
+frequencyCodec : Serialize.Codec e NotifyMe.Frequency
+frequencyCodec =
+    Serialize.customType
+        (\every3HoursEncoder every12HoursEncoder dailyEncoder weeklyEncoder monthlyEncoder value ->
+            case value of
+                NotifyMe.Every3Hours ->
+                    every3HoursEncoder
+
+                NotifyMe.Every12Hours ->
+                    every12HoursEncoder
+
+                NotifyMe.Daily ->
+                    dailyEncoder
+
+                NotifyMe.Weekly ->
+                    weeklyEncoder
+
+                NotifyMe.Monthly ->
+                    monthlyEncoder
+        )
+        |> Serialize.variant0 NotifyMe.Every3Hours
+        |> Serialize.variant0 NotifyMe.Every12Hours
+        |> Serialize.variant0 NotifyMe.Daily
+        |> Serialize.variant0 NotifyMe.Weekly
+        |> Serialize.variant0 NotifyMe.Monthly
+        |> Serialize.finishCustomType
+
+
+unsubscribeEmailKeyCodec : Serialize.Codec e UnsubscribeEmailKey
+unsubscribeEmailKeyCodec =
+    Serialize.customType
+        (\unsubscribeEmailKeyEncoder value ->
+            case value of
+                UrlHelper.UnsubscribeEmailKey arg0 ->
+                    unsubscribeEmailKeyEncoder arg0
+        )
+        |> Serialize.variant1 UnsubscribeEmailKey Serialize.string
+        |> Serialize.finishCustomType
+
+
+pendingEmailCodec : Serialize.Codec String PendingEmail
+pendingEmailCodec =
+    Serialize.record PendingEmail
+        |> Serialize.field .email emailAddressCodec
+        |> Serialize.field .frequency frequencyCodec
+        |> Serialize.field .creationTime posixCodec
+        |> Serialize.field .userId User.codec
+        |> Serialize.field .key confirmEmailKeyCodec
+        |> Serialize.finishRecord
+
+
+confirmEmailKeyCodec : Serialize.Codec e ConfirmEmailKey
+confirmEmailKeyCodec =
+    Serialize.customType
+        (\confirmEmailKeyEncoder value ->
+            case value of
+                UrlHelper.ConfirmEmailKey arg0 ->
+                    confirmEmailKeyEncoder arg0
+        )
+        |> Serialize.variant1 ConfirmEmailKey Serialize.string
+        |> Serialize.finishCustomType
+
+
+posixCodec : Serialize.Codec e Time.Posix
+posixCodec =
+    Serialize.map
+        Time.millisToPosix
+        Time.posixToMillis
+        Serialize.int
+
+
+backendErrorCodec : Serialize.Codec String BackendError
+backendErrorCodec =
+    Serialize.customType
+        (\postmarkErrorEncoder value ->
+            case value of
+                PostmarkError arg0 arg1 ->
+                    postmarkErrorEncoder arg0 arg1
+        )
+        |> Serialize.variant2 PostmarkError emailAddressCodec sendEmailErrorCodec
+        |> Serialize.finishCustomType
+
+
+sendEmailErrorCodec : Serialize.Codec String Postmark.SendEmailError
+sendEmailErrorCodec =
+    Serialize.customType
+        (\unknownErrorEncoder postmarkErrorEncoder networkErrorEncoder timeoutEncoder badUrlEncoder value ->
+            case value of
+                Postmark.UnknownError arg0 ->
+                    unknownErrorEncoder arg0
+
+                Postmark.PostmarkError arg0 ->
+                    postmarkErrorEncoder arg0
+
+                Postmark.NetworkError ->
+                    networkErrorEncoder
+
+                Postmark.Timeout ->
+                    timeoutEncoder
+
+                Postmark.BadUrl arg0 ->
+                    badUrlEncoder arg0
+        )
+        |> Serialize.variant1
+            Postmark.UnknownError
+            (Serialize.record (\statusCode body -> { statusCode = statusCode, body = body })
+                |> Serialize.field .statusCode Serialize.int
+                |> Serialize.field .body Serialize.string
+                |> Serialize.finishRecord
+            )
+        |> Serialize.variant1 Postmark.PostmarkError postmarkSendResponseCodec
+        |> Serialize.variant0 Postmark.NetworkError
+        |> Serialize.variant0 Postmark.Timeout
+        |> Serialize.variant1 Postmark.BadUrl Serialize.string
+        |> Serialize.finishCustomType
+
+
+postmarkSendResponseCodec : Serialize.Codec String Postmark.PostmarkSendResponse
+postmarkSendResponseCodec =
+    Serialize.record Postmark.PostmarkSendResponse
+        |> Serialize.field .errorCode Serialize.int
+        |> Serialize.field .message Serialize.string
+        |> Serialize.field .to (Serialize.list emailAddressCodec)
+        |> Serialize.finishRecord

@@ -3,6 +3,7 @@ module Postmark exposing
     , MessageStream(..)
     , PostmarkEmailBody(..)
     , PostmarkSend
+    , PostmarkSendResponse
     , SendEmailError(..)
     , SendEmailsError(..)
     , apiKey
