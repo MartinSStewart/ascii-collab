@@ -1,5 +1,5 @@
 module Bounds exposing
-    ( Bounds
+    ( Bounds(..)
     , addToMax
     , bounds
     , boundsToBounds2d
