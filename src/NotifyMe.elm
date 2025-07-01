@@ -6,7 +6,7 @@ import Element.Border
 import Element.Events
 import Element.Font
 import Element.Input exposing (OptionState(..))
-import EmailAddress exposing (EmailAddress)
+import EmailAddress2 exposing (EmailAddress)
 import Helper exposing (Coord)
 import Html
 import Html.Attributes
@@ -107,7 +107,7 @@ frequencyToString frequency =
 validate : InProgressModel -> Maybe Validated
 validate model =
     Maybe.map2 Validated
-        (EmailAddress.fromString model.email)
+        (EmailAddress2.fromString model.email)
         model.frequency
 
 
@@ -225,7 +225,7 @@ view config modelChangedMsg submitMsg closeMsg model =
                             :: button config.devicePixelRatio closeMsg "Cancel"
                             :: (errorMessage <|
                                     if inProgress_.status == FormWithError then
-                                        case ( String.trim inProgress_.email, EmailAddress.fromString inProgress_.email ) of
+                                        case ( String.trim inProgress_.email, EmailAddress2.fromString inProgress_.email ) of
                                             ( "", _ ) ->
                                                 Just "Email missing"
 

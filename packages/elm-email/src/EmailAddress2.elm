@@ -1,4 +1,4 @@
-module EmailAddress exposing (EmailAddress, fromString, toString)
+module EmailAddress2 exposing (EmailAddress, fromString, toString)
 
 {-|
 

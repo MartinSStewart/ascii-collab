@@ -3,8 +3,8 @@ module Backend exposing (app)
 import BackendLogic exposing (Effect(..))
 import Dict
 import Duration
-import Email.Html
-import EmailAddress exposing (EmailAddress)
+import Email.Html2
+import EmailAddress2 exposing (EmailAddress)
 import Env
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty
@@ -47,12 +47,12 @@ subscriptions _ =
         ]
 
 
-asciiCollabEmail : NonemptyString -> Email.Html.Html -> EmailAddress -> PostmarkSend
+asciiCollabEmail : NonemptyString -> Email.Html2.Html -> EmailAddress -> PostmarkSend
 asciiCollabEmail subject content to =
     { from =
         { name = "ascii-collab"
         , email =
-            EmailAddress.fromString "no-reply@ascii-collab.app"
+            EmailAddress2.fromString "no-reply@ascii-collab.app"
                 -- This should never happen
                 |> Maybe.withDefault to
         }

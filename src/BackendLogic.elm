@@ -8,9 +8,9 @@ import Cluster
 import Crypto.Hash
 import Dict
 import Duration exposing (Duration)
-import Email.Html
-import Email.Html.Attributes
-import EmailAddress exposing (EmailAddress)
+import Email.Html.Attributes2
+import Email.Html2
+import EmailAddress2 exposing (EmailAddress)
 import Env
 import Grid exposing (Grid)
 import GridCell
@@ -43,7 +43,7 @@ import User exposing (UserId)
 
 type Effect
     = SendToFrontend ClientId ToFrontend
-    | SendEmail (Result Postmark.SendEmailError () -> BackendMsg) NonemptyString Email.Html.Html EmailAddress
+    | SendEmail (Result Postmark.SendEmailError () -> BackendMsg) NonemptyString Email.Html2.Html EmailAddress
 
 
 init : BackendModel
@@ -186,35 +186,35 @@ sendChangeEmails time model =
         content :
             Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
             -> UnsubscribeEmailKey
-            -> Email.Html.Html
+            -> Email.Html2.Html
         content actualChanges =
             let
                 images =
                     List.map (\( bounds, _ ) -> clusterToImage model actualChanges bounds) (clusters actualChanges)
             in
             \unsubscribeKey ->
-                Email.Html.div
-                    [ Email.Html.Attributes.backgroundColor "rgb(230, 230, 225)"
-                    , Email.Html.Attributes.padding "8px"
+                Email.Html2.div
+                    [ Email.Html.Attributes2.backgroundColor "rgb(230, 230, 225)"
+                    , Email.Html.Attributes2.padding "8px"
                     ]
-                    [ Email.Html.text "Click on an image to view it in ascii-collab"
-                    , Email.Html.div [] images
-                    , Email.Html.hr [] []
-                    , Email.Html.a
+                    [ Email.Html2.text "Click on an image to view it in ascii-collab"
+                    , Email.Html2.div [] images
+                    , Email.Html2.hr [] []
+                    , Email.Html2.a
                         [ UrlHelper.encodeUrl (EmailUnsubscribeRoute unsubscribeKey)
                             |> (++) (Env.domain ++ "/")
-                            |> Email.Html.Attributes.href
+                            |> Email.Html.Attributes2.href
                         ]
-                        [ Email.Html.text "Click here to unsubscribe" ]
+                        [ Email.Html2.text "Click here to unsubscribe" ]
                     , Time.posixToMillis time
                         |> String.fromInt
                         |> (++) "Generated at "
-                        |> Email.Html.text
+                        |> Email.Html2.text
                         |> List.singleton
-                        |> Email.Html.div
-                            [ Email.Html.Attributes.fontSize "12px"
-                            , Email.Html.Attributes.color "rgb(160, 160, 155)"
-                            , Email.Html.Attributes.paddingTop "8px"
+                        |> Email.Html2.div
+                            [ Email.Html.Attributes2.fontSize "12px"
+                            , Email.Html.Attributes2.color "rgb(160, 160, 155)"
+                            , Email.Html.Attributes2.paddingTop "8px"
                             ]
                     ]
 
@@ -269,7 +269,7 @@ clusterToImage :
     { a | grid : Grid, users : Dict.Dict Int { b | hiddenForAll : Bool } }
     -> Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
     -> Bounds CellUnit
-    -> Email.Html.Html
+    -> Email.Html2.Html
 clusterToImage model actualChanges bounds =
     let
         url : String
@@ -378,11 +378,11 @@ clusterToImage model actualChanges bounds =
             []
         |> Image.fromList2d
         |> Image.toPng
-        |> (\image -> Email.Html.inlinePngImg image [] [])
+        |> (\image -> Email.Html2.inlinePngImg image [] [])
         |> List.singleton
-        |> Email.Html.a [ Email.Html.Attributes.href url ]
+        |> Email.Html2.a [ Email.Html.Attributes2.href url ]
         |> List.singleton
-        |> Email.Html.div [ Email.Html.Attributes.style "margin" "8px 0" ]
+        |> Email.Html2.div [ Email.Html.Attributes2.style "margin" "8px 0" ]
 
 
 addError : Time.Posix -> BackendError -> BackendModel -> BackendModel
@@ -425,7 +425,7 @@ notifyAdmin model =
                         (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
                         " users hidden"
                     )
-                    (Email.Html.text hidden)
+                    (Email.Html2.text hidden)
                     adminEmail
                 ]
 
@@ -1044,16 +1044,16 @@ sendConfirmationEmail validated model sessionId userId time =
                 generateKey ConfirmEmailKey model
 
             content =
-                Email.Html.div []
-                    [ Email.Html.a
-                        [ Email.Html.Attributes.href
+                Email.Html2.div []
+                    [ Email.Html2.a
+                        [ Email.Html.Attributes2.href
                             (Env.domain ++ "/" ++ UrlHelper.encodeUrl (EmailConfirmationRoute key))
                         ]
-                        [ Email.Html.text "Click this link" ]
-                    , Email.Html.text
+                        [ Email.Html2.text "Click this link" ]
+                    , Email.Html2.text
                         " to confirm you want to be notified about changes people make on ascii-collab."
-                    , Email.Html.br [] []
-                    , Email.Html.text "If this email was sent to you in error, you can safely ignore it."
+                    , Email.Html2.br [] []
+                    , Email.Html2.text "If this email was sent to you in error, you can safely ignore it."
                     ]
         in
         ( { model2
@@ -1452,8 +1452,8 @@ subscribedEmailCodec =
 emailAddressCodec : Serialize.Codec String EmailAddress
 emailAddressCodec =
     Serialize.mapValid
-        (\a -> EmailAddress.fromString a |> Result.fromMaybe "Invalid email")
-        EmailAddress.toString
+        (\a -> EmailAddress2.fromString a |> Result.fromMaybe "Invalid email")
+        EmailAddress2.toString
         Serialize.string
 
 

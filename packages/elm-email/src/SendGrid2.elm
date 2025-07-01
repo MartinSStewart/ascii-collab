@@ -1,4 +1,4 @@
-module SendGrid exposing (ApiKey, apiKey, textEmail, htmlEmail, addCc, addBcc, addAttachments, sendEmail, sendEmailTask, Email, Error(..), ErrorMessage, ErrorMessage403)
+module SendGrid2 exposing (ApiKey, apiKey, textEmail, htmlEmail, addCc, addBcc, addAttachments, sendEmail, sendEmailTask, Email, Error(..), ErrorMessage, ErrorMessage403)
 
 {-|
 
@@ -8,8 +8,8 @@ module SendGrid exposing (ApiKey, apiKey, textEmail, htmlEmail, addCc, addBcc, a
 
 import Bytes exposing (Bytes)
 import Dict exposing (Dict)
-import Email.Html
-import EmailAddress exposing (EmailAddress)
+import Email.Html2
+import EmailAddress2 exposing (EmailAddress)
 import Http
 import Internal
 import Json.Decode as JD
@@ -42,7 +42,7 @@ encodeContent content =
 
 encodeEmailAddress : EmailAddress -> JE.Value
 encodeEmailAddress =
-    EmailAddress.toString >> JE.string
+    EmailAddress2.toString >> JE.string
 
 
 encodeEmailAndName : { name : String, email : EmailAddress } -> JE.Value
@@ -120,7 +120,7 @@ You can still use `Email.Html.node` and `Email.Html.Attributes.attribute` if you
 -}
 htmlEmail :
     { subject : NonemptyString
-    , content : Email.Html.Html
+    , content : Email.Html2.Html
     , to : Nonempty EmailAddress
     , nameOfSender : String
     , emailAddressOfSender : EmailAddress

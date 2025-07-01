@@ -15,8 +15,8 @@ module Postmark exposing
 
 import Bytes exposing (Bytes)
 import Dict exposing (Dict)
-import Email.Html
-import EmailAddress exposing (EmailAddress)
+import Email.Html2
+import EmailAddress2 exposing (EmailAddress)
 import Http
 import Internal
 import Json.Decode as D
@@ -46,9 +46,9 @@ apiKey apiKey_ =
 
 
 type PostmarkEmailBody
-    = BodyHtml Email.Html.Html
+    = BodyHtml Email.Html2.Html
     | BodyText String
-    | BodyBoth Email.Html.Html String
+    | BodyBoth Email.Html2.Html String
 
 
 
@@ -252,12 +252,12 @@ emailsToString nonEmptyEmails =
 emailToString : { name : String, email : EmailAddress } -> String
 emailToString address =
     if address.name == "" then
-        EmailAddress.toString address.email
+        EmailAddress2.toString address.email
 
     else
         String.filter (\char -> char /= '<' && char /= '>' && char /= ',') address.name
             ++ " <"
-            ++ EmailAddress.toString address.email
+            ++ EmailAddress2.toString address.email
             ++ ">"
 
 
@@ -323,7 +323,7 @@ decodeEmails =
                                     Nothing
 
                                 else
-                                    Just ( trimmed, EmailAddress.fromString trimmed )
+                                    Just ( trimmed, EmailAddress2.fromString trimmed )
                             )
 
                 validEmails : List EmailAddress

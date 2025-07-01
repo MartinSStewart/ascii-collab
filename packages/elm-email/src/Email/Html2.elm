@@ -1,4 +1,4 @@
-module Email.Html exposing
+module Email.Html2 exposing
     ( a, b, br, div, font, h1, h2, h3, h4, h5, h6, hr, img, label, li, node, ol, p, span, strong, table, td, text, th, tr, u, ul, Attribute, Html
     , inlineGifImg, inlineJpgImg, inlinePngImg
     , toHtml

@@ -12,6 +12,7 @@
             "Chadtech/elm-vector": "3.0.2",
             "MartinSStewart/elm-nonempty-string": "2.0.0",
             "MartinSStewart/elm-serialize": "1.3.1",
+            "MartinSStewart/send-grid": "4.1.3",
             "danfishgold/base64-bytes": "1.1.0",
             "elm/browser": "1.0.2",
             "elm/bytes": "1.0.8",
