@@ -1,4 +1,4 @@
-module Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, asciiToWorld, asciiUnit, cellToAscii, cellToAscii_, cellUnit, inWorldUnits, pixelToWorldPixel, screenFrame, worldToAscii, worldUnit)
+module Units exposing (AsciiUnit(..), CellUnit(..), ScreenCoordinate(..), WorldCoordinate(..), WorldPixel(..), asciiToWorld, asciiUnit, cellToAscii, cellToAscii_, cellUnit, inWorldUnits, pixelToWorldPixel, screenFrame, worldToAscii, worldUnit)
 
 import Ascii
 import Frame2d exposing (Frame2d)
