@@ -1,4 +1,4 @@
-module Ascii exposing (Ascii(..), asciiChars, asciis, charsPerRow, default, fromChar, fromInt, image, intensity, size, textureData, textureHeight, texturePosition, texturePositionInt, textureWidth, toChar, toInt)
+module Ascii exposing (Ascii(..), asciiChars, asciis, charsPerRow, codec, default, fromChar, fromInt, image, intensity, size, textureData, textureHeight, texturePosition, texturePositionInt, textureWidth, toChar, toInt)
 
 import Array exposing (Array)
 import Base64
@@ -11,6 +11,7 @@ import List.Nonempty exposing (Nonempty)
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Quantity exposing (Quantity)
+import Serialize
 
 
 asciiChars : List Char
@@ -104,6 +105,11 @@ textureHeight =
 
 type Ascii
     = Ascii Int
+
+
+codec : Serialize.Codec e Ascii
+codec =
+    Serialize.map Ascii (\(Ascii a) -> a) Serialize.byte
 
 
 toInt : Ascii -> Int

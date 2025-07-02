@@ -20,6 +20,9 @@ import Element.Font
 import Element.Input
 import Env
 import EverySet exposing (EverySet)
+import File
+import File.Download as Download
+import File.Select
 import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord)
@@ -651,6 +654,18 @@ updateLoaded msg model =
 
         NotifyMeModelChanged notifyMeModel ->
             ( { model | notifyMeModel = notifyMeModel }, Cmd.none )
+
+        ExportBackendPressed ->
+            ( model, Lamdera.sendToBackend ExportBackend )
+
+        ImportBackendPressed ->
+            ( model, File.Select.file [ "application/octet-stream" ] FileSelected )
+
+        FileSelected file ->
+            ( model, Task.perform FileLoaded (File.toBytes file) )
+
+        FileLoaded bytes ->
+            ( model, Lamdera.sendToBackend (ImportBackend bytes) )
 
 
 closeNotifyMe : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
@@ -1408,6 +1423,13 @@ updateLoadedFromBackend msg model =
         UnsubscribeEmailConfirmed ->
             ( { model | notifyMeModel = NotifyMe.unsubscribed model.notifyMeModel }, Cmd.none )
 
+        BackendExported bytes ->
+            ( model, Download.bytes "ascii-collab-export" "application/octet-stream" bytes )
+
+        BackendImported result ->
+            -- You could add user feedback here (e.g., show success/error message)
+            ( model, Cmd.none )
+
 
 textarea : Maybe Hyperlink -> FrontendLoaded -> Element.Attribute FrontendMsg
 textarea maybeHyperlink model =
@@ -1860,6 +1882,52 @@ userListView model =
 
         showHiddenUsersForAll =
             not (List.isEmpty hiddenUsersForAll) && isAdmin model
+
+        exportButton =
+            if isAdmin model then
+                Element.Input.button
+                    [ Element.Background.color UiColors.button
+                    , Element.mouseOver [ Element.Background.color UiColors.buttonActive ]
+                    , Element.Border.color UiColors.border
+                    , Element.Border.width 1
+                    , Element.Border.rounded 2
+                    , Element.padding 8
+                    , Element.width Element.fill
+                    ]
+                    { onPress = Just ExportBackendPressed
+                    , label = Element.el [ Element.centerX ] (Element.text "Export backend")
+                    }
+
+            else
+                Element.none
+
+        importButton =
+            if isAdmin model then
+                Element.Input.button
+                    [ Element.Background.color UiColors.button
+                    , Element.mouseOver [ Element.Background.color UiColors.buttonActive ]
+                    , Element.Border.color UiColors.border
+                    , Element.Border.width 1
+                    , Element.Border.rounded 2
+                    , Element.padding 8
+                    , Element.width Element.fill
+                    ]
+                    { onPress = Just ImportBackendPressed
+                    , label =
+                        Element.text
+                            ("Import to "
+                                ++ (if Env.isProduction then
+                                        "prod"
+
+                                    else
+                                        "dev"
+                                   )
+                            )
+                            |> Element.el [ Element.centerX ]
+                    }
+
+            else
+                Element.none
     in
     Element.column
         [ Element.Background.color UiColors.background
@@ -1898,6 +1966,8 @@ userListView model =
 
           else
             Element.none
+        , exportButton
+        , importButton
         ]
 
 
