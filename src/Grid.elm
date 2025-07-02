@@ -341,7 +341,7 @@ cellCodec =
                         (Serialize.record
                             (\userId position line -> { userId = userId, position = position, line = line })
                             |> Serialize.field .userId User.codec
-                            |> Serialize.field .position Serialize.int
+                            |> Serialize.field .position Serialize.byte
                             |> Serialize.field .line (nonemptyCodec Ascii.codec)
                             |> Serialize.finishRecord
                         )
