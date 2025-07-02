@@ -3,11 +3,11 @@ module LocalGrid exposing (LocalGrid, LocalGrid_, incrementUndoCurrent, init, lo
 import Bounds exposing (Bounds)
 import Change exposing (Change(..), ClientChange(..), LocalChange(..), ServerChange(..))
 import Dict exposing (Dict)
-import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import Helper exposing (Coord, RawCellCoord)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
+import SeqSet exposing (SeqSet)
 import Time
 import Undo
 import Units exposing (CellUnit)
@@ -23,8 +23,8 @@ type alias LocalGrid_ =
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , user : UserId
-    , hiddenUsers : EverySet UserId
-    , adminHiddenUsers : EverySet UserId
+    , hiddenUsers : SeqSet UserId
+    , adminHiddenUsers : SeqSet UserId
     , viewBounds : Bounds CellUnit
     , undoCurrent : Dict RawCellCoord Int
     }
@@ -38,8 +38,8 @@ localModel localModel_ =
 init :
     { user : UserId
     , grid : Grid
-    , hiddenUsers : EverySet UserId
-    , adminHiddenUsers : EverySet UserId
+    , hiddenUsers : SeqSet UserId
+    , adminHiddenUsers : SeqSet UserId
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
@@ -119,7 +119,7 @@ update_ msg model =
                         model.hiddenUsers
 
                     else
-                        EverySet.insert userId_ model.hiddenUsers
+                        SeqSet.insert userId_ model.hiddenUsers
             }
 
         LocalChange (LocalUnhideUser userId_) ->
@@ -129,7 +129,7 @@ update_ msg model =
                         model.hiddenUsers
 
                     else
-                        EverySet.remove userId_ model.hiddenUsers
+                        SeqSet.remove userId_ model.hiddenUsers
             }
 
         LocalChange (LocalToggleUserVisibilityForAll hideUserId) ->

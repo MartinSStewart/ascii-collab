@@ -9,11 +9,10 @@ import Cluster
 import Crypto.Hash
 import Dict
 import Duration exposing (Duration)
-import Email.Html
-import Email.Html.Attributes
-import EmailAddress exposing (EmailAddress)
+import Email.Html.Attributes2
+import Email.Html2
+import EmailAddress2 exposing (EmailAddress)
 import Env
-import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord, RawCellCoord)
@@ -26,9 +25,11 @@ import LocalGrid
 import NonemptyExtra as Nonempty
 import NotifyMe exposing (Frequency(..))
 import Pixels
+import Postmark
 import Quantity exposing (Quantity(..))
 import RecentChanges
-import SendGrid
+import SeqDict
+import SeqSet exposing (SeqSet)
 import Serialize
 import Set
 import Shaders
@@ -43,7 +44,7 @@ import User exposing (UserId)
 
 type Effect
     = SendToFrontend ClientId ToFrontend
-    | SendEmail (Result SendGrid.Error () -> BackendMsg) NonemptyString Email.Html.Html EmailAddress
+    | SendEmail (Result Postmark.SendEmailError () -> BackendMsg) NonemptyString Email.Html2.Html EmailAddress
 
 
 init : BackendModel
@@ -119,14 +120,14 @@ update msg model =
                 Err error ->
                     case Env.adminEmail of
                         Just adminEmail ->
-                            addError timeSent (SendGridError adminEmail error) model
+                            addError timeSent (PostmarkError adminEmail error) model
 
                         Nothing ->
                             model
             , broadcast
                 (\sessionId_ _ ->
                     if sessionId_ == sessionId then
-                        NotifyMeEmailSent { isSuccessful = result == Ok () } |> Just
+                        Just (NotifyMeEmailSent { isSuccessful = result == Ok () })
 
                     else
                         Nothing
@@ -138,12 +139,14 @@ update msg model =
             updateFromFrontend time sessionId clientId toBackendMsg model
 
         ChangeEmailSent time email result ->
-            case result of
-                Ok _ ->
-                    ( model, [] )
+            ( case result of
+                Ok () ->
+                    model
 
                 Err error ->
-                    ( addError time (SendGridError email error) model, [] )
+                    addError time (PostmarkError email error) model
+            , []
+            )
 
 
 sendChangeEmails : Time.Posix -> BackendModel -> ( BackendModel, List Effect )
@@ -184,35 +187,35 @@ sendChangeEmails time model =
         content :
             Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
             -> UnsubscribeEmailKey
-            -> Email.Html.Html
+            -> Email.Html2.Html
         content actualChanges =
             let
                 images =
                     List.map (\( bounds, _ ) -> clusterToImage model actualChanges bounds) (clusters actualChanges)
             in
             \unsubscribeKey ->
-                Email.Html.div
-                    [ Email.Html.Attributes.backgroundColor "rgb(230, 230, 225)"
-                    , Email.Html.Attributes.padding "8px"
+                Email.Html2.div
+                    [ Email.Html.Attributes2.backgroundColor "rgb(230, 230, 225)"
+                    , Email.Html.Attributes2.padding "8px"
                     ]
-                    [ Email.Html.text "Click on an image to view it in ascii-collab"
-                    , Email.Html.div [] images
-                    , Email.Html.hr [] []
-                    , Email.Html.a
+                    [ Email.Html2.text "Click on an image to view it in ascii-collab"
+                    , Email.Html2.div [] images
+                    , Email.Html2.hr [] []
+                    , Email.Html2.a
                         [ UrlHelper.encodeUrl (EmailUnsubscribeRoute unsubscribeKey)
                             |> (++) (Env.domain ++ "/")
-                            |> Email.Html.Attributes.href
+                            |> Email.Html.Attributes2.href
                         ]
-                        [ Email.Html.text "Click here to unsubscribe" ]
+                        [ Email.Html2.text "Click here to unsubscribe" ]
                     , Time.posixToMillis time
                         |> String.fromInt
                         |> (++) "Generated at "
-                        |> Email.Html.text
+                        |> Email.Html2.text
                         |> List.singleton
-                        |> Email.Html.div
-                            [ Email.Html.Attributes.fontSize "12px"
-                            , Email.Html.Attributes.color "rgb(160, 160, 155)"
-                            , Email.Html.Attributes.paddingTop "8px"
+                        |> Email.Html2.div
+                            [ Email.Html.Attributes2.fontSize "12px"
+                            , Email.Html.Attributes2.color "rgb(160, 160, 155)"
+                            , Email.Html.Attributes2.paddingTop "8px"
                             ]
                     ]
 
@@ -267,7 +270,7 @@ clusterToImage :
     { a | grid : Grid, users : Dict.Dict Int { b | hiddenForAll : Bool } }
     -> Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
     -> Bounds CellUnit
-    -> Email.Html.Html
+    -> Email.Html2.Html
 clusterToImage model actualChanges bounds =
     let
         url : String
@@ -299,7 +302,7 @@ clusterToImage model actualChanges bounds =
                         Nothing ->
                             Grid.getCell coord model.grid
                                 |> Maybe.withDefault GridCell.empty
-                                |> GridCell.flatten EverySet.empty (hiddenUsers Nothing model)
+                                |> GridCell.flatten SeqSet.empty (hiddenUsers Nothing model)
                                 |> Array.map (\( _, ascii ) -> ( Nothing, ascii ))
 
                 slices : List (List ( Maybe UserId, Ascii ))
@@ -376,11 +379,11 @@ clusterToImage model actualChanges bounds =
             []
         |> Image.fromList2d
         |> Image.toPng
-        |> (\image -> Email.Html.inlinePngImg image [] [])
+        |> (\image -> Email.Html2.inlinePngImg image [] [])
         |> List.singleton
-        |> Email.Html.a [ Email.Html.Attributes.href url ]
+        |> Email.Html2.a [ Email.Html.Attributes2.href url ]
         |> List.singleton
-        |> Email.Html.div [ Email.Html.Attributes.style "margin" "8px 0" ]
+        |> Email.Html2.div [ Email.Html.Attributes2.style "margin" "8px 0" ]
 
 
 addError : Time.Posix -> BackendError -> BackendModel -> BackendModel
@@ -423,7 +426,7 @@ notifyAdmin model =
                         (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
                         " users hidden"
                     )
-                    (Email.Html.text hidden)
+                    (Email.Html2.text hidden)
                     adminEmail
                 ]
 
@@ -442,8 +445,8 @@ diffCells model before after =
             else
                 after_
         )
-        (GridCell.flatten EverySet.empty (hiddenUsers Nothing model) before |> Array.toList)
-        (GridCell.flatten EverySet.empty (hiddenUsers Nothing model) after |> Array.toList)
+        (GridCell.flatten SeqSet.empty (hiddenUsers Nothing model) before |> Array.toList)
+        (GridCell.flatten SeqSet.empty (hiddenUsers Nothing model) after |> Array.toList)
         |> Array.fromList
 
 
@@ -570,7 +573,7 @@ timestamp currentTime nextUpdate =
         ++ "."
 
 
-statistics : EverySet UserId -> Bounds AsciiUnit -> Grid -> Nonempty ( Ascii, Int )
+statistics : SeqSet UserId -> Bounds AsciiUnit -> Grid -> Nonempty ( Ascii, Int )
 statistics hiddenUsers_ bounds grid =
     let
         cells =
@@ -601,7 +604,7 @@ statistics hiddenUsers_ bounds grid =
 
         countCell : Coord CellUnit -> GridCell.Cell -> Nonempty ( Ascii, Int ) -> Nonempty ( Ascii, Int )
         countCell coord cell acc =
-            GridCell.flatten EverySet.empty hiddenUsers_ cell
+            GridCell.flatten SeqSet.empty hiddenUsers_ cell
                 |> Array.foldl
                     (\( _, value ) ( acc_, index ) ->
                         ( if Bounds.contains (Grid.cellAndLocalCoordToAscii ( coord, index )) bounds then
@@ -632,7 +635,7 @@ statistics hiddenUsers_ bounds grid =
                         countCell coord cell acc
 
                     else
-                        GridCell.flatten EverySet.empty hiddenUsers_ cell
+                        GridCell.flatten SeqSet.empty hiddenUsers_ cell
                             |> Array.foldl
                                 (\( _, value ) acc_ ->
                                     Nonempty.updateFirst (Tuple.first >> (==) value) (Tuple.mapSecond ((+) 1)) acc_
@@ -654,7 +657,7 @@ statistics hiddenUsers_ bounds grid =
         initialCount
 
 
-generateMap : EverySet UserId -> Bounds CellUnit -> Grid -> Nonempty (List Ascii)
+generateMap : SeqSet UserId -> Bounds CellUnit -> Grid -> Nonempty (List Ascii)
 generateMap hiddenUsers_ bounds grid =
     let
         cells =
@@ -665,7 +668,7 @@ generateMap hiddenUsers_ bounds grid =
                         if Bounds.contains (Helper.fromRawCoord ( x, y )) bounds then
                             let
                                 flattened =
-                                    GridCell.flatten EverySet.empty hiddenUsers_ cell |> Array.toList
+                                    GridCell.flatten SeqSet.empty hiddenUsers_ cell |> Array.toList
 
                                 halfCell =
                                     GridCell.cellSize // 2
@@ -1042,16 +1045,16 @@ sendConfirmationEmail validated model sessionId userId time =
                 generateKey ConfirmEmailKey model
 
             content =
-                Email.Html.div []
-                    [ Email.Html.a
-                        [ Email.Html.Attributes.href
+                Email.Html2.div []
+                    [ Email.Html2.a
+                        [ Email.Html.Attributes2.href
                             (Env.domain ++ "/" ++ UrlHelper.encodeUrl (EmailConfirmationRoute key))
                         ]
-                        [ Email.Html.text "Click this link" ]
-                    , Email.Html.text
+                        [ Email.Html2.text "Click this link" ]
+                    , Email.Html2.text
                         " to confirm you want to be notified about changes people make on ascii-collab."
-                    , Email.Html.br [] []
-                    , Email.Html.text "If this email was sent to you in error, you can safely ignore it."
+                    , Email.Html2.br [] []
+                    , Email.Html2.text "If this email was sent to you in error, you can safely ignore it."
                     ]
         in
         ( { model2
@@ -1237,7 +1240,7 @@ updateUser userId updateUserFunc model =
 hiddenUsers :
     Maybe UserId
     -> { a | users : Dict.Dict Int { b | hiddenForAll : Bool } }
-    -> EverySet UserId
+    -> SeqSet UserId
 hiddenUsers userId model =
     model.users
         |> Dict.toList
@@ -1249,7 +1252,7 @@ hiddenUsers userId model =
                 else
                     Nothing
             )
-        |> EverySet.fromList
+        |> SeqSet.fromList
 
 
 requestDataUpdate : SessionId -> ClientId -> Bounds CellUnit -> BackendModel -> ( BackendModel, List Effect )
@@ -1312,7 +1315,7 @@ createUser userId model =
     let
         userBackendData : BackendUserData
         userBackendData =
-            { hiddenUsers = EverySet.empty
+            { hiddenUsers = SeqSet.empty
             , hiddenForAll = False
             , undoHistory = []
             , redoHistory = []
@@ -1382,11 +1385,11 @@ backendUserDataCodec =
         |> Serialize.finishRecord
 
 
-seqSetCodec : Serialize.Codec e a -> Serialize.Codec e (EverySet a)
+seqSetCodec : Serialize.Codec e a -> Serialize.Codec e (SeqSet a)
 seqSetCodec a =
     Serialize.map
-        EverySet.fromList
-        EverySet.toList
+        SeqSet.fromList
+        SeqSet.toList
         (Serialize.list a)
 
 
@@ -1426,11 +1429,11 @@ recentChangesCodec =
         |> Serialize.finishCustomType
 
 
-seqDictCodec : Serialize.Codec e a -> Serialize.Codec e b -> Serialize.Codec e (AssocList.Dict a b)
+seqDictCodec : Serialize.Codec e a -> Serialize.Codec e b -> Serialize.Codec e (SeqDict.SeqDict a b)
 seqDictCodec a b =
     Serialize.map
-        AssocList.fromList
-        AssocList.toList
+        SeqDict.fromList
+        SeqDict.toList
         (Serialize.list (Serialize.tuple a b))
 
 
@@ -1448,8 +1451,8 @@ subscribedEmailCodec =
 emailAddressCodec : Serialize.Codec String EmailAddress
 emailAddressCodec =
     Serialize.mapValid
-        (\a -> EmailAddress.fromString a |> Result.fromMaybe "Invalid email")
-        EmailAddress.toString
+        (\a -> EmailAddress2.fromString a |> Result.fromMaybe "Invalid email")
+        EmailAddress2.toString
         Serialize.string
 
 

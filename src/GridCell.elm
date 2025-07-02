@@ -3,8 +3,8 @@ module GridCell exposing (Cell(..), addLine, cellSize, changeCount, empty, flatt
 import Array exposing (Array)
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
-import EverySet exposing (EverySet)
 import List.Nonempty exposing (Nonempty)
+import SeqSet exposing (SeqSet)
 import User exposing (RawUserId, UserId)
 
 
@@ -73,15 +73,15 @@ changeCount (Cell { history }) =
     List.length history
 
 
-flatten : EverySet UserId -> EverySet UserId -> Cell -> Array ( Maybe UserId, Ascii )
+flatten : SeqSet UserId -> SeqSet UserId -> Cell -> Array ( Maybe UserId, Ascii )
 flatten hiddenUsers hiddenUsersForAll (Cell cell) =
     let
         hidden =
-            EverySet.union hiddenUsers hiddenUsersForAll
+            SeqSet.union hiddenUsers hiddenUsersForAll
     in
     List.foldr
         (\{ userId, position, line } state ->
-            if EverySet.member userId hidden then
+            if SeqSet.member userId hidden then
                 state
 
             else

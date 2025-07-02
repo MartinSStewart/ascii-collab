@@ -1,6 +1,5 @@
 module RecentChanges exposing (RecentChanges(..), addChange, init, threeHoursElapsed, undoRedoChange)
 
-import AssocList
 import Dict exposing (Dict)
 import Grid exposing (Grid)
 import GridCell
@@ -8,12 +7,13 @@ import Helper exposing (Coord, RawCellCoord)
 import List.Extra as List
 import NotifyMe exposing (Frequency(..), ThreeHours)
 import Quantity exposing (Quantity(..))
+import SeqDict exposing (SeqDict)
 import Units exposing (CellUnit)
 
 
 type RecentChanges
     = RecentChanges
-        { frequencies : AssocList.Dict Frequency (Dict RawCellCoord GridCell.Cell)
+        { frequencies : SeqDict Frequency (Dict RawCellCoord GridCell.Cell)
         , threeHoursElapsed : Quantity Int ThreeHours
         }
 
@@ -26,9 +26,9 @@ init =
         }
 
 
-noFrequencies : AssocList.Dict Frequency (Dict k v)
+noFrequencies : SeqDict Frequency (Dict k v)
 noFrequencies =
-    NotifyMe.frequencies |> List.map (\a -> ( a, Dict.empty )) |> AssocList.fromList
+    NotifyMe.frequencies |> List.map (\a -> ( a, Dict.empty )) |> SeqDict.fromList
 
 
 addChange : Coord CellUnit -> GridCell.Cell -> RecentChanges -> RecentChanges
@@ -36,7 +36,7 @@ addChange coord originalCell (RecentChanges recentChanges) =
     RecentChanges
         { recentChanges
             | frequencies =
-                AssocList.update
+                SeqDict.update
                     Every3Hours
                     (Maybe.withDefault Dict.empty
                         >> Dict.update (Helper.toRawCoord coord) (Maybe.withDefault originalCell >> Just)
@@ -62,7 +62,7 @@ addChanges frequency coords (RecentChanges recentChanges) =
     RecentChanges
         { recentChanges
             | frequencies =
-                AssocList.update
+                SeqDict.update
                     frequency
                     (\maybeDict -> Dict.union (Maybe.withDefault Dict.empty maybeDict) coords |> Just)
                     recentChanges.frequencies
@@ -97,10 +97,10 @@ threeHoursElapsed (RecentChanges recentChanges) =
                     )
                 |> List.head
 
-        allReadyFrequencies : AssocList.Dict Frequency (Dict RawCellCoord GridCell.Cell)
+        allReadyFrequencies : SeqDict Frequency (Dict RawCellCoord GridCell.Cell)
         allReadyFrequencies =
             recentChanges.frequencies
-                |> AssocList.filter
+                |> SeqDict.filter
                     (\frequency _ ->
                         NotifyMe.duration frequency
                             |> Quantity.lessThanOrEqualTo (NotifyMe.duration longestFrequencyReady_)
@@ -109,7 +109,7 @@ threeHoursElapsed (RecentChanges recentChanges) =
         changes : List ( Frequency, Dict RawCellCoord GridCell.Cell )
         changes =
             allReadyFrequencies
-                |> AssocList.toList
+                |> SeqDict.toList
                 |> Quantity.sortBy (Tuple.first >> NotifyMe.duration)
                 |> List.foldl
                     (\( frequency, change ) list ->
@@ -128,12 +128,12 @@ threeHoursElapsed (RecentChanges recentChanges) =
                 { recentChanges
                     | frequencies =
                         recentChanges.frequencies
-                            |> AssocList.filter
+                            |> SeqDict.filter
                                 (\frequency _ ->
                                     NotifyMe.duration frequency
                                         |> Quantity.greaterThan (NotifyMe.duration longestFrequencyReady_)
                                 )
-                            |> (\a -> AssocList.union a noFrequencies)
+                            |> (\a -> SeqDict.union a noFrequencies)
                     , threeHoursElapsed = Quantity.plus recentChanges.threeHoursElapsed (Quantity 1)
                 }
     in
