@@ -124,6 +124,7 @@ loadedInit loading loadingData =
             , showNotifyMe = loading.showNotifyMe
             , notifyMeModel = loading.notifyMeModel
             , textAreaText = ""
+            , backendImported = NotImported
             }
     in
     ( updateMeshes model model
@@ -659,7 +660,9 @@ updateLoaded msg model =
             ( model, Lamdera.sendToBackend ExportBackend )
 
         ImportBackendPressed ->
-            ( model, File.Select.file [ "application/octet-stream" ] FileSelected )
+            ( { model | backendImported = Importing }
+            , File.Select.file [ "application/octet-stream" ] FileSelected
+            )
 
         FileSelected file ->
             ( model, Task.perform FileLoaded (File.toBytes file) )
@@ -1428,7 +1431,17 @@ updateLoadedFromBackend msg model =
 
         BackendImported result ->
             -- You could add user feedback here (e.g., show success/error message)
-            ( model, Cmd.none )
+            ( { model
+                | backendImported =
+                    case result of
+                        Ok () ->
+                            ImportedSuccessfully
+
+                        Err () ->
+                            ImportFailed
+              }
+            , Cmd.none
+            )
 
 
 textarea : Maybe Hyperlink -> FrontendLoaded -> Element.Attribute FrontendMsg
@@ -1915,13 +1928,24 @@ userListView model =
                     { onPress = Just ImportBackendPressed
                     , label =
                         Element.text
-                            ("Import to "
-                                ++ (if Env.isProduction then
-                                        "prod"
+                            (case model.backendImported of
+                                NotImported ->
+                                    "Import to "
+                                        ++ (if Env.isProduction then
+                                                "prod"
 
-                                    else
-                                        "dev"
-                                   )
+                                            else
+                                                "dev"
+                                           )
+
+                                Importing ->
+                                    "Importing..."
+
+                                ImportedSuccessfully ->
+                                    "Import success"
+
+                                ImportFailed ->
+                                    "Import failed"
                             )
                             |> Element.el [ Element.centerX ]
                     }

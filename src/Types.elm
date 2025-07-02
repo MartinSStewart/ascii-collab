@@ -1,5 +1,6 @@
 module Types exposing
     ( BackendError(..)
+    , BackendImported(..)
     , BackendModel
     , BackendMsg(..)
     , BackendUserData
@@ -99,7 +100,15 @@ type alias FrontendLoaded =
     , showNotifyMe : Bool
     , notifyMeModel : NotifyMe.Model
     , textAreaText : String
+    , backendImported : BackendImported
     }
+
+
+type BackendImported
+    = NotImported
+    | Importing
+    | ImportedSuccessfully
+    | ImportFailed
 
 
 type ToolType
