@@ -10,6 +10,7 @@
     "dependencies": {
         "direct": {
             "Chadtech/elm-vector": "3.0.2",
+            "Gizra/elm-all-set": "1.0.1",
             "MartinSStewart/elm-nonempty-string": "2.0.0",
             "MartinSStewart/elm-serialize": "1.3.1",
             "MartinSStewart/send-grid": "4.1.3",
