@@ -22,7 +22,7 @@ import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import NonemptyExtra as Nonempty
-import NotifyMe
+import NotifyMe exposing (Frequency(..))
 import Pixels
 import Postmark
 import Quantity exposing (Quantity(..))
@@ -1459,30 +1459,7 @@ emailAddressCodec =
 
 frequencyCodec : Serialize.Codec e NotifyMe.Frequency
 frequencyCodec =
-    Serialize.customType
-        (\every3HoursEncoder every12HoursEncoder dailyEncoder weeklyEncoder monthlyEncoder value ->
-            case value of
-                NotifyMe.Every3Hours ->
-                    every3HoursEncoder
-
-                NotifyMe.Every12Hours ->
-                    every12HoursEncoder
-
-                NotifyMe.Daily ->
-                    dailyEncoder
-
-                NotifyMe.Weekly ->
-                    weeklyEncoder
-
-                NotifyMe.Monthly ->
-                    monthlyEncoder
-        )
-        |> Serialize.variant0 NotifyMe.Every3Hours
-        |> Serialize.variant0 NotifyMe.Every12Hours
-        |> Serialize.variant0 NotifyMe.Daily
-        |> Serialize.variant0 NotifyMe.Weekly
-        |> Serialize.variant0 NotifyMe.Monthly
-        |> Serialize.finishCustomType
+    Serialize.enum Every3Hours [ Every12Hours, Daily, Weekly, Monthly ]
 
 
 unsubscribeEmailKeyCodec : Serialize.Codec e UnsubscribeEmailKey
