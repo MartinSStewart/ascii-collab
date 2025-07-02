@@ -2,6 +2,7 @@ module BackendLogic exposing (Effect(..), init, notifyAdminWait, sendConfirmatio
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
+import AssocList
 import Bounds exposing (Bounds)
 import Change exposing (ClientChange(..), ServerChange(..))
 import Cluster
@@ -28,6 +29,7 @@ import Pixels
 import Quantity exposing (Quantity(..))
 import RecentChanges
 import SendGrid
+import Serialize
 import Set
 import Shaders
 import String.Nonempty exposing (NonemptyString(..))
@@ -1330,7 +1332,7 @@ broadcast msgFunc model =
 
 backendModelToJson : Serialize.Codec String BackendModel
 backendModelToJson =
-    Serialize.record BackendModel
+    Serialize.record (\a b c d e f g h -> BackendModel a b c d e f g h [] 0)
         |> Serialize.field .grid Grid.gridCodec
         |> Serialize.field
             .userSessions
@@ -1362,8 +1364,6 @@ backendModelToJson =
         |> Serialize.field .subscribedEmails (Serialize.list subscribedEmailCodec)
         |> Serialize.field .pendingEmails (Serialize.list pendingEmailCodec)
         |> Serialize.field .secretLinkCounter Serialize.int
-        |> Serialize.field .errors (Serialize.list (Serialize.tuple posixCodec backendErrorCodec))
-        |> Serialize.field .dummyField Serialize.int
         |> Serialize.finishRecord
 
 
@@ -1382,11 +1382,11 @@ backendUserDataCodec =
         |> Serialize.finishRecord
 
 
-seqSetCodec : Serialize.Codec e a -> Serialize.Codec e (SeqSet a)
+seqSetCodec : Serialize.Codec e a -> Serialize.Codec e (EverySet a)
 seqSetCodec a =
     Serialize.map
-        SeqSet.fromList
-        SeqSet.toList
+        EverySet.fromList
+        EverySet.toList
         (Serialize.list a)
 
 
@@ -1426,11 +1426,11 @@ recentChangesCodec =
         |> Serialize.finishCustomType
 
 
-seqDictCodec : Serialize.Codec e a -> Serialize.Codec e b -> Serialize.Codec e (SeqDict.SeqDict a b)
+seqDictCodec : Serialize.Codec e a -> Serialize.Codec e b -> Serialize.Codec e (AssocList.Dict a b)
 seqDictCodec a b =
     Serialize.map
-        SeqDict.fromList
-        SeqDict.toList
+        AssocList.fromList
+        AssocList.toList
         (Serialize.list (Serialize.tuple a b))
 
 
@@ -1522,58 +1522,3 @@ posixCodec =
         Time.millisToPosix
         Time.posixToMillis
         Serialize.int
-
-
-backendErrorCodec : Serialize.Codec String BackendError
-backendErrorCodec =
-    Serialize.customType
-        (\postmarkErrorEncoder value ->
-            case value of
-                PostmarkError arg0 arg1 ->
-                    postmarkErrorEncoder arg0 arg1
-        )
-        |> Serialize.variant2 PostmarkError emailAddressCodec sendEmailErrorCodec
-        |> Serialize.finishCustomType
-
-
-sendEmailErrorCodec : Serialize.Codec String Postmark.SendEmailError
-sendEmailErrorCodec =
-    Serialize.customType
-        (\unknownErrorEncoder postmarkErrorEncoder networkErrorEncoder timeoutEncoder badUrlEncoder value ->
-            case value of
-                Postmark.UnknownError arg0 ->
-                    unknownErrorEncoder arg0
-
-                Postmark.PostmarkError arg0 ->
-                    postmarkErrorEncoder arg0
-
-                Postmark.NetworkError ->
-                    networkErrorEncoder
-
-                Postmark.Timeout ->
-                    timeoutEncoder
-
-                Postmark.BadUrl arg0 ->
-                    badUrlEncoder arg0
-        )
-        |> Serialize.variant1
-            Postmark.UnknownError
-            (Serialize.record (\statusCode body -> { statusCode = statusCode, body = body })
-                |> Serialize.field .statusCode Serialize.int
-                |> Serialize.field .body Serialize.string
-                |> Serialize.finishRecord
-            )
-        |> Serialize.variant1 Postmark.PostmarkError postmarkSendResponseCodec
-        |> Serialize.variant0 Postmark.NetworkError
-        |> Serialize.variant0 Postmark.Timeout
-        |> Serialize.variant1 Postmark.BadUrl Serialize.string
-        |> Serialize.finishCustomType
-
-
-postmarkSendResponseCodec : Serialize.Codec String Postmark.PostmarkSendResponse
-postmarkSendResponseCodec =
-    Serialize.record Postmark.PostmarkSendResponse
-        |> Serialize.field .errorCode Serialize.int
-        |> Serialize.field .message Serialize.string
-        |> Serialize.field .to (Serialize.list emailAddressCodec)
-        |> Serialize.finishRecord
