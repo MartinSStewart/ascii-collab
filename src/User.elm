@@ -1,4 +1,6 @@
-module User exposing (RawUserId, UserId(..), rawId, userId)
+module User exposing (RawUserId, UserId(..), codec, rawId, userId)
+
+import Serialize
 
 
 type UserId
@@ -17,3 +19,8 @@ userId index =
 rawId : UserId -> Int
 rawId (UserId userId_) =
     userId_
+
+
+codec : Serialize.Codec e UserId
+codec =
+    Serialize.map UserId rawId Serialize.int

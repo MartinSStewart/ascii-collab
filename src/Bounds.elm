@@ -4,6 +4,7 @@ module Bounds exposing
     , bounds
     , boundsToBounds2d
     , center
+    , codec
     , contains
     , containsBounds
     , convert
@@ -26,10 +27,34 @@ import List.Nonempty exposing (Nonempty)
 import NonemptyExtra as Nonempty
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
+import Serialize exposing (Codec)
 
 
 type Bounds unit
     = Bounds { min : Coord unit, max : Coord unit }
+
+
+codec : Codec e (Bounds unit)
+codec =
+    Serialize.customType
+        (\boundsEncoder value ->
+            case value of
+                Bounds arg0 ->
+                    boundsEncoder arg0
+        )
+        |> Serialize.variant1
+            Bounds
+            (Serialize.record (\min max -> { min = min, max = max })
+                |> Serialize.field .min (Serialize.tuple quantityInt quantityInt)
+                |> Serialize.field .max (Serialize.tuple quantityInt quantityInt)
+                |> Serialize.finishRecord
+            )
+        |> Serialize.finishCustomType
+
+
+quantityInt : Codec e (Quantity Int unit)
+quantityInt =
+    Serialize.map Quantity.unsafe Quantity.unwrap Serialize.int
 
 
 width : Bounds unit -> Quantity Int unit

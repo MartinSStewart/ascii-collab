@@ -9,10 +9,12 @@ module Grid exposing
     , asciiBox
     , asciiToCellAndLocalCoord
     , cellAndLocalCoordToAscii
+    , cellCodec
     , changeCount
     , empty
     , from
     , getCell
+    , gridCodec
     , localChangeToChange
     , mesh
     , moveUndoPoint
@@ -32,6 +34,7 @@ import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
 import Pixels
 import Quantity exposing (Quantity(..))
+import Serialize
 import Units exposing (CellUnit)
 import User exposing (UserId)
 import WebGL
@@ -307,3 +310,55 @@ removeUser userId grid =
     allCellsDict grid
         |> Dict.map (\_ cell -> GridCell.removeUser userId cell)
         |> from
+
+
+gridCodec : Serialize.Codec e Grid
+gridCodec =
+    Serialize.customType
+        (\gridEncoder value ->
+            case value of
+                Grid arg0 ->
+                    gridEncoder arg0
+        )
+        |> Serialize.variant1 Grid (Serialize.dict (Serialize.tuple Serialize.int Serialize.int) cellCodec)
+        |> Serialize.finishCustomType
+
+
+cellCodec : Serialize.Codec e GridCell.Cell
+cellCodec =
+    Serialize.customType
+        (\cellEncoder value ->
+            case value of
+                GridCell.Cell arg0 ->
+                    cellEncoder arg0
+        )
+        |> Serialize.variant1
+            GridCell.Cell
+            (Serialize.record (\history undoPoint -> { history = history, undoPoint = undoPoint })
+                |> Serialize.field
+                    .history
+                    (Serialize.list
+                        (Serialize.record
+                            (\userId position line -> { userId = userId, position = position, line = line })
+                            |> Serialize.field .userId User.codec
+                            |> Serialize.field .position Serialize.byte
+                            |> Serialize.field .line (nonemptyCodec Ascii.codec)
+                            |> Serialize.finishRecord
+                        )
+                    )
+                |> Serialize.field .undoPoint (Serialize.dict Serialize.int Serialize.int)
+                |> Serialize.finishRecord
+            )
+        |> Serialize.finishCustomType
+
+
+nonemptyCodec : Serialize.Codec e a -> Serialize.Codec e (Nonempty a)
+nonemptyCodec a =
+    Serialize.customType
+        (\nonemptyEncoder value ->
+            case value of
+                Nonempty arg0 arg1 ->
+                    nonemptyEncoder arg0 arg1
+        )
+        |> Serialize.variant2 Nonempty a (Serialize.list a)
+        |> Serialize.finishCustomType
