@@ -945,7 +945,7 @@ updateFromFrontend currentTime sessionId clientId msg model =
         ImportBackend bytes ->
             case Dict.get sessionId model.userSessions of
                 Just { userId } ->
-                    if Just userId == Env.adminUserId && not Env.isProduction then
+                    if Just userId == Env.adminUserId then
                         case Serialize.decodeFromBytes backendModelToJson bytes of
                             Ok model2 ->
                                 ( model2
