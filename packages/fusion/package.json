@@ -1,0 +1,10 @@
+{
+    "devDependencies": {
+        "elm-review": "^2.12.0",
+        "elm-test-rs": "^3.0.0-5"
+    },
+    "resolutions": {
+        "**/wrap-ansi": "^7.0.0"
+    },
+    "license": "UNLICENSED"
+}

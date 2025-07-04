@@ -1,0 +1,17 @@
+{
+    "devDependencies": {
+        "elm-codegen": "^0.6.1",
+        "elm-format": "^0.8.7",
+        "elm-pages": "^3.0.19",
+        "elm-review": "^2.11.1",
+        "elm-test-rs": "^3.0.0-5",
+        "vite": "^6.0.3"
+    },
+    "scripts": {
+        "start": "yarn elm-pages run src/Main.elm"
+    },
+    "resolutions": {
+        "**/wrap-ansi": "^7.0.0"
+    },
+    "license": "UNLICENSED"
+}

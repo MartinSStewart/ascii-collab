@@ -4,7 +4,8 @@
         "src",
         "packages/elm-geometry/3.6.0/src",
         "packages/elm-email/src",
-        "tools"
+        "tools",
+        "pacakges/fusion/src"
     ],
     "elm-version": "0.19.1",
     "dependencies": {
