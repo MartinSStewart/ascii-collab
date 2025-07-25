@@ -4,10 +4,9 @@ module Env exposing (Mode(..), adminEmail, adminEmail_, adminUserId, adminUserId
 -- See https://dashboard.lamdera.app/docs/environment for more info.
 
 import Bounds exposing (Bounds)
-import EmailAddress2 exposing (EmailAddress)
+import EmailAddress exposing (EmailAddress)
 import Helper exposing (Coord)
 import Postmark
-import SendGrid2
 import Units exposing (AsciiUnit)
 import User exposing (UserId)
 
@@ -47,7 +46,7 @@ adminEmail_ =
 
 adminEmail : Maybe EmailAddress
 adminEmail =
-    EmailAddress2.fromString adminEmail_
+    EmailAddress.fromString adminEmail_
 
 
 postmarkKey_ : String

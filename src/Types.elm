@@ -26,7 +26,7 @@ import Change exposing (Change, ServerChange)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
-import EmailAddress2 exposing (EmailAddress)
+import EmailAddress exposing (EmailAddress)
 import File
 import Grid exposing (Grid)
 import Helper exposing (Coord, RawCellCoord)

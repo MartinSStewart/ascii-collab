@@ -2,22 +2,20 @@ module BackendLogic exposing (Effect(..), init, notifyAdminWait, sendConfirmatio
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
-import AssocList
 import Bounds exposing (Bounds)
 import Change exposing (ClientChange(..), ServerChange(..))
 import Cluster
 import Crypto.Hash
 import Dict
 import Duration exposing (Duration)
-import Email.Html.Attributes2
-import Email.Html2
-import EmailAddress2 exposing (EmailAddress)
+import Email.Html
+import Email.Html.Attributes
+import EmailAddress exposing (EmailAddress)
 import Env
 import Grid exposing (Grid)
 import GridCell
 import Helper exposing (Coord, RawCellCoord)
 import Image
-import Json.Encode as Encode
 import Lamdera exposing (ClientId, SessionId)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
@@ -44,7 +42,7 @@ import User exposing (UserId)
 
 type Effect
     = SendToFrontend ClientId ToFrontend
-    | SendEmail (Result Postmark.SendEmailError () -> BackendMsg) NonemptyString Email.Html2.Html EmailAddress
+    | SendEmail (Result Postmark.SendEmailError () -> BackendMsg) NonemptyString Email.Html.Html EmailAddress
 
 
 init : BackendModel
@@ -187,35 +185,35 @@ sendChangeEmails time model =
         content :
             Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
             -> UnsubscribeEmailKey
-            -> Email.Html2.Html
+            -> Email.Html.Html
         content actualChanges =
             let
                 images =
                     List.map (\( bounds, _ ) -> clusterToImage model actualChanges bounds) (clusters actualChanges)
             in
             \unsubscribeKey ->
-                Email.Html2.div
-                    [ Email.Html.Attributes2.backgroundColor "rgb(230, 230, 225)"
-                    , Email.Html.Attributes2.padding "8px"
+                Email.Html.div
+                    [ Email.Html.Attributes.backgroundColor "rgb(230, 230, 225)"
+                    , Email.Html.Attributes.padding "8px"
                     ]
-                    [ Email.Html2.text "Click on an image to view it in ascii-collab"
-                    , Email.Html2.div [] images
-                    , Email.Html2.hr [] []
-                    , Email.Html2.a
+                    [ Email.Html.text "Click on an image to view it in ascii-collab"
+                    , Email.Html.div [] images
+                    , Email.Html.hr [] []
+                    , Email.Html.a
                         [ UrlHelper.encodeUrl (EmailUnsubscribeRoute unsubscribeKey)
                             |> (++) (Env.domain ++ "/")
-                            |> Email.Html.Attributes2.href
+                            |> Email.Html.Attributes.href
                         ]
-                        [ Email.Html2.text "Click here to unsubscribe" ]
+                        [ Email.Html.text "Click here to unsubscribe" ]
                     , Time.posixToMillis time
                         |> String.fromInt
                         |> (++) "Generated at "
-                        |> Email.Html2.text
+                        |> Email.Html.text
                         |> List.singleton
-                        |> Email.Html2.div
-                            [ Email.Html.Attributes2.fontSize "12px"
-                            , Email.Html.Attributes2.color "rgb(160, 160, 155)"
-                            , Email.Html.Attributes2.paddingTop "8px"
+                        |> Email.Html.div
+                            [ Email.Html.Attributes.fontSize "12px"
+                            , Email.Html.Attributes.color "rgb(160, 160, 155)"
+                            , Email.Html.Attributes.paddingTop "8px"
                             ]
                     ]
 
@@ -270,7 +268,7 @@ clusterToImage :
     { a | grid : Grid, users : Dict.Dict Int { b | hiddenForAll : Bool } }
     -> Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
     -> Bounds CellUnit
-    -> Email.Html2.Html
+    -> Email.Html.Html
 clusterToImage model actualChanges bounds =
     let
         url : String
@@ -379,11 +377,11 @@ clusterToImage model actualChanges bounds =
             []
         |> Image.fromList2d
         |> Image.toPng
-        |> (\image -> Email.Html2.inlinePngImg image [] [])
+        |> (\image -> Email.Html.inlinePngImg image [] [])
         |> List.singleton
-        |> Email.Html2.a [ Email.Html.Attributes2.href url ]
+        |> Email.Html.a [ Email.Html.Attributes.href url ]
         |> List.singleton
-        |> Email.Html2.div [ Email.Html.Attributes2.style "margin" "8px 0" ]
+        |> Email.Html.div [ Email.Html.Attributes.style "margin" "8px 0" ]
 
 
 addError : Time.Posix -> BackendError -> BackendModel -> BackendModel
@@ -426,7 +424,7 @@ notifyAdmin model =
                         (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
                         " users hidden"
                     )
-                    (Email.Html2.text hidden)
+                    (Email.Html.text hidden)
                     adminEmail
                 ]
 
@@ -1045,16 +1043,16 @@ sendConfirmationEmail validated model sessionId userId time =
                 generateKey ConfirmEmailKey model
 
             content =
-                Email.Html2.div []
-                    [ Email.Html2.a
-                        [ Email.Html.Attributes2.href
+                Email.Html.div []
+                    [ Email.Html.a
+                        [ Email.Html.Attributes.href
                             (Env.domain ++ "/" ++ UrlHelper.encodeUrl (EmailConfirmationRoute key))
                         ]
-                        [ Email.Html2.text "Click this link" ]
-                    , Email.Html2.text
+                        [ Email.Html.text "Click this link" ]
+                    , Email.Html.text
                         " to confirm you want to be notified about changes people make on ascii-collab."
-                    , Email.Html2.br [] []
-                    , Email.Html2.text "If this email was sent to you in error, you can safely ignore it."
+                    , Email.Html.br [] []
+                    , Email.Html.text "If this email was sent to you in error, you can safely ignore it."
                     ]
         in
         ( { model2
@@ -1451,8 +1449,8 @@ subscribedEmailCodec =
 emailAddressCodec : Serialize.Codec String EmailAddress
 emailAddressCodec =
     Serialize.mapValid
-        (\a -> EmailAddress2.fromString a |> Result.fromMaybe "Invalid email")
-        EmailAddress2.toString
+        (\a -> EmailAddress.fromString a |> Result.fromMaybe "Invalid email")
+        EmailAddress.toString
         Serialize.string
 
 

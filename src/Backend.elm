@@ -1,14 +1,13 @@
 module Backend exposing (app)
 
 import BackendLogic exposing (Effect(..))
-import Dict
 import Duration
-import Email.Html2
-import EmailAddress2 exposing (EmailAddress)
+import Email.Html
+import EmailAddress exposing (EmailAddress)
 import Env
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty
-import Postmark exposing (PostmarkSend)
+import Postmark
 import String.Nonempty exposing (NonemptyString)
 import Task
 import Time
@@ -47,18 +46,18 @@ subscriptions _ =
         ]
 
 
-asciiCollabEmail : NonemptyString -> Email.Html2.Html -> EmailAddress -> PostmarkSend
+asciiCollabEmail : NonemptyString -> Email.Html.Html -> EmailAddress -> Postmark.Email
 asciiCollabEmail subject content to =
     { from =
         { name = "ascii-collab"
         , email =
-            EmailAddress2.fromString "no-reply@ascii-collab.app"
+            EmailAddress.fromString "no-reply@ascii-collab.app"
                 -- This should never happen
                 |> Maybe.withDefault to
         }
     , to = Nonempty.fromElement { name = "", email = to }
     , subject = subject
-    , body = Postmark.BodyHtml content
+    , body = Postmark.HtmlBody content
     , messageStream = Postmark.BroadcastEmail
-    , attachments = Dict.empty
+    , attachments = Postmark.noAttachments
     }

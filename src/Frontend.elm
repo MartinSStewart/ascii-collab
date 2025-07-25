@@ -1968,6 +1968,8 @@ userListView model =
             Element.width (Element.px 130)
         ]
         [ userTag
+        , exportButton
+        , importButton
         , if List.isEmpty hiddenUsers && not showHiddenUsersForAll then
             Element.none
 
@@ -1990,8 +1992,6 @@ userListView model =
 
           else
             Element.none
-        , exportButton
-        , importButton
         ]
 
 
