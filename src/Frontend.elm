@@ -1978,7 +1978,7 @@ userListView model =
                 [ Element.width Element.fill, Element.spacing 4 ]
                 [ Element.el [ Element.paddingXY 8 0 ] (Element.text "Hidden")
                 , Element.column
-                    [ Element.width Element.fill, Element.spacing 2 ]
+                    [ Element.width Element.fill, Element.spacing 2, Element.Font.size 16 ]
                     hiddenUsers
                 ]
         , if showHiddenUsersForAll then
@@ -1986,7 +1986,7 @@ userListView model =
                 [ Element.width Element.fill, Element.spacing 4 ]
                 [ Element.el [ Element.paddingXY 8 0 ] (Element.text "Hidden for all")
                 , Element.column
-                    [ Element.width Element.fill, Element.spacing 2 ]
+                    [ Element.width Element.fill, Element.spacing 2, Element.Font.size 16 ]
                     hiddenUsersForAll
                 ]
 
